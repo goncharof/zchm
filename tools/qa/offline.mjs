@@ -1,0 +1,22 @@
+// Проверка офлайн-режима: `pnpm build && pnpm preview --port 5178`, затем `node tools/qa/offline.mjs [url]`
+import { chromium } from 'playwright-core'
+const BASE = process.argv[2] ?? 'http://localhost:5178/'
+const browser = await chromium.launch({ channel: 'chrome', headless: true })
+const ctx = await browser.newContext()
+const page = await ctx.newPage()
+await page.goto(BASE)
+await page.evaluate(async () => { await navigator.serviceWorker.ready })
+await page.reload()
+await page.getByRole('button', { name: 'Быстрый старт' }).click()
+await page.waitForSelector('.map-node')
+await page.goto(BASE + '#/bestiary'); await page.waitForSelector('.thumb')
+await page.goto(BASE + '#/map'); await page.waitForTimeout(800)
+await ctx.setOffline(true)
+await page.goto(BASE)
+await page.waitForSelector('text=Заклятье Чёрного мага', { timeout: 5000 })
+await page.goto(BASE + '#/map')
+await page.waitForTimeout(500)
+const ok = await page.locator('.map-node').count()
+const mapOk = await page.evaluate(() => [...document.images].some((i) => i.src.includes('world.jpg') && i.complete && i.naturalWidth > 0))
+console.log(ok > 0 ? `Офлайн: карта мира открывается (${ok} узлов), изображение ${mapOk ? 'из кэша' : 'не закэшировано'}` : 'Офлайн: экран карты не открылся')
+await browser.close()

@@ -139,4 +139,18 @@ describe('хранилище партии', () => {
     expect(s.game!.companions).toHaveLength(0)
     expect(s.game!.log.some((e) => /выполнил уговор|пал в бою/.test(e.text))).toBe(true)
   })
+
+  it('быстрый старт: четыре героя, снаряжение надето и уложено в 40 монет', () => {
+    const s = useGameStore()
+    s.quickStart()
+    expect(s.heroes.map((h) => h.classId)).toEqual(['warrior', 'mage', 'priest', 'thief'])
+    for (const h of s.heroes) {
+      expect(h.money).toBeGreaterThanOrEqual(0)
+      expect(Object.keys(h.equipment).length).toBeGreaterThan(0)
+    }
+    expect(s.heroes[0].equipment.body && s.heroes[0].equipment.shield && s.heroes[0].equipment.rightHand).toBeTruthy()
+    expect(s.heroes[3].equipment.ranged).toBeTruthy()
+    expect(s.heroes[3].inventory.find((e) => e.ref === 'strela')?.qty).toBe(10)
+    expect(s.heroes[1].equipment.ranged).toBeTruthy()
+  })
 })

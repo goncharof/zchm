@@ -1,3 +1,26 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { gameData } from '@/data'
+
+const base = import.meta.env.BASE_URL
+const progress = ref('')
+/** Скачивает все картинки, чтобы service worker положил их в кэш для игры без сети */
+async function cacheAll() {
+  const urls = [
+    ...gameData.bestiary.map((m) => base + m.image),
+    ...gameData.locations.filter((l) => l.plan).map((l) => base + l.plan),
+    base + 'img/map/world.jpg',
+  ]
+  let done = 0
+  for (const u of urls) {
+    try { await fetch(u) } catch { /* без сети — пропускаем */ }
+    done++
+    progress.value = `${done} / ${urls.length}`
+  }
+  progress.value = `Готово: ${urls.length} изображений сохранено для игры без сети.`
+}
+</script>
+
 <template>
   <div class="grid wide">
     <div class="card">
@@ -6,6 +29,9 @@
       <p><b>Авторы:</b> автор-составитель Багдасаров Ж. Г., художественный текст Тарасов О. А., графика Гвалия О. В., корректор Лебедева В. М., оригинал-макет Яцницкий В. Э. © Багдасаров Ж. Г., ЗАО «Камелот», 1997.</p>
       <p><b>Оцифровка:</b> Павел Немченко, 2020, с разрешения автора на свободное распространение. Материалы: <a href="https://zakoldovka.com/" target="_blank" rel="noopener">zakoldovka.com</a>, сообщество <a href="https://vk.com/tmamrak" target="_blank" rel="noopener">vk.com/tmamrak</a>.</p>
       <p>Эта браузерная версия — некоммерческий проект. Тексты Книги Жизни, Бестиария и Инструкции приведены без изменений; рисунки — Олега Гвалии.</p>
+      <h3>Игра без сети</h3>
+      <p class="small muted">Игру можно установить на телефон или компьютер (меню браузера → «Установить приложение» / «На экран Домой»). Код и тексты сохраняются автоматически; рисунки бестиария и планы — по мере просмотра или кнопкой ниже (около 20 МБ).</p>
+      <div class="row"><button class="small" @click="cacheAll">Скачать все рисунки</button><span class="small muted">{{ progress }}</span></div>
     </div>
     <div class="card">
       <h2>Как трактованы правила</h2>

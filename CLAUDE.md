@@ -29,6 +29,7 @@ pnpm data:world     # → src/data/world.json + public/img/map/world.jpg
 pnpm data:rules     # → src/data/{classes,weapons,armor,items,artifacts,spells,rules}.json
 pnpm data:lore      # → src/data/lore.json (Книга Сумерек)
 node tools/qa/screens.mjs [url] [outDir]  # при запущенном pnpm dev: проход по экранам в Chrome, скриншоты desktop/mobile в tools/qa/out, отчёт об ошибках и горизонтальной прокрутке
+node tools/qa/offline.mjs [url]           # при pnpm build && pnpm preview --port 5178: проверка игры без сети
 ```
 
 ## Структура
@@ -40,7 +41,8 @@ src/data/        сгенерированные JSON — НЕ править р�
 src/engine/      чистая логика без Vue: dice, character, combat, spells, inventory
 src/stores/      Pinia: game (партия, сохранения), combat
 src/views/       экраны (роутер), src/components/ — переиспользуемые куски
-public/img/      картинки (иллюстрации бестиария, планы локаций, карта мира)
+public/img/      картинки (иллюстрации бестиария, планы локаций, карта мира); при их изменении поднять CACHE в public/sw.js
+public/sw.js     service worker (офлайн), public/manifest.webmanifest + public/icons — установка как приложение
 tests/           Vitest: движок, стор, сквозной прогон приложения в jsdom
 tools/qa/        визуальный прогон в Chrome (playwright-core)
 docs/            документация проекта

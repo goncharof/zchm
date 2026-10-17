@@ -128,6 +128,25 @@ export const useGameStore = defineStore('game', () => {
     log(`В команду вступает ${h.name} (${idx.cls(classId).name}).`)
     return h
   }
+  /** Быстрый старт: четыре героя со снаряжением на стартовые 40 монет */
+  const QUICK_PARTY: { name: string; classId: string; kit: { kind: 'weapon' | 'armor'; ref: string; qty?: number; slot?: EquipSlot }[] }[] = [
+    { name: 'Конан', classId: 'warrior', kit: [{ kind: 'weapon', ref: 'mech-korotkiy' }, { kind: 'armor', ref: 'kozhanyy-dospeh' }, { kind: 'armor', ref: 'schit' }] },
+    { name: 'Мерлин', classId: 'mage', kit: [{ kind: 'weapon', ref: 'kinzhal' }, { kind: 'weapon', ref: 'drotik', qty: 10 }] },
+    { name: 'Брат Тук', classId: 'priest', kit: [{ kind: 'weapon', ref: 'palitsa' }] },
+    { name: 'Бильбо', classId: 'thief', kit: [{ kind: 'weapon', ref: 'mech-korotkiy' }, { kind: 'weapon', ref: 'arbalet' }, { kind: 'weapon', ref: 'strela', qty: 10 }] },
+  ]
+  function quickStart(): void {
+    newGame()
+    for (const p of QUICK_PARTY) {
+      const h = addHero(p.name, p.classId)
+      for (const k of p.kit) {
+        const e = inv.buy(h, k.kind, k.ref, idx, k.qty ?? 1)
+        const w = k.kind === 'weapon' ? idx.weapon(k.ref) : null
+        if (!w || w.group !== 'ammo') inv.equip(h, e.uid, idx, k.slot)
+      }
+    }
+    log('Быстрый старт: партия собрана и снаряжена. Отправляйтесь в путь с карты мира.')
+  }
   function removeHero(uid: string): void {
     if (!game.value) return
     game.value.heroes = game.value.heroes.filter((h) => h.uid !== uid)
@@ -520,7 +539,7 @@ export const useGameStore = defineStore('game', () => {
   return {
     game, world, notice, heroes, combat, location, worldNode, started,
     log, say, hero,
-    newGame, addHero, removeHero, renameHero, resetGame, exportSave, importSave, toggleGm,
+    newGame, quickStart, addHero, removeHero, renameHero, resetGame, exportSave, importSave, toggleGm,
     slotInfo, saveSlot, loadSlot, clearSlot,
     buyItem, sellItem, equipItem, unequipItem, giveItem, dropItem, transferItem, drink, identifyBottle, copyScroll, learnSpell,
     useAntidote, useParalysisPotion, poisonWeapon, adjustLives, adjustMana, adjustMoney, giveXp,

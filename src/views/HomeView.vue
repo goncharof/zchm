@@ -44,6 +44,12 @@ async function importSave(ev: Event) {
   if (!f) return
   try { store.importSave(await f.text()); store.say('Сохранение загружено'); continueGame() } catch (e) { store.say((e as Error).message) }
 }
+function quick() {
+  if (store.started && !confirm('Текущая партия будет удалена. Начать заново?')) return
+  store.resetGame()
+  store.quickStart()
+  router.push('/map')
+}
 function newGame() {
   if (store.started && !confirm('Текущая партия будет удалена. Начать заново?')) return
   store.resetGame()
@@ -64,6 +70,7 @@ function newGame() {
         <div class="row" style="margin-top:1rem">
           <button v-if="store.started" class="primary" @click="continueGame">Продолжить (день {{ store.game?.day }}, {{ where }})</button>
           <button :class="{ primary: !store.started }" @click="newGame">Новая партия</button>
+          <button @click="quick" title="Воин, маг, жрец и вор со снаряжением на 40 монет">Быстрый старт</button>
           <button v-if="store.started" @click="exportSave">Экспорт сохранения</button>
           <button @click="fileInput?.click()">Импорт сохранения</button>
           <input ref="fileInput" type="file" accept="application/json" style="display:none" @change="importSave" />

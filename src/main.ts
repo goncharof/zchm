@@ -5,3 +5,8 @@ import { router } from './router'
 import './style.css'
 
 createApp(App).use(createPinia()).use(router).mount('#app')
+
+// офлайн-режим и установка на телефон (только в сборке)
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {})
+}
