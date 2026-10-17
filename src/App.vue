@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import DiceTray from '@/components/DiceTray.vue'
 import { useGameStore } from '@/stores/game'
 import { idx } from '@/data'
 
 const store = useGameStore()
 const heroes = computed(() => store.heroes)
 const inCombat = computed(() => !!store.combat)
+const dice = ref(false)
 const locationLink = computed(() => (store.location ? `/location/${store.location.id}` : null))
 </script>
 
@@ -24,6 +26,7 @@ const locationLink = computed(() => (store.location ? `/location/${store.locatio
         <router-link to="/rules">Правила</router-link>
         <router-link to="/lore">Предыстория</router-link>
         <router-link to="/about">Об игре</router-link>
+        <a href="#" title="Кубики" @click.prevent="dice = true">🎲</a>
       </nav>
       <div class="party-strip" v-if="heroes.length">
         <span class="chip muted" v-if="store.game">День {{ store.game.day }}</span>
@@ -37,4 +40,5 @@ const locationLink = computed(() => (store.location ? `/location/${store.locatio
     <router-view />
   </main>
   <div v-if="store.notice" class="notice">{{ store.notice }}</div>
+  <DiceTray v-if="dice" @close="dice = false" />
 </template>
