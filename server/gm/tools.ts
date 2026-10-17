@@ -1,0 +1,219 @@
+/** Инструменты ИИ-ведущего: схемы для Claude API и исполнение через GameSession. */
+import type Anthropic from '@anthropic-ai/sdk'
+import { z } from 'zod'
+import { idx } from '@/data'
+import type { Hero } from '@/engine/model'
+import { GameError } from '@/game/session'
+import type { Room } from '../rooms'
+
+type Tool = Anthropic.Beta.BetaTool
+
+const heroProp = { type: 'string', description: 'Имя героя или его uid из «Состояния партии».' }
+
+/** Определения инструментов (порядок фиксирован — от него зависит кэш) */
+export const GM_TOOLS: Tool[] = ([
+  {
+    name: 'open_paragraph',
+    description: 'Прочитать параграф Книги Жизни (полный текст со скрытыми деталями, ветки решений, подсказки) и отметить его пройденным. Вызывай, когда партия входит в помещение локации или с ней случается встреча в пути (location_id "doroga").',
+    input_schema: { type: 'object', properties: { location_id: { type: 'string', description: 'id локации из списка' }, n: { type: 'integer', description: 'номер параграфа' } }, required: ['location_id', 'n'], additionalProperties: false },
+  },
+  {
+    name: 'roll_luck',
+    description: 'Бросок удачи героя: к18 + удача ≥ target. Используй для проверок «удача — N» из текста.',
+    input_schema: { type: 'object', properties: { hero: heroProp, target: { type: 'integer', description: 'порог N' } }, required: ['hero', 'target'], additionalProperties: false },
+  },
+  {
+    name: 'roll_dice',
+    description: 'Бросить кубики по формуле («1к6», «2к6+2», «1к18»). Для выбора по таблицам из текста и случайных событий.',
+    input_schema: { type: 'object', properties: { formula: { type: 'string' } }, required: ['formula'], additionalProperties: false },
+  },
+  {
+    name: 'start_combat',
+    description: 'Начать бой с монстрами из Бестиария (id из списка, число — как в тексте). Дальше игроки сражаются в интерфейсе боя; закончи реплику.',
+    input_schema: { type: 'object', properties: { monsters: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, count: { type: 'integer' } }, required: ['id', 'count'], additionalProperties: false } } }, required: ['monsters'], additionalProperties: false },
+  },
+  {
+    name: 'change_lives',
+    description: 'Изменить жизни героя (урон или лечение из текста параграфа). delta < 0 — урон.',
+    input_schema: { type: 'object', properties: { hero: heroProp, delta: { type: 'integer' }, reason: { type: 'string' } }, required: ['hero', 'delta', 'reason'], additionalProperties: false },
+  },
+  {
+    name: 'change_money',
+    description: 'Дать или забрать монеты (находка, плата, награда из текста). delta < 0 — плата; если монет не хватает, придёт ошибка.',
+    input_schema: { type: 'object', properties: { hero: heroProp, delta: { type: 'integer' }, reason: { type: 'string' } }, required: ['hero', 'delta', 'reason'], additionalProperties: false },
+  },
+  {
+    name: 'give_item',
+    description: 'Дать герою предмет: kind "bottle" и ref "1"…"6" — бутылка из текста (неопознанная); "weapon"/"armor"/"item" — id из лавки (например "mech-korotkiy", "kozhanyy-dospeh", "protivoyadie").',
+    input_schema: { type: 'object', properties: { hero: heroProp, kind: { type: 'string', enum: ['bottle', 'weapon', 'armor', 'item'] }, ref: { type: 'string' }, qty: { type: 'integer' } }, required: ['hero', 'kind', 'ref', 'qty'], additionalProperties: false },
+  },
+  {
+    name: 'give_artifact',
+    description: 'Герой находит артефакт (к18 определяет какой; все получают 500 опыта). Только если артефакт есть в тексте.',
+    input_schema: { type: 'object', properties: { hero: heroProp }, required: ['hero'], additionalProperties: false },
+  },
+  {
+    name: 'give_scroll',
+    description: 'Герой получает свиток с заклинанием. caster и level — как в тексте («свиток с заклинанием мага 5 уровня»), иначе null.',
+    input_schema: { type: 'object', properties: { hero: heroProp, caster: { type: ['string', 'null'], enum: ['mage', 'priest', null] }, level: { type: ['integer', 'null'] } }, required: ['hero', 'caster', 'level'], additionalProperties: false },
+  },
+  {
+    name: 'give_xp',
+    description: 'Начислить опыт вне боя (найденная ловушка или тайник — 400 вору, разгаданная загадка и т.п.).',
+    input_schema: { type: 'object', properties: { hero: heroProp, amount: { type: 'integer' }, reason: { type: 'string' } }, required: ['hero', 'amount', 'reason'], additionalProperties: false },
+  },
+  {
+    name: 'add_companion',
+    description: 'Существо из текста присоединяется к партии как спутник на battles боёв (рыцарь — 3 боя, наёмники — сколько оплачено).',
+    input_schema: { type: 'object', properties: { monster_id: { type: 'string' }, battles: { type: 'integer' } }, required: ['monster_id', 'battles'], additionalProperties: false },
+  },
+  {
+    name: 'rest',
+    description: 'Отдых в трактире на days суток (2 монеты в сутки с героя, +5 жизней и маны в сутки).',
+    input_schema: { type: 'object', properties: { days: { type: 'integer' } }, required: ['days'], additionalProperties: false },
+  },
+  {
+    name: 'final_duel_attack',
+    description: 'Финал в Замке Чёрного мага (§13): герой пытается поразить мага (удача 15; при промахе маг бросает огненный шар). Попадание — победа.',
+    input_schema: { type: 'object', properties: { hero: heroProp }, required: ['hero'], additionalProperties: false },
+  },
+  {
+    name: 'drink_fountain',
+    description: 'Партия пьёт из фонтана в зале Чёрного мага (§13): все жизни и мана восстанавливаются.',
+    input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+  },
+] as Tool[]).map((t) => ({ ...t, strict: true, eager_input_streaming: true }))
+
+const Hero = z.string().min(1).max(60)
+const SCHEMAS = {
+  open_paragraph: z.object({ location_id: z.string(), n: z.number().int() }),
+  roll_luck: z.object({ hero: Hero, target: z.number().int().min(1).max(40) }),
+  roll_dice: z.object({ formula: z.string().max(20) }),
+  start_combat: z.object({ monsters: z.array(z.object({ id: z.string(), count: z.number().int().min(1).max(30) })).min(1).max(8) }),
+  change_lives: z.object({ hero: Hero, delta: z.number().int().min(-100).max(100), reason: z.string().max(200) }),
+  change_money: z.object({ hero: Hero, delta: z.number().int().min(-5000).max(5000), reason: z.string().max(200) }),
+  give_item: z.object({ hero: Hero, kind: z.enum(['bottle', 'weapon', 'armor', 'item']), ref: z.string().max(60), qty: z.number().int().min(1).max(50) }),
+  give_artifact: z.object({ hero: Hero }),
+  give_scroll: z.object({ hero: Hero, caster: z.enum(['mage', 'priest']).nullable(), level: z.number().int().min(0).max(12).nullable() }),
+  give_xp: z.object({ hero: Hero, amount: z.number().int().min(1).max(5000), reason: z.string().max(200) }),
+  add_companion: z.object({ monster_id: z.string(), battles: z.number().int().min(1).max(20) }),
+  rest: z.object({ days: z.number().int().min(1).max(30) }),
+  final_duel_attack: z.object({ hero: Hero }),
+  drink_fountain: z.object({}),
+}
+export type GmToolName = keyof typeof SCHEMAS
+
+export interface ToolOutcome {
+  content: string
+  isError?: boolean
+  /** инструмент начал бой — ведущему пора закончить реплику */
+  endsTurn?: boolean
+}
+
+function findHero(room: Room, ref: string): Hero {
+  const s = ref.trim().toLowerCase()
+  const h = room.state.heroes.find((x) => x.uid === ref) ?? room.state.heroes.find((x) => x.name.toLowerCase() === s)
+  if (!h) throw new GameError(`Нет героя «${ref}». Герои: ${room.state.heroes.map((x) => `${x.name} [${x.uid}]`).join(', ')}`)
+  return h
+}
+
+export function executeGmTool(room: Room, name: string, input: unknown): ToolOutcome {
+  const schema = (SCHEMAS as Record<string, z.ZodTypeAny>)[name]
+  if (!schema) return { content: `Неизвестный инструмент ${name}`, isError: true }
+  const parsed = schema.safeParse(input)
+  if (!parsed.success) return { content: JSON.stringify({ INVALID_INPUT: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) }), isError: true }
+  const a = parsed.data as Record<string, unknown>
+  const s = room.session()
+  const json = (v: unknown) => JSON.stringify(v)
+  try {
+    switch (name as GmToolName) {
+      case 'open_paragraph': {
+        const loc = idx.locationById.get(String(a.location_id))
+        if (!loc) throw new GameError(`Нет локации ${a.location_id}`)
+        const p = loc.paragraphs.find((x) => x.n === a.n)
+        if (!p) throw new GameError(`В локации «${loc.name}» нет параграфа ${a.n}`)
+        const before = (room.state.visited[loc.id] ?? []).includes(p.n)
+        s.markVisited(loc.id, p.n)
+        if (loc.id === 'doroga') s.dismissRoad(p.n)
+        const branches = (p.segments ?? []).filter((g) => g.kind === 'branch').map((g) => ({ если: g.label, исход: g.blocks.map((b) => ('text' in b ? b.text : b.roll.map((o) => `${o.values.join(',')} — ${o.text}`).join('; '))).join(' ') }))
+        return { content: json({ локация: loc.name, параграф: p.n, уже_пройден: before, текст: p.text, ветки: branches, подсказки: p.hints ?? {}, напоминание: 'Раскрывай игрокам только то, что видят герои; исходы веток — после их выбора.' }) }
+      }
+      case 'roll_luck': {
+        const h = findHero(room, String(a.hero))
+        return { content: json({ герой: h.name, ...s.luckCheck(h.uid, Number(a.target)) }) }
+      }
+      case 'roll_dice':
+        return { content: json(s.rollDice(String(a.formula))) }
+      case 'start_combat': {
+        const specs = (a.monsters as { id: string; count: number }[]).map((m) => {
+          const mon = idx.monsterById.get(m.id)
+          if (!mon) throw new GameError(`Нет монстра ${m.id} в Бестиарии`)
+          if (mon.special) throw new GameError(`${mon.name} — персонаж без боевых характеристик, бой с ним невозможен`)
+          return { monsterId: m.id, count: m.count }
+        })
+        s.startEncounter(specs)
+        return { content: json({ бой: 'начат', противники: room.state.combat?.monsters.map((m) => m.name), указание: 'Игроки сражаются в интерфейсе боя. Опиши начало схватки одной-двумя фразами и закончи реплику.' }), endsTurn: true }
+      }
+      case 'change_lives': {
+        const h = findHero(room, String(a.hero))
+        s.adjustLives(h.uid, Number(a.delta))
+        return { content: json({ герой: h.name, жизни: `${h.lives}/${h.maxLives}`, без_сознания: !!h.status.unconscious, мёртв: !!h.status.dead }) }
+      }
+      case 'change_money': {
+        const h = findHero(room, String(a.hero))
+        s.adjustMoney(h.uid, Number(a.delta))
+        return { content: json({ герой: h.name, монеты: h.money }) }
+      }
+      case 'give_item': {
+        const h = findHero(room, String(a.hero))
+        const kind = String(a.kind)
+        const ref = String(a.ref)
+        if (kind === 'bottle') {
+          if (!/^[1-6]$/.test(ref)) throw new GameError('Бутылка: ref от "1" до "6"')
+          s.giveItem(h.uid, 'bottle', ref, Number(a.qty), false)
+        } else {
+          const ok = kind === 'weapon' ? idx.weaponById.has(ref) : kind === 'armor' ? idx.armorById.has(ref) : idx.itemById.has(ref)
+          if (!ok) throw new GameError(`Нет предмета ${kind}/${ref}. Примеры id: оружие ${[...idx.weaponById.keys()].slice(0, 8).join(', ')}…; доспехи ${[...idx.armorById.keys()].join(', ')}; вещи ${[...idx.itemById.keys()].join(', ')}`)
+          s.giveItem(h.uid, kind as 'weapon' | 'armor' | 'item', ref, Number(a.qty))
+        }
+        return { content: json({ герой: h.name, получил: `${kind}/${ref} ×${a.qty}` }) }
+      }
+      case 'give_artifact': {
+        const h = findHero(room, String(a.hero))
+        const n = s.findArtifact(h.uid)
+        return { content: json({ герой: h.name, артефакт: n ? idx.artifact(n).name : null }) }
+      }
+      case 'give_scroll': {
+        const h = findHero(room, String(a.hero))
+        s.giveScroll(h.uid, (a.caster as 'mage' | 'priest' | null) ?? undefined, (a.level as number | null) ?? undefined)
+        const last = h.inventory.filter((e) => e.kind === 'scroll').at(-1)
+        return { content: json({ герой: h.name, свиток: last ? idx.spell(last.ref).name : null }) }
+      }
+      case 'give_xp': {
+        const h = findHero(room, String(a.hero))
+        s.giveXp(h.uid, Number(a.amount))
+        return { content: json({ герой: h.name, опыт: h.xp, уровень: h.level }) }
+      }
+      case 'add_companion': {
+        const mon = idx.monsterById.get(String(a.monster_id))
+        if (!mon || mon.special) throw new GameError(`Нет подходящего существа ${a.monster_id}`)
+        s.addCompanion(mon.id, Number(a.battles))
+        return { content: json({ спутник: mon.name, боёв: a.battles }) }
+      }
+      case 'rest':
+        s.restAll(Number(a.days))
+        return { content: json({ день: room.state.day, герои: room.state.heroes.map((h) => `${h.name} ${h.lives}/${h.maxLives}`) }) }
+      case 'final_duel_attack': {
+        const h = findHero(room, String(a.hero))
+        const won = s.finalDuelAttack(h.uid)
+        return { content: json({ герой: h.name, попадание: won, победа: won, жизни: `${h.lives}/${h.maxLives}` }) }
+      }
+      case 'drink_fountain':
+        s.drinkFountain()
+        return { content: json({ готово: true }) }
+    }
+  } catch (e) {
+    return { content: (e as Error).message, isError: true }
+  }
+  return { content: 'Неизвестный инструмент', isError: true }
+}

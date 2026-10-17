@@ -67,13 +67,13 @@ export class NetClient {
   }
 
   async create(name: string, gm: GmMode, state?: GameState): Promise<Joined> {
-    const j = this.unwrap(await this.socket.emitWithAck('room:create', { name, gm, state }))
+    const j = this.unwrap(await this.socket.emitWithAck('room:create', { name, gm, state })) as Joined
     this.joined = { code: j.code, token: j.token, name }
     saveSession(this.joined)
     return j
   }
   async join(code: string, name: string, token?: string): Promise<Joined> {
-    const j = this.unwrap(await this.socket.emitWithAck('room:join', { code: code.trim().toUpperCase(), name, token }))
+    const j = this.unwrap(await this.socket.emitWithAck('room:join', { code: code.trim().toUpperCase(), name, token })) as Joined
     this.joined = { code: j.code, token: j.token, name }
     saveSession(this.joined)
     return j

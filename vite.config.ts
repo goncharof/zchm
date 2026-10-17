@@ -8,6 +8,10 @@ export default defineConfig({
   plugins: [vue()],
   // JSON как строка + JSON.parse: быстрее разбирается браузером
   json: { stringify: true },
+  server: {
+    // сетевая игра в разработке: pnpm server (порт 8787) + pnpm dev
+    proxy: { '/socket.io': { target: 'http://localhost:8787', ws: true } },
+  },
   build: {
     chunkSizeWarningLimit: 1200,
     rollupOptions: {

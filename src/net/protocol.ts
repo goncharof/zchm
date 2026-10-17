@@ -56,8 +56,8 @@ export interface ServerToClient {
 }
 
 export interface ClientToServer {
-  'room:create': (req: CreateRoomReq, ack: (a: Ack<Joined>) => void) => void
-  'room:join': (req: JoinRoomReq, ack: (a: Ack<Joined>) => void) => void
+  'room:create': (req: CreateRoomReq, ack: (a: Ack) => void) => void
+  'room:join': (req: JoinRoomReq, ack: (a: Ack) => void) => void
   'room:setGm': (gm: GmMode, ack: (a: Ack) => void) => void
   'room:loadState': (state: GameState, ack: (a: Ack) => void) => void
   'hero:claim': (heroUid: string, ack: (a: Ack) => void) => void
