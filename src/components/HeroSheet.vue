@@ -13,6 +13,7 @@ const props = defineProps<{ hero: Hero; shop?: boolean }>()
 const store = useGameStore()
 const cls = computed(() => idx.cls(props.hero.classId))
 const next = computed(() => (props.hero.level < 12 ? levelRow(cls.value, props.hero.level + 1).xp : null))
+const prevXp = computed(() => levelRow(cls.value, props.hero.level).xp)
 const showPicker = ref(false)
 const transferTo = ref('')
 const renaming = ref(false)
@@ -58,6 +59,7 @@ const statusText = computed(() => {
       <div style="flex:1;min-width:160px"><div class="small">Жизни {{ hero.lives }}/{{ hero.maxLives }}</div><div class="bar" :class="{ danger: hero.lives * 3 <= hero.maxLives }"><i :style="{ width: pct(hero.lives, hero.maxLives) }" /></div></div>
       <div v-if="hero.maxMana" style="flex:1;min-width:160px"><div class="small">Мана {{ hero.mana }}/{{ hero.maxMana }}</div><div class="bar mana"><i :style="{ width: pct(hero.mana, hero.maxMana) }" /></div></div>
     </div>
+    <div v-if="next" style="margin:-.2rem 0 .5rem"><div class="bar" style="height:5px" :title="`до ${hero.level + 1} уровня: ${next - hero.xp} очков`"><i :style="{ width: pct(hero.xp - prevXp, next - prevXp), background: 'var(--accent)' }" /></div></div>
     <div class="stat-table">
       <div><b>Опыт</b> {{ hero.xp }}<span v-if="next" class="muted"> / {{ next }}</span></div>
       <div><b>Сила</b> {{ heroStrength(hero, idx) }}</div>

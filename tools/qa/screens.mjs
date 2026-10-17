@@ -111,6 +111,7 @@ async function run(label, viewport) {
   await shot('11-bestiary-modal')
   await page.goto(BASE + '#/spells'); await shot('12-spells')
   await page.goto(BASE + '#/lore'); await page.waitForTimeout(300); await shot('13-lore')
+  await page.goto(BASE + '#/rules'); await page.waitForTimeout(200); await shot('13b-rules')
   await page.goto(BASE + '#/location/zamok-chernogo-maga?p=13'); await shot('14-final')
   await page.goto(BASE); await shot('15-home-after')
   await ctx.close()

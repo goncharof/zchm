@@ -12,6 +12,7 @@ export const router = createRouter({
     { path: '/bestiary', component: () => import('./views/BestiaryView.vue') },
     { path: '/spells', component: () => import('./views/SpellsView.vue') },
     { path: '/lore', component: () => import('./views/LoreView.vue') },
+    { path: '/rules', component: () => import('./views/RulesView.vue') },
     { path: '/about', component: () => import('./views/AboutView.vue') },
   ],
   scrollBehavior: () => ({ top: 0 }),

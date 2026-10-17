@@ -89,7 +89,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
   <div v-if="!loc" class="card">Локация не найдена.</div>
   <template v-else>
     <div class="row between" style="margin-bottom:.6rem">
-      <h1>{{ loc.name }} <span class="badge">Книга Жизни, стр. {{ loc.pages[0] }}–{{ loc.pages[1] }}</span></h1>
+      <h1>{{ loc.name }} <span class="badge">Книга Жизни, стр. {{ loc.pages[0] }}–{{ loc.pages[1] }}</span> <span v-if="visited.length" class="badge accent">пройдено {{ visited.length }} из {{ loc.paragraphs.length }}</span></h1>
       <div class="row">
         <router-link v-if="services.includes('shop') || services.includes('tavern')" class="btn" to="/shop">Лавка / трактир</router-link>
         <button @click="picker = true">Произвольный бой</button>
