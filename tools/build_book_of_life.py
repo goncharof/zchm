@@ -158,6 +158,8 @@ STEM_OVERRIDE = {'сгусток': 'сгуст', 'лишайник-пожира�
 
 
 SHORT_END = r'(?:а|я|у|ю|ом|ем|ой|ей|е|ы|и|ов|ев|ам|ям|ами|ями|ах|ях)?(?![а-яё])'
+# короткие основы прилагательных («бел-ый», «черн-ого»): окончания прилагательных, иначе «белый дракон» не узнаётся
+ADJ_SHORT_END = r'(?:ый|ий|ой|ая|яя|ое|ее|ые|ие|ого|его|ому|ему|ым|им|ую|юю|ых|их|ыми|ими)(?![а-яё])'
 
 
 def stem(word):
@@ -187,7 +189,12 @@ def build_monster_patterns():
         else:
             words = [w for w in re.split(r'[\s-]+', name) if w]
             # короткие основы («огр», «орк», «энт») — только с падежными окончаниями, иначе «огромный» = огр
-            parts = [re.escape(stem(w)) + (SHORT_END if len(stem(w)) <= 4 else r'\w*') for w in words]
+            def part(w):
+                st = stem(w)
+                if len(st) > 4:
+                    return re.escape(st) + r'\w*'
+                return re.escape(st) + (ADJ_SHORT_END if w.lower().endswith(ADJ_END) else SHORT_END)
+            parts = [part(w) for w in words]
             pat = re.compile(r'(?<![\w-])' + r'[\s-]+'.join(parts), re.IGNORECASE)
         pats.append((m['id'], pat))
     return pats
