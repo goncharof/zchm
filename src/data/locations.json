@@ -196,10 +196,7 @@
        ],
        "monsters": [
         "drakonid"
-       ],
-       "monsterCounts": {
-        "drakonid": 4
-       }
+       ]
       }
      },
      {
@@ -1834,12 +1831,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "monsters": [
-        "rytsar"
-       ]
-      }
+      ]
      }
     ]
    },
@@ -2716,8 +2708,6 @@
       ],
       "hints": {
        "coins": [
-        40,
-        80,
         33
        ],
        "monsters": [
@@ -2898,19 +2888,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "bottles": [
-        5
-       ],
-       "coins": [
-        60
-       ],
-       "monsters": [
-        "vampir",
-        "vurdalak"
-       ]
-      }
+      ]
      }
     ]
    },
@@ -3069,14 +3047,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "bottles": [
-        6,
-        5,
-        4
-       ]
-      }
+      ]
      }
     ]
    },
@@ -3440,9 +3411,6 @@
        }
       ],
       "hints": {
-       "coins": [
-        15
-       ],
        "monsters": [
         "drakonid"
        ],
@@ -3831,15 +3799,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "monsters": [
-        "ork"
-       ],
-       "monsterCounts": {
-        "ork": 2
-       }
-      }
+      ]
      },
      {
       "kind": "branch",
@@ -3873,12 +3833,7 @@
        {
         "text": "Вдруг взгляд останавливается на вас. Раздается смех, и зеркало окутывается темным туманом."
        }
-      ],
-      "hints": {
-       "monsters": [
-        "chernyy-mag"
-       ]
-      }
+      ]
      }
     ]
    },
@@ -7608,12 +7563,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "bottles": [
-        5
-       ]
-      }
+      ]
      }
     ]
    },
@@ -8004,21 +7954,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "bottles": [
-        5
-       ],
-       "coins": [
-        80
-       ],
-       "monsters": [
-        "drakonid"
-       ],
-       "monsterCounts": {
-        "drakonid": 4
-       }
-      }
+      ]
      }
     ]
    },
@@ -8408,17 +8344,12 @@
        }
       ],
       "hints": {
-       "bottles": [
-        2,
-        5
-       ],
        "monsters": [
         "kentavr"
        ],
        "monsterCounts": {
         "kentavr": 2
-       },
-       "artifact": true
+       }
       }
      }
     ]
@@ -8548,9 +8479,6 @@
       "hints": {
        "coins": [
         100
-       ],
-       "monsters": [
-        "oboroten"
        ]
       }
      }
@@ -9239,10 +9167,6 @@
        }
       ],
       "hints": {
-       "bottles": [
-        5,
-        3
-       ],
        "monsters": [
         "hazg"
        ]
@@ -11066,12 +10990,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "coins": [
-        3
-       ]
-      }
+      ]
      }
     ]
    },
@@ -11246,15 +11165,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "coins": [
-        60
-       ],
-       "monsters": [
-        "gurr"
-       ]
-      }
+      ]
      }
     ]
    },
@@ -11641,19 +11552,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "bottles": [
-        5
-       ],
-       "monsters": [
-        "ork",
-        "berserker"
-       ],
-       "monsterCounts": {
-        "ork": 6
-       }
-      }
+      ]
      }
     ]
    },
@@ -12284,12 +12183,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "monsters": [
-        "skelet"
-       ]
-      }
+      ]
      },
      {
       "kind": "branch",
@@ -14959,13 +14853,6 @@
        "luck": [
         10
        ],
-       "bottles": [
-        5,
-        2
-       ],
-       "coins": [
-        77
-       ],
        "monsters": [
         "zhnets"
        ]
@@ -15573,28 +15460,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "bottles": [
-        5,
-        5
-       ],
-       "coins": [
-        40,
-        59,
-        80,
-        15
-       ],
-       "monsters": [
-        "drakonid",
-        "volkolak",
-        "lyudoed"
-       ],
-       "monsterCounts": {
-        "drakonid": 2,
-        "lyudoed": 2
-       }
-      }
+      ]
      }
     ]
    },
@@ -17772,30 +17638,7 @@
          }
         ]
        }
-      ],
-      "hints": {
-       "bottles": [
-        4,
-        5,
-        5
-       ],
-       "coins": [
-        20,
-        20
-       ],
-       "monsters": [
-        "gurr",
-        "sgustok",
-        "lyudoed",
-        "razboynik",
-        "uruk-hay"
-       ],
-       "monsterCounts": {
-        "gurr": 2,
-        "razboynik": 3,
-        "uruk-hay": 6
-       }
-      }
+      ]
      }
     ]
    },

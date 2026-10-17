@@ -262,9 +262,11 @@ def segment(text, hints_for=None):
             s['when'] = w
     if hints_for:
         for s in segs:
+            # исходы таблицы броска — в подсказках самих вариантов (ниже), а не сегмента: иначе награда или бой
+            # из одного варианта предлагаются ещё до броска
             parts = [s.get('label', '')]
             for b in s['blocks']:
-                parts.append(b.get('text', '') or ' '.join(o['text'] for o in b.get('roll', [])))
+                parts.append(b.get('text', ''))
             # условие и исход разделены тире, как в книге: иначе «взять золото» + «Драконы…» = «Золотой дракон»
             h = hints_for(' — '.join(x for x in parts if x))
             if h:
