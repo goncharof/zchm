@@ -1,0 +1,363 @@
+[
+ {
+  "id": "mech-korotkiy",
+  "name": "меч короткий",
+  "group": "sword",
+  "price": 10,
+  "attacks": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "hand": "any"
+ },
+ {
+  "id": "mech-shirokiy",
+  "name": "меч широкий",
+  "group": "sword",
+  "price": 50,
+  "attacks": [
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "hand": "right"
+ },
+ {
+  "id": "mech-dlinnyy",
+  "name": "меч длинный",
+  "group": "sword",
+  "price": 100,
+  "attacks": [
+   3,
+   4,
+   5,
+   6,
+   7,
+   8
+  ],
+  "hand": "right"
+ },
+ {
+  "id": "mech-dvuruchnyy",
+  "name": "меч двуручный",
+  "group": "sword",
+  "price": 200,
+  "attacks": [
+   4,
+   5,
+   6,
+   7,
+   8,
+   9
+  ],
+  "hand": "two"
+ },
+ {
+  "id": "zolotoy-mech-dvuruchnyy",
+  "name": "золотой меч двуручный",
+  "group": "sword",
+  "price": 500,
+  "attacks": [
+   5,
+   6,
+   7,
+   8,
+   9,
+   10
+  ],
+  "hand": "two"
+ },
+ {
+  "id": "boevoy-topor",
+  "name": "боевой топор",
+  "group": "axe",
+  "price": 60,
+  "attacks": [
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "hand": "right"
+ },
+ {
+  "id": "boevoy-topor-dvuruchnyy",
+  "name": "боевой топор двуручный",
+  "group": "axe",
+  "price": 100,
+  "attacks": [
+   3,
+   4,
+   5,
+   6,
+   7,
+   8
+  ],
+  "hand": "two"
+ },
+ {
+  "id": "sekira",
+  "name": "секира",
+  "group": "axe",
+  "price": 300,
+  "attacks": [
+   4,
+   5,
+   6,
+   7,
+   8,
+   9
+  ],
+  "hand": "two"
+ },
+ {
+  "id": "dubina",
+  "name": "дубина",
+  "group": "mace",
+  "price": 15,
+  "attacks": [
+   1,
+   1,
+   2,
+   2,
+   3,
+   3
+  ],
+  "hand": "any"
+ },
+ {
+  "id": "palitsa",
+  "name": "палица",
+  "group": "mace",
+  "price": 40,
+  "attacks": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "hand": "any"
+ },
+ {
+  "id": "serebryanaya-palitsa",
+  "name": "серебряная палица",
+  "group": "mace",
+  "price": 100,
+  "attacks": [
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "hand": "right"
+ },
+ {
+  "id": "zolotaya-palitsa",
+  "name": "золотая палица",
+  "group": "mace",
+  "price": 200,
+  "attacks": [
+   3,
+   4,
+   5,
+   6,
+   7,
+   8
+  ],
+  "hand": "two"
+ },
+ {
+  "id": "kinzhal",
+  "name": "кинжал",
+  "group": "dagger",
+  "price": 15,
+  "attacks": [
+   1,
+   1,
+   2,
+   2,
+   3,
+   3
+  ],
+  "hand": "any"
+ },
+ {
+  "id": "kinzhal-serebryanyy",
+  "name": "кинжал серебряный",
+  "group": "dagger",
+  "price": 40,
+  "attacks": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "hand": "any"
+ },
+ {
+  "id": "kinzhal-zolotoy",
+  "name": "кинжал золотой",
+  "group": "dagger",
+  "price": 100,
+  "attacks": [
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "hand": "any"
+ },
+ {
+  "id": "bez-oruzhiya",
+  "name": "без оружия",
+  "group": "unarmed",
+  "price": 0,
+  "attacks": [
+   1,
+   1,
+   1,
+   2,
+   2,
+   2
+  ],
+  "hand": "any"
+ },
+ {
+  "id": "alebarda-dvuruchnaya",
+  "name": "алебарда двуручная",
+  "group": "other",
+  "price": 125,
+  "attacks": [
+   5,
+   5,
+   6,
+   6,
+   7,
+   7
+  ],
+  "hand": "two"
+ },
+ {
+  "id": "kope",
+  "name": "копье",
+  "group": "other",
+  "price": 50,
+  "attacks": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "hand": "right",
+  "throwable": true,
+  "note": "можно метать"
+ },
+ {
+  "id": "arbalet",
+  "name": "арбалет",
+  "group": "crossbow",
+  "price": 20,
+  "attacks": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "ranged": true
+ },
+ {
+  "id": "korotkiy-luk",
+  "name": "короткий лук",
+  "group": "bow",
+  "price": 50,
+  "attacks": [
+   2,
+   3,
+   4,
+   5,
+   6,
+   7
+  ],
+  "ranged": true
+ },
+ {
+  "id": "dlinnyy-luk",
+  "name": "длинный лук",
+  "group": "bow",
+  "price": 100,
+  "attacks": [
+   3,
+   4,
+   5,
+   6,
+   7,
+   8
+  ],
+  "ranged": true
+ },
+ {
+  "id": "elfiyskiy-luk",
+  "name": "эльфийский лук",
+  "group": "bow",
+  "price": 300,
+  "attacks": [
+   4,
+   5,
+   6,
+   7,
+   8,
+   9
+  ],
+  "ranged": true
+ },
+ {
+  "id": "strela",
+  "name": "стрела",
+  "group": "ammo",
+  "price": 1
+ },
+ {
+  "id": "elfiyskaya-strela",
+  "name": "эльфийская стрела",
+  "group": "ammo",
+  "price": 5,
+  "accuracyBonus": 3,
+  "note": "меткость +3"
+ },
+ {
+  "id": "drotik",
+  "name": "дротик",
+  "group": "dart",
+  "price": 1,
+  "attacks": [
+   1,
+   1,
+   2,
+   2,
+   3,
+   3
+  ],
+  "ranged": true
+ }
+]

@@ -1,0 +1,79 @@
+[
+ {
+  "id": "none",
+  "name": "без доспеха",
+  "price": 0,
+  "slot": "body",
+  "defense": 9
+ },
+ {
+  "id": "kozhanyy-dospeh",
+  "name": "кожаный доспех",
+  "price": 10,
+  "slot": "body",
+  "defense": 10
+ },
+ {
+  "id": "kozhano-serebryanyy-dospeh",
+  "name": "кожано-серебряный доспех",
+  "price": 20,
+  "slot": "body",
+  "defense": 11
+ },
+ {
+  "id": "zheleznaya-kolchuga",
+  "name": "железная кольчуга",
+  "price": 50,
+  "slot": "body",
+  "defense": 12
+ },
+ {
+  "id": "serebryanaya-kolchuga",
+  "name": "серебряная кольчуга",
+  "price": 120,
+  "slot": "body",
+  "defense": 13
+ },
+ {
+  "id": "pantsir",
+  "name": "панцирь",
+  "price": 200,
+  "slot": "body",
+  "defense": 14
+ },
+ {
+  "id": "laty",
+  "name": "латы",
+  "price": 300,
+  "slot": "body",
+  "defense": 15
+ },
+ {
+  "id": "mifrilovaya-kolchuga",
+  "name": "мифриловая кольчуга",
+  "price": 500,
+  "slot": "body",
+  "defense": 16
+ },
+ {
+  "id": "schit",
+  "name": "щит",
+  "price": 15,
+  "slot": "shield",
+  "defenseBonus": 1
+ },
+ {
+  "id": "shlem",
+  "name": "шлем",
+  "price": 55,
+  "slot": "helmet",
+  "defenseBonus": 1
+ },
+ {
+  "id": "latnye-rukavitsy",
+  "name": "латные рукавицы",
+  "price": 105,
+  "slot": "gloves",
+  "strengthBonus": 1
+ }
+]

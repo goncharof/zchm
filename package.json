@@ -1,0 +1,33 @@
+{
+  "name": "zchm",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Заклятье Чёрного мага — браузерная версия настольной ролевой игры 1997 года",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "vue-tsc --noEmit",
+    "data:bestiary": "tools/.venv/bin/python -I tools/build_bestiary.py",
+    "data:book": "tools/.venv/bin/python -I tools/build_book_of_life.py",
+    "data:world": "tools/.venv/bin/python -I tools/build_world.py",
+    "data:rules": "tools/.venv/bin/python -I tools/build_rules.py",
+    "data:text": "tools/.venv/bin/python -I tools/extract_text.py source/pdf source/text"
+  },
+  "dependencies": {
+    "pinia": "^4.1.0",
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5",
+    "vue-tsc": "^3.3.13"
+  }
+}

@@ -1,0 +1,258 @@
+{
+ "image": "img/map/world.jpg",
+ "width": 2400,
+ "height": 1685,
+ "nodes": [
+  {
+   "id": "zamok-chernogo-maga",
+   "name": "Замок Чёрного мага",
+   "x": 0.105,
+   "y": 0.845,
+   "locationId": "zamok-chernogo-maga"
+  },
+  {
+   "id": "chernye-peschery",
+   "name": "Чёрные Пещеры",
+   "x": 0.21,
+   "y": 0.635,
+   "locationId": "chernye-peschery"
+  },
+  {
+   "id": "mertvyy-gorod",
+   "name": "Мёртвый Город",
+   "x": 0.2,
+   "y": 0.37,
+   "locationId": "mertvyy-gorod"
+  },
+  {
+   "id": "gorod-zhretsov",
+   "name": "Город Жрецов",
+   "x": 0.255,
+   "y": 0.2,
+   "locationId": "zamok-zhretsov"
+  },
+  {
+   "id": "krepost-rytsarey",
+   "name": "Крепость Рыцарей",
+   "x": 0.385,
+   "y": 0.285,
+   "locationId": "krepost-rytsarey"
+  },
+  {
+   "id": "severnyy-fort",
+   "name": "Северный Форт",
+   "x": 0.355,
+   "y": 0.55,
+   "locationId": "severnyy-fort"
+  },
+  {
+   "id": "zolotoy-gorod",
+   "name": "Золотой Город",
+   "x": 0.47,
+   "y": 0.705,
+   "locationId": "zolotoy-gorod"
+  },
+  {
+   "id": "broshennyy-gorod",
+   "name": "Брошенный Город",
+   "x": 0.52,
+   "y": 0.405,
+   "locationId": "broshennyy-gorod"
+  },
+  {
+   "id": "zamok-korolya-nazgulov",
+   "name": "Замок Короля назгулов",
+   "x": 0.61,
+   "y": 0.265,
+   "locationId": "krepost-korolya-nazgulov"
+  },
+  {
+   "id": "liholese",
+   "name": "Лихолесье",
+   "x": 0.745,
+   "y": 0.335,
+   "locationId": "liholese"
+  },
+  {
+   "id": "upokoische",
+   "name": "Упокоище",
+   "x": 0.605,
+   "y": 0.545,
+   "locationId": "upokoische"
+  },
+  {
+   "id": "krepost-posledney-nadezhdy",
+   "name": "Крепость Последней Надежды",
+   "x": 0.81,
+   "y": 0.68,
+   "locationId": "krepost-posledney-nadezhdy"
+  },
+  {
+   "id": "runnoe-more",
+   "name": "Рунное Море",
+   "x": 0.745,
+   "y": 0.81,
+   "locationId": "runnoe-more"
+  },
+  {
+   "id": "drevnie-razvaliny",
+   "name": "Древние Развалины",
+   "x": 0.94,
+   "y": 0.105,
+   "locationId": "drevnie-razvaliny"
+  },
+  {
+   "id": "j-west",
+   "name": "Перекрёсток",
+   "x": 0.265,
+   "y": 0.605
+  },
+  {
+   "id": "j-dead",
+   "name": "Перекрёсток",
+   "x": 0.252,
+   "y": 0.41
+  },
+  {
+   "id": "j-gold",
+   "name": "Перекрёсток",
+   "x": 0.62,
+   "y": 0.74
+  },
+  {
+   "id": "j-grave",
+   "name": "Перекрёсток",
+   "x": 0.68,
+   "y": 0.66
+  },
+  {
+   "id": "j-hope",
+   "name": "Перекрёсток",
+   "x": 0.745,
+   "y": 0.635
+  },
+  {
+   "id": "j-coast",
+   "name": "Перекрёсток",
+   "x": 0.885,
+   "y": 0.175
+  }
+ ],
+ "edges": [
+  {
+   "from": "zamok-chernogo-maga",
+   "to": "chernye-peschery",
+   "cells": 3
+  },
+  {
+   "from": "chernye-peschery",
+   "to": "j-west",
+   "cells": 0
+  },
+  {
+   "from": "j-west",
+   "to": "severnyy-fort",
+   "cells": 1
+  },
+  {
+   "from": "j-west",
+   "to": "j-dead",
+   "cells": 2
+  },
+  {
+   "from": "j-dead",
+   "to": "mertvyy-gorod",
+   "cells": 0
+  },
+  {
+   "from": "j-dead",
+   "to": "gorod-zhretsov",
+   "cells": 2
+  },
+  {
+   "from": "gorod-zhretsov",
+   "to": "krepost-rytsarey",
+   "cells": 2
+  },
+  {
+   "from": "krepost-rytsarey",
+   "to": "severnyy-fort",
+   "cells": 4
+  },
+  {
+   "from": "krepost-rytsarey",
+   "to": "broshennyy-gorod",
+   "cells": 3
+  },
+  {
+   "from": "severnyy-fort",
+   "to": "zolotoy-gorod",
+   "cells": 2
+  },
+  {
+   "from": "zolotoy-gorod",
+   "to": "j-gold",
+   "cells": 2
+  },
+  {
+   "from": "j-gold",
+   "to": "j-grave",
+   "cells": 1
+  },
+  {
+   "from": "j-gold",
+   "to": "runnoe-more",
+   "cells": 1
+  },
+  {
+   "from": "j-grave",
+   "to": "upokoische",
+   "cells": 1
+  },
+  {
+   "from": "upokoische",
+   "to": "broshennyy-gorod",
+   "cells": 2
+  },
+  {
+   "from": "j-grave",
+   "to": "j-hope",
+   "cells": 1
+  },
+  {
+   "from": "j-hope",
+   "to": "krepost-posledney-nadezhdy",
+   "cells": 0
+  },
+  {
+   "from": "krepost-posledney-nadezhdy",
+   "to": "runnoe-more",
+   "cells": 1
+  },
+  {
+   "from": "j-hope",
+   "to": "liholese",
+   "cells": 2
+  },
+  {
+   "from": "liholese",
+   "to": "zamok-korolya-nazgulov",
+   "cells": 1
+  },
+  {
+   "from": "liholese",
+   "to": "j-coast",
+   "cells": 3
+  },
+  {
+   "from": "j-coast",
+   "to": "drevnie-razvaliny",
+   "cells": 0
+  },
+  {
+   "from": "j-coast",
+   "to": "j-hope",
+   "cells": 5
+  }
+ ]
+}

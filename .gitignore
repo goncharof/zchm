@@ -1,0 +1,8 @@
+node_modules/
+dist/
+tools/.venv/
+.DS_Store
+*.local
+# тяжёлые исходники (скачиваются скриптом tools/fetch_sources.sh)
+source/pdf/*.pdf
+source/pdf/*.jpg
