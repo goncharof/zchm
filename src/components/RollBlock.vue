@@ -13,10 +13,12 @@ const store = useGameStore()
 const result = ref<number | null>(null)
 const sides = computed(() => (Math.max(...props.options.flatMap((o) => o.values)) > 6 ? 18 : 6))
 watch(() => props.options, () => { result.value = null })
-function rollIt() {
-  result.value = store.rollDie(sides.value, props.context)
-  const hit = props.options.find((o) => o.values.includes(result.value!))
-  if (hit) store.log(`Выпало ${result.value}: ${hit.text}`, 'luck')
+async function rollIt() {
+  const r = await store.rollDie(sides.value, props.context)
+  if (r === undefined) return
+  result.value = r
+  const hit = props.options.find((o) => o.values.includes(r))
+  if (hit) void store.note(`Выпало ${r}: ${hit.text}`, 'luck')
 }
 </script>
 

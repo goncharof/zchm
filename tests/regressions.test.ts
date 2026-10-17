@@ -26,7 +26,7 @@ const caster = (classId: 'mage' | 'priest', xp: number, spell: string) => {
 describe('регрессии ревью движка', () => {
   beforeEach(() => { setRng(seededRng(77)); mem.clear(); setActivePinia(createPinia()) })
 
-  it('1. сбежавший воин с запасным действием не подвешивает раунд', () => {
+  it('1. сбежавший воин с запасным действием не подвешивает раунд', async () => {
     const w = createHero('Воин', 'warrior', idx); gainXp(w, 60000, idx)
     const m = createHero('Маг', 'mage', idx)
     const heroes = [w, m]
@@ -38,7 +38,7 @@ describe('регрессии ревью движка', () => {
     expect(state.turn).toBe('monsters')
   })
 
-  it('1б. «Закончить ход героев» всегда двигает бой дальше', () => {
+  it('1б. «Закончить ход героев» всегда двигает бой дальше', async () => {
     const w = createHero('Воин', 'warrior', idx)
     const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
     endHeroesTurn(state, [w], idx)
@@ -48,7 +48,7 @@ describe('регрессии ревью движка', () => {
     expect(state.turn).toBe('monsters')
   })
 
-  it('2. «Замедление времени» даёт ровно одно дополнительное действие', () => {
+  it('2. «Замедление времени» даёт ровно одно дополнительное действие', async () => {
     const p = caster('priest', 30000, 'priest-zamedlenie-vremeni')
     const w = createHero('Воин', 'warrior', idx)
     const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
@@ -58,7 +58,7 @@ describe('регрессии ревью движка', () => {
     expect(state.extraActions[w.uid] ?? 0).toBe(0)
   })
 
-  it('3. паралич героя длится полные N раундов', () => {
+  it('3. паралич героя длится полные N раундов', async () => {
     const w = createHero('Воин', 'warrior', idx)
     const log: LogEntry[] = []
     applyExtraAttack(w, 'paralysis', log)
@@ -69,7 +69,7 @@ describe('регрессии ревью движка', () => {
     expect(w.status.paralysis).toBe(n - 1)
   })
 
-  it('4. атака «смерть» без указанной удачи убивает без спасброска', () => {
+  it('4. атака «смерть» без указанной удачи убивает без спасброска', async () => {
     const gub = makeMonsterInstance(idx.monster('gubitel'), 0)
     let hits = 0
     for (let i = 0; i < 60 && hits === 0; i++) {
@@ -81,7 +81,7 @@ describe('регрессии ревью движка', () => {
     expect(hits).toBe(1)
   })
 
-  it('5. «Воздушный щит» — общий запас на партию и пропускает слишком сильное заклинание', () => {
+  it('5. «Воздушный щит» — общий запас на партию и пропускает слишком сильное заклинание', async () => {
     const m = caster('mage', 15000, 'mage-vozdushnyy-schit')
     const a = createHero('А', 'warrior', idx), b = createHero('Б', 'thief', idx)
     const heroes = [m, a, b]
@@ -97,7 +97,7 @@ describe('регрессии ревью движка', () => {
     expect(second.some((e) => /поглощает/.test(e.text))).toBe(false)
   })
 
-  it('6. заклинания монстров не находят невидимого героя', () => {
+  it('6. заклинания монстров не находят невидимого героя', async () => {
     const w = createHero('Воин', 'warrior', idx)
     w.buffs.push({ source: 'Невидимость', stat: 'ward', ward: 'invisible', amount: 0, rounds: 5 })
     const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
@@ -108,7 +108,7 @@ describe('регрессии ревью движка', () => {
     expect(w.lives).toBe(w.maxLives)
   })
 
-  it('7. опыт за урон окаменения достаётся магу', () => {
+  it('7. опыт за урон окаменения достаётся магу', async () => {
     const m = caster('mage', 10000, 'mage-okamenenie')
     const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
     const orc = state.monsters[0]; orc.noSave = true
@@ -119,14 +119,14 @@ describe('регрессии ревью движка', () => {
     expect(m.xp - before).toBe(orc.maxLives * orc.points)
   })
 
-  it('8. заклинание без эффекта не даёт опыта', () => {
+  it('8. заклинание без эффекта не даёт опыта', async () => {
     const m = caster('mage', 1000, 'mage-zasypanie')
     const { state } = startCombat([{ monsterId: 'chernyy-drakon', count: 1 }], idx)
     const res = castSpell({ hero: m, spell: idx.spell('mage-zasypanie'), idx, heroes: [m], combat: state, targetUid: state.monsters[0].uid })
     expect(res.ok).toBe(true); expect(res.xp).toBe(0)
   })
 
-  it('9. лечение мёртвого героя не тратит ману', () => {
+  it('9. лечение мёртвого героя не тратит ману', async () => {
     const p = caster('priest', 0, 'priest-lechenie')
     const w = createHero('Воин', 'warrior', idx)
     w.lives = -10; w.status.dead = true
@@ -134,7 +134,7 @@ describe('регрессии ревью движка', () => {
     expect(res.ok).toBe(false); expect(p.mana).toBe(p.maxMana)
   })
 
-  it('10. артефакты подчиняются ограничениям класса и рук', () => {
+  it('10. артефакты подчиняются ограничениям класса и рук', async () => {
     const m = createHero('Маг', 'mage', idx)
     expect(() => equip(m, addToInventory(m, 'artifact', '6').uid, idx)).toThrow() // Топор Крома
     const p = createHero('Жрец', 'priest', idx)
@@ -148,10 +148,10 @@ describe('регрессии ревью движка', () => {
     expect(equip(m, buy(m, 'armor', 'schit', idx).uid, idx)).toBe('shield')
   })
 
-  it('11. «Прервать» снимает боевые статусы и баффы', () => {
+  it('11. «Прервать» снимает боевые статусы и баффы', async () => {
     const s = useGameStore()
     s.newGame()
-    const w = s.addHero('Воин', 'warrior')
+    const w = (await s.addHero('Воин', 'warrior'))!
     s.startEncounter([{ monsterId: 'ork', count: 1 }])
     const h = s.hero(w.uid)
     h.status.paralysis = 3; h.status.petrified = true
@@ -161,7 +161,7 @@ describe('регрессии ревью движка', () => {
     expect(h.status.paralysis).toBeUndefined(); expect(h.status.petrified).toBeUndefined(); expect(h.buffs).toEqual([])
   })
 
-  it('мелочи: опыт заклинаний входит в итог боя, «Бесконечная мана» восполняет ману', () => {
+  it('мелочи: опыт заклинаний входит в итог боя, «Бесконечная мана» восполняет ману', async () => {
     const m = caster('mage', 4000, 'mage-magicheskaya-strela')
     const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
     state.monsters[0].noSave = true
@@ -173,7 +173,7 @@ describe('регрессии ревью движка', () => {
     expect(m8.mana).toBe(m8.maxMana)
   })
 
-  it('Молитва: +3 к следующему броску героя, затем снимается', () => {
+  it('Молитва: +3 к следующему броску героя, затем снимается', async () => {
     const p = caster('priest', 7000, 'priest-molitva')
     castSpell({ hero: p, spell: idx.spell('priest-molitva'), idx, heroes: [p], targetHeroUid: p.uid })
     expect(hasWard(p, 'prayer')).toBeDefined()
@@ -182,7 +182,7 @@ describe('регрессии ревью движка', () => {
     expect(hasWard(p, 'prayer')).toBeUndefined()
   })
 
-  it('Двойник копирует защиту и жизни героя и сражается за партию', () => {
+  it('Двойник копирует защиту и жизни героя и сражается за партию', async () => {
     const m = caster('mage', 40000, 'mage-dvoynik')
     const w = createHero('Воин', 'warrior', idx); w.money = 500
     equip(w, buy(w, 'weapon', 'mech-dlinnyy', idx).uid, idx)
@@ -194,7 +194,7 @@ describe('регрессии ревью движка', () => {
     expect(state.allies[0].attacks).toBe('3-4-5-6-7-8')
   })
 
-  it('Отражение магии возвращает заклинание монстру', () => {
+  it('Отражение магии возвращает заклинание монстру', async () => {
     const m = caster('mage', 40000, 'mage-otrazhenie-magii')
     const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
     castSpell({ hero: m, spell: idx.spell('mage-otrazhenie-magii'), idx, heroes: [m], combat: state })
@@ -209,7 +209,7 @@ describe('регрессии ревью движка', () => {
     expect(hasWard(m, 'reflect')).toBeUndefined()
   })
 
-  it('Удвоение жидкости и Несчастье', () => {
+  it('Удвоение жидкости и Несчастье', async () => {
     const m = caster('mage', 2000, 'mage-udvoenie-zhidkosti')
     const b = addToInventory(m, 'bottle', '6', 1, { identified: true })
     castSpell({ hero: m, spell: idx.spell('mage-udvoenie-zhidkosti'), idx, heroes: [m], targetEntryUid: b.uid })
@@ -223,7 +223,7 @@ describe('регрессии ревью движка', () => {
     expect(() => monstersTurn(state, [m8], idx)).not.toThrow()
   })
 
-  it('Оживление мертвеца: нужен труп, зомби может выйти из-под контроля', () => {
+  it('Оживление мертвеца: нужен труп, зомби может выйти из-под контроля', async () => {
     const m = caster('mage', 4000, 'mage-ozhivlenie-mertvetsa')
     const { state } = startCombat([{ monsterId: 'ork', count: 2 }], idx)
     const no = castSpell({ hero: m, spell: idx.spell('mage-ozhivlenie-mertvetsa'), idx, heroes: [m], combat: state })

@@ -30,8 +30,8 @@ describe('приложение монтируется и проходит по �
     await router.push('/party'); await flush()
     expect(html()).toContain('Партия')
     store.newGame()
-    const w = store.addHero('Конан', 'warrior')
-    const m = store.addHero('Мерлин', 'mage')
+    const w = (await store.addHero('Конан', 'warrior'))!
+    const m = (await store.addHero('Мерлин', 'mage'))!
     store.addHero('Жрец', 'priest')
     await flush()
     expect(html()).toContain('Конан'); expect(html()).toContain('Книга заклинаний')
@@ -52,7 +52,7 @@ describe('приложение монтируется и проходит по �
     store.enterLocation('zolotoy-gorod')
     await router.push({ path: '/location/zolotoy-gorod', query: { p: 1 } }); await flush()
     expect(html()).toContain('§ 1'); expect(html()).toContain('Бросок удачи 12'); expect(html()).toContain('Зомби')
-    const r = store.luckCheck(w.uid, 12); expect(typeof r.ok).toBe('boolean')
+    const r = (await store.luckCheck(w.uid, 12))!; expect(typeof r.ok).toBe('boolean')
 
     store.startEncounter([{ monsterId: 'zombi', count: 1 }], '/location/zolotoy-gorod?p=1')
     await router.push('/combat'); await flush()

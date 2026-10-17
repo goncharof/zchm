@@ -49,7 +49,7 @@ function toggleBranch(i: number, label?: string) {
   if (s.has(i)) s.delete(i)
   else {
     s.add(i)
-    if (label && current.value) store.log(`${loc.value?.name}, § ${current.value}: ${label}.`)
+    if (label && current.value) void store.note(`${loc.value?.name}, § ${current.value}: ${label}.`)
   }
   opened.value = s
 }
@@ -72,9 +72,9 @@ function next() {
   if (nxt) open(nxt.n)
 }
 function leave() { store.leaveLocation(); router.push('/map') }
-function finalAttack() {
+async function finalAttack() {
   if (!heroUid.value) return
-  const won = store.finalDuelAttack(heroUid.value)
+  const won = await store.finalDuelAttack(heroUid.value)
   lastFinal.value = won ? 'Попадание! Чёрный маг повержен.' : 'Промах — маг отвечает огненным шаром (см. журнал).'
   if (won && current.value) store.markVisited(props.id, current.value)
 }

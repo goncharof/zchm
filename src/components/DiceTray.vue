@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { rollFormula } from '@/engine/dice'
 import { useGameStore } from '@/stores/game'
 
 /** Лоток кубиков для свободных бросков (ведущему и игрокам) */
@@ -8,15 +7,11 @@ const emit = defineEmits<{ close: [] }>()
 const store = useGameStore()
 const formula = ref('3к6')
 const history = ref<string[]>([])
-function rollIt(f: string) {
-  try {
-    const r = rollFormula(f)
-    const text = `${f} = ${r.total}${r.rolls.length > 1 || /[+-]/.test(f) ? ` (${r.rolls.join(' + ')}${f.match(/[+-]\d+$/)?.[0] ?? ''})` : ''}`
-    history.value = [text, ...history.value].slice(0, 8)
-    store.log(`Бросок: ${text}.`, 'luck')
-  } catch (e) {
-    store.say((e as Error).message)
-  }
+async function rollIt(f: string) {
+  const r = await store.rollDice(f)
+  if (!r) return
+  const text = `${f} = ${r.total}${r.rolls.length > 1 || /[+-]/.test(f) ? ` (${r.rolls.join(' + ')}${f.match(/[+-]\d+$/)?.[0] ?? ''})` : ''}`
+  history.value = [text, ...history.value].slice(0, 8)
 }
 </script>
 

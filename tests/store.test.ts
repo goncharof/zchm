@@ -20,7 +20,7 @@ const { useGameStore } = await import('@/stores/game')
 
 describe('карта мира', () => {
   const w = world as unknown as WorldMap
-  it('все рёбра ссылаются на узлы, из Золотого города достижим Замок Чёрного мага', () => {
+  it('все рёбра ссылаются на узлы, из Золотого города достижим Замок Чёрного мага', async () => {
     const ids = new Set(w.nodes.map((n) => n.id))
     for (const e of w.edges) { expect(ids.has(e.from)).toBe(true); expect(ids.has(e.to)).toBe(true) }
     const r = shortestRoute(w, 'zolotoy-gorod', 'zamok-chernogo-maga')
@@ -34,25 +34,24 @@ describe('карта мира', () => {
 describe('хранилище партии', () => {
   beforeEach(() => { setActivePinia(createPinia()); mem.clear(); setRng(seededRng(11)) })
 
-  it('новая партия, герои, покупки, сохранение в localStorage', () => {
+  it('новая партия, герои, покупки, сохранение в localStorage', async () => {
     const s = useGameStore()
     s.newGame()
-    const w = s.addHero('Воин', 'warrior')
+    const w = (await s.addHero('Воин', 'warrior'))!
     s.addHero('Маг', 'mage')
     s.buyItem(w.uid, 'weapon', 'mech-korotkiy')
     expect(s.hero(w.uid).money).toBe(30)
-    expect(mem.get('zchm.save.v1')).toBeUndefined() // watch сработает после flush
     const json = s.exportSave()
     expect(json).toContain('Воин')
     s.importSave(json)
     expect(s.heroes).toHaveLength(2)
   })
 
-  it('параграф: удача, монеты, бутылка, свиток, артефакт, ловушка', () => {
+  it('параграф: удача, монеты, бутылка, свиток, артефакт, ловушка', async () => {
     const s = useGameStore()
     s.newGame()
-    const t = s.addHero('Вор', 'thief')
-    const r = s.luckCheck(t.uid, 5)
+    const t = (await s.addHero('Вор', 'thief'))!
+    const r = (await s.luckCheck(t.uid, 5))!
     expect(typeof r.ok).toBe('boolean')
     s.adjustMoney(t.uid, 100); expect(s.hero(t.uid).money).toBe(140)
     s.giveItem(t.uid, 'bottle', '5', 1, false)
@@ -60,7 +59,7 @@ describe('хранилище партии', () => {
     s.giveScroll(t.uid, 'mage', 3)
     const scroll = s.hero(t.uid).inventory.find((e) => e.kind === 'scroll')!
     expect(scroll.ref.startsWith('mage-')).toBe(true)
-    const n = s.findArtifact(t.uid)
+    const n = (await s.findArtifact(t.uid))!
     expect(n).toBeGreaterThanOrEqual(1); expect(n).toBeLessThanOrEqual(18)
     expect(s.game!.artifactsFound).toEqual([n])
     expect(s.hero(t.uid).xp).toBe(500)
@@ -68,10 +67,10 @@ describe('хранилище партии', () => {
     expect(s.hero(t.uid).xp).toBe(900)
   })
 
-  it('бой из хранилища: встреча, ход героев и монстров, завершение', () => {
+  it('бой из хранилища: встреча, ход героев и монстров, завершение', async () => {
     const s = useGameStore()
     s.newGame()
-    const w = s.addHero('Воин', 'warrior')
+    const w = (await s.addHero('Воин', 'warrior'))!
     s.adjustMoney(w.uid, 500)
     s.buyItem(w.uid, 'weapon', 'mech-dvuruchnyy')
     s.equipItem(w.uid, s.hero(w.uid).inventory[0].uid)
@@ -103,14 +102,14 @@ describe('хранилище партии', () => {
     expect(s.location?.name).toBe('Северный форт')
   })
 
-  it('финал: схватка с Чёрным магом заканчивается победой, короной и артефактом', () => {
+  it('финал: схватка с Чёрным магом заканчивается победой, короной и артефактом', async () => {
     const s = useGameStore()
     s.newGame()
-    const w = s.addHero('Воин', 'warrior')
+    const w = (await s.addHero('Воин', 'warrior'))!
     let won = false
     for (let i = 0; i < 200 && !won; i++) {
       w.lives = w.maxLives; w.status = {}
-      won = s.finalDuelAttack(w.uid)
+      won = (await s.finalDuelAttack(w.uid))!
     }
     expect(won).toBe(true)
     expect(s.game!.victory?.heroName).toBe('Воин')
@@ -120,10 +119,10 @@ describe('хранилище партии', () => {
     expect(s.hero(w.uid).lives).toBe(w.maxLives)
   })
 
-  it('спутник сражается в бою и уходит после оговорённого числа боёв', () => {
+  it('спутник сражается в бою и уходит после оговорённого числа боёв', async () => {
     const s = useGameStore()
     s.newGame()
-    const w = s.addHero('Воин', 'warrior')
+    const w = (await s.addHero('Воин', 'warrior'))!
     s.addCompanion('rytsar', 1)
     expect(s.game!.companions).toHaveLength(1)
     s.startEncounter([{ monsterId: 'kobold', count: 1 }])
@@ -140,7 +139,7 @@ describe('хранилище партии', () => {
     expect(s.game!.log.some((e) => /выполнил уговор|пал в бою/.test(e.text))).toBe(true)
   })
 
-  it('быстрый старт: четыре героя, снаряжение надето и уложено в 40 монет', () => {
+  it('быстрый старт: четыре героя, снаряжение надето и уложено в 40 монет', async () => {
     const s = useGameStore()
     s.quickStart()
     expect(s.heroes.map((h) => h.classId)).toEqual(['warrior', 'mage', 'priest', 'thief'])

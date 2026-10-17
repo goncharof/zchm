@@ -33,9 +33,10 @@ function once(key: string, fn: (h: string) => void) {
   fn(h)
   taken.value = new Set([...taken.value, key])
 }
-function luck(target: number) {
+async function luck(target: number) {
   const h = need(); if (!h) return
-  const r = store.luckCheck(h, target)
+  const r = await store.luckCheck(h, target)
+  if (!r) return
   lastLuck.value = `${store.hero(h).name}: к18 = ${r.roll}${r.luck ? ` + ${r.luck}` : ''} против ${target} — ${r.ok ? 'удача!' : 'неудача'}`
 }
 function fight(ids: string[]) {
