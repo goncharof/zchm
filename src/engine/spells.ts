@@ -205,6 +205,8 @@ export function castSpell(input: CastInput): CastResult {
   const cost = resolveCost(spell, hero, input.param)
   const effect = spell.effect ?? { type: 'manual' }
   const measured = { damageXp: 0, healed: 0, manaMoved: 0 }
+  /** заклинание подействовало хотя бы на одну цель (иначе опыта нет, стр. 10) */
+  let effective = true
   const aliveMonsters = () => (combat?.monsters ?? []).filter((m) => !m.dead && !m.fled)
   const targetHero = () => heroes.find((h) => h.uid === (input.targetHeroUid ?? hero.uid)) ?? hero
   const fail = (text: string) => { log(entries, text, 'info'); return res }
@@ -228,6 +230,7 @@ export function castSpell(input: CastInput): CastResult {
       const volleys = /за 1 стрел/.test(spell.costFormula ?? '') ? Math.min(3, Math.max(1, input.param ?? 1)) : 1
       for (const t of targets) {
         for (let v = 0; v < volleys; v++) {
+          if (t.dead) break
           let half = false
           if (spell.luck && !t.noSave) {
             const r = k18()
@@ -256,14 +259,16 @@ export function castSpell(input: CastInput): CastResult {
     }
     case 'heal': {
       const target = targetHero()
+      if (target.status.dead) return fail(`${target.name} мёртв — лечение не поможет`)
+      const free = !!hasWard(hero, 'infinite-mana')
       const manaPerLife = Math.max(1, Math.round(1 / effect.perMana))
       const want = Math.max(1, input.param ?? 1)
       const missing = Math.max(0, target.maxLives - target.lives)
-      let use = Math.min(want, hero.mana, missing * manaPerLife)
+      let use = Math.min(want, free ? want : hero.mana, missing * manaPerLife)
       use -= use % manaPerLife
       if (use <= 0) return fail(`${target.name} не нуждается в лечении`)
-      hero.mana -= use
-      res.manaSpent = use
+      if (!free) hero.mana -= use
+      res.manaSpent = free ? 0 : use
       const healed = changeLives(target, Math.floor(use * effect.perMana))
       measured.healed = healed
       log(entries, `${hero.name} — «${spell.name}»: ${target.name} +${healed} жизней за ${use} маны.`)
@@ -271,6 +276,7 @@ export function castSpell(input: CastInput): CastResult {
     }
     case 'restore-all': {
       const target = targetHero()
+      if (target.status.dead) return fail(`${target.name} мёртв — восстановление не поможет`)
       spend()
       const healed = changeLives(target, target.maxLives - target.lives)
       measured.healed = healed
@@ -327,12 +333,15 @@ export function castSpell(input: CastInput): CastResult {
         targets = [t]
       } else targets = all
       spend()
+      let affected = 0
       for (const t of targets) {
         if (effect.maxLevel !== undefined && t.level > effect.maxLevel) { log(entries, `${t.name} слишком силён (уровень ${t.level} > ${effect.maxLevel}) — заклинание не действует.`); continue }
         if (effect.kind === 'slay-undead' && !UNDEAD.has(t.monsterId)) { log(entries, `${t.name} — не мертвец, заклинание бессильно.`); continue }
         if (monsterSaves(t, spell, entries)) continue
         applyControl(effect.kind, t, hero, spell, combat!, effect.duration, entries, measured)
+        affected++
       }
+      effective = affected > 0
       break
     }
     case 'weapon': {
@@ -347,12 +356,15 @@ export function castSpell(input: CastInput): CastResult {
       spend()
       const rounds = durationRounds(effect.duration, hero.level)
       const targets = effect.scope === 'party' ? heroes.filter((h) => !h.status.dead) : effect.scope === 'ally' ? [targetHero()] : [hero]
-      const charge = effect.kind === 'antimagic' ? (effect.scope === 'party' ? rollFormula('2к6').total : 99) : undefined
+      // Воздушный щит: один общий запас 2к6 уровней заклинаний на всю партию
+      const charge = effect.kind === 'spell-shield' ? rollFormula('2к6').total : undefined
+      const poolId = charge !== undefined ? `pool_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}` : undefined
       for (const t of targets) {
         t.buffs = t.buffs.filter((b) => !(b.stat === 'ward' && b.ward === effect.kind))
-        t.buffs.push({ source: spell.name, stat: 'ward', ward: effect.kind, amount: 0, rounds, charge })
+        t.buffs.push({ source: spell.name, stat: 'ward', ward: effect.kind, amount: 0, rounds, charge, poolId })
+        if (effect.kind === 'infinite-mana') t.mana = t.maxMana
       }
-      log(entries, `${targets.map((t) => t.name).join(', ')}: ${wardName(effect.kind)}${charge && charge < 99 ? ` (поглотит ${charge} уровней заклинаний)` : ''}${rounds > 0 ? ` на ${rounds} раунд(ов)` : ''}.`)
+      log(entries, `${targets.map((t) => t.name).join(', ')}: ${wardName(effect.kind)}${charge !== undefined ? ` (поглотит ${charge} уровней заклинаний на всех)` : ''}${rounds > 0 ? ` на ${rounds} раунд(ов)` : ''}.`)
       break
     }
     case 'initiative': {
@@ -366,8 +378,9 @@ export function castSpell(input: CastInput): CastResult {
       if (needCombat()) return res
       spend()
       const t = targetHero()
-      combat!.extraActions[t.uid] = (combat!.extraActions[t.uid] ?? 0) + 1
-      combat!.acted = combat!.acted.filter((u) => u !== t.uid)
+      // ровно одно дополнительное действие: уже сходившему — вернуть ход, ещё не сходившему — прибавить действие
+      if (combat!.acted.includes(t.uid)) combat!.acted = combat!.acted.filter((u) => u !== t.uid)
+      else combat!.extraActions[t.uid] = (combat!.extraActions[t.uid] ?? 0) + 1
       log(entries, `Время замирает: ${t.name} получает дополнительное действие без ответа противника.`)
       break
     }
@@ -404,7 +417,7 @@ export function castSpell(input: CastInput): CastResult {
       const t = oneMonster()
       if (!t) return fail('Нужно выбрать цель')
       if (!(t.mana ?? 0)) { spend(); log(entries, `У ${t.name} нет магической энергии — мана потрачена впустую.`); break }
-      if (monsterSaves(t, spell, entries)) { hero.mana -= cost; res.manaSpent = cost; break }
+      if (monsterSaves(t, spell, entries)) { hero.mana -= cost; res.manaSpent = cost; effective = false; break }
       const use = Math.max(1, Math.min(input.param ?? 1, hero.mana))
       hero.mana -= use
       res.manaSpent = use
@@ -472,9 +485,11 @@ export function castSpell(input: CastInput): CastResult {
     }
   }
   res.ok = true
-  const xp = spellXp(spell, hero, measured)
+  const xp = effective ? spellXp(spell, hero, measured) : 0
+  if (!effective) log(entries, 'Заклинание ни на кого не подействовало — опыта нет.', 'info')
   if (xp > 0) {
     res.xp = xp
+    if (combat) combat.xpEarned[hero.uid] = (combat.xpEarned[hero.uid] ?? 0) + xp
     res.levelUps = gainXp(hero, xp, idx)
     log(entries, `${hero.name} получает ${xp} очков опыта.`, 'xp')
   }
@@ -492,11 +507,13 @@ function applyControl(kind: Extract<SpellEffect, { type: 'control' }>['kind'], t
     case 'paralysis': {
       t.disabled = k6()
       t.disabledKind = 'paralysis'
+      t.dotBy = { ...t.dotBy, paralysis: hero.uid }
       log(entries, `${t.name} парализован на ${t.disabled} раунд(ов), теряет 1к3 жизней за раунд.`)
       break
     }
     case 'petrify':
       t.petrified = true
+      t.dotBy = { ...t.dotBy, petrify: hero.uid }
       log(entries, `${t.name} превращается в камень и будет терять 1к6 жизней за раунд.`)
       break
     case 'freeze': {
@@ -524,6 +541,7 @@ function applyControl(kind: Extract<SpellEffect, { type: 'control' }>['kind'], t
     case 'choke': {
       if (!t.choke) { t.defenseMod -= 4; t.attackMultiplier *= 0.5 }
       t.choke = Math.max(t.choke ?? 0, durationRounds(duration, hero.level))
+      t.dotBy = { ...t.dotBy, choke: hero.uid }
       log(entries, `${t.name} задыхается: защита −4, атаки вдвое, −1к3 жизней за раунд (${t.choke} раунд(ов)).`)
       break
     }
@@ -602,7 +620,7 @@ export function statName(stat: string): string {
 export function wardName(kind: string): string {
   return ({
     invulnerable: 'неуязвимость', invisible: 'невидимость', crystal: 'хрустальный щит (монстры до 2 уровня не могут атаковать)',
-    antimagic: 'защита от заклинаний', 'air-wall': 'защита от метательного оружия', undead: 'мертвецы не замечают',
+    antimagic: 'защита от заклинаний', 'spell-shield': 'воздушный щит от заклинаний и особых атак', 'air-wall': 'защита от метательного оружия', undead: 'мертвецы не замечают',
     luck: 'следующий бросок удачи удастся', 'infinite-mana': 'мана не убывает',
   } as Record<string, string>)[kind] ?? kind
 }

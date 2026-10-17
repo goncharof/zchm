@@ -1,4 +1,5 @@
 /** Инвентарь: покупка/продажа, экипировка, бутылки, свитки, вещи. */
+import type { Artifact, Weapon } from '@/types'
 import type { DataIndex } from './data'
 import type { EquipSlot, Hero, InventoryEntry, InventoryKind } from './model'
 import { uid } from './model'
@@ -99,18 +100,18 @@ export function equip(hero: Hero, entryUid: string, idx: DataIndex, preferredSlo
   }
   if (e.kind === 'armor') {
     const a = idx.armor(e.ref)
-    if (a.slot === 'shield') {
-      const r = hero.equipment.rightHand && entryByUid(hero, hero.equipment.rightHand)
-      if (r && handOf(r, idx) === 'two') throw new Error('Щит нельзя держать вместе с двуручным оружием')
-      if (hero.equipment.leftHand) delete hero.equipment.leftHand
-      if (cls.oneHandOnly && hero.equipment.rightHand) throw new Error(`${cls.name} держит оружие только в одной руке и не может взять щит`)
-    }
+    if (a.slot === 'shield') checkShield(hero, idx)
     return place(a.slot)
   }
   if (e.kind === 'artifact') {
     const n = parseInt(e.ref, 10)
     const a = idx.artifact(n)
     const slot = artifactSlot(n)
+    if (slot === 'melee' || slot === 'ranged') {
+      const pseudo: Weapon = { id: a.id, name: a.name, group: artifactGroup(a), price: 0, hand: a.hand, ranged: slot === 'ranged' || undefined }
+      if (!canUseWeapon(cls, pseudo)) throw new Error(`${cls.name} не может пользоваться: ${a.name}`)
+    }
+    if (slot === 'shield') checkShield(hero, idx)
     if (slot === 'melee') return placeMelee(hero, entryUid, a.hand ?? 'any', !!cls.oneHandOnly, preferredSlot)
     if (slot === 'ranged') return place('ranged')
     if (slot === 'accessory1') {
@@ -120,6 +121,24 @@ export function equip(hero: Hero, entryUid: string, idx: DataIndex, preferredSlo
     return place(slot)
   }
   throw new Error('Этот предмет нельзя надеть')
+}
+
+/** Группа оружия артефакта по названию (для ограничений класса) */
+export function artifactGroup(a: Artifact): Weapon['group'] {
+  const n = a.name.toLowerCase()
+  if (/лук/.test(n)) return 'bow'
+  if (/палиц/.test(n)) return 'mace'
+  if (/кинжал/.test(n)) return 'dagger'
+  if (/топор/.test(n)) return 'axe'
+  if (/меч|экскалибур/.test(n)) return 'sword'
+  return 'other'
+}
+
+/** ХАУСРУЛ: щит доступен всем классам (книга ограничивает магов и жрецов только оружием), но не с двуручным оружием */
+function checkShield(hero: Hero, idx: DataIndex): void {
+  const r = hero.equipment.rightHand && entryByUid(hero, hero.equipment.rightHand)
+  if (r && handOf(r, idx) === 'two') throw new Error('Щит нельзя держать вместе с двуручным оружием')
+  if (hero.equipment.leftHand) delete hero.equipment.leftHand
 }
 
 function handOf(e: InventoryEntry, idx: DataIndex): string | undefined {

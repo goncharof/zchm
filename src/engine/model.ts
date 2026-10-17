@@ -31,6 +31,8 @@ export interface HeroStatus {
   dead?: boolean
   /** заклинание «Инициатива»: в ближайшем бою герои атакуют первыми */
   initiative?: boolean
+  /** статусы, наложенные в этот ход монстров: первый отсчёт пропускается, чтобы герой пропустил полные N раундов */
+  fresh?: ('paralysis' | 'freeze')[]
 }
 
 export interface Hero {
@@ -70,8 +72,10 @@ export interface Buff {
   rounds: number
   /** для stat = 'ward' */
   ward?: WardKind
-  /** заряд (антимагия: суммарные уровни заклинаний) */
+  /** заряд (Воздушный щит: суммарные уровни заклинаний) */
   charge?: number
+  /** общий запас заряда у нескольких героев (Воздушный щит на всю партию) */
+  poolId?: string
   /** для stat = 'weapon': временное магическое оружие */
   weapon?: { name: string; attacks: string; dexterityBonus?: number; attacksPerRound?: number; lifesteal?: boolean }
 }
@@ -143,6 +147,8 @@ export interface MonsterInstance {
   noSave?: boolean
   /** атаки −2 от устрашения и т.п. учитываются в attackMod */
   sleeping?: boolean
+  /** кто наложил урон со временем — ему идёт опыт за отнятые жизни */
+  dotBy?: Partial<Record<'poison' | 'choke' | 'petrify' | 'paralysis', string>>
 }
 
 export interface LogEntry {

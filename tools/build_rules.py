@@ -700,7 +700,7 @@ EFFECT_OVERRIDES = {
     'mage-oledenenie': control('freeze', 'one', maxLevel=5),
     'mage-uluchshenie-magicheskogo-sozdaniya': {'type': 'empower'},
     'mage-ognennaya-yascheritsa': {'type': 'summon', 'name': 'Огненная ящерица', 'defense': 10, 'attacks': '3к6', 'lives': '2*L', 'kind': 'creature'},
-    'mage-vozdushnyy-schit': ward('antimagic', 'party', '1 бой'),
+    'mage-vozdushnyy-schit': ward('spell-shield', 'party', '1 бой'),
     'mage-prizrachnaya-pantera': {'type': 'summon', 'name': 'Призрачная пантера', 'defense': 13, 'attacks': '1к18', 'lives': '10', 'kind': 'creature'},
     'mage-beskonechnaya-mana': ward('infinite-mana', 'ally', '1к6 раундов'),
     'mage-sozdanie-elementalov': {'type': 'summon', 'name': 'Элементал', 'kind': 'elemental'},

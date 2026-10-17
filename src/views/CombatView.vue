@@ -111,6 +111,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
         <button v-if="!c.finished && c.phase === 'ranged'" @click="store.toMelee()">Сойтись вплотную</button>
         <label class="row small" style="gap:.3rem" title="Ход монстров выполняется автоматически"><input type="checkbox" v-model="autoMonsters" /> монстры ходят сами</label>
         <button v-if="!c.finished && c.turn === 'monsters'" class="primary" @click="store.monstersAct()">Ход монстров</button>
+        <button v-if="!c.finished && c.turn === 'heroes'" class="small" title="Оставшиеся герои пропускают ход" @click="store.endHeroesTurn()">Закончить ход героев</button>
         <button v-if="!c.finished" class="small" @click="picker = true">Добавить монстров</button>
         <button v-if="c.finished" class="primary" @click="finish">Завершить бой</button>
         <button v-else class="small danger" @click="store.abortCombat()">Прервать</button>

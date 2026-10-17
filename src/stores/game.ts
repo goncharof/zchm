@@ -9,7 +9,7 @@ import { changeLives, createHero, gainXp, hasWard, heroLuck, isConscious, rest, 
 import * as inv from '@/engine/inventory'
 import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
-import { makeAlly, closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
+import { makeAlly, cleanupAfterCombat, endHeroesTurn as endHeroesTurnEngine, closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
 import { plural } from '@/ui/format'
 import { REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
@@ -524,9 +524,21 @@ export const useGameStore = defineStore('game', () => {
     game.value.combat = null
   }
   function abortCombat(): void {
-    if (!game.value) return
+    if (!game.value || !game.value.combat) return
+    // спутники сохраняют жизни (бой не засчитывается), боевые статусы и баффы снимаются
+    for (const a of game.value.combat.allies) {
+      const c = a.companionUid ? game.value.companions.find((x) => x.uid === a.companionUid) : null
+      if (!c) continue
+      if (a.dead || a.lives <= 0) game.value.companions = game.value.companions.filter((x) => x.uid !== c.uid)
+      else c.lives = a.lives
+    }
+    cleanupAfterCombat(heroes.value)
     game.value.combat = null
     log('Бой прерван вручную.')
+  }
+  function endHeroesTurn(): void {
+    if (!combat.value) return
+    logAll(endHeroesTurnEngine(combat.value, heroes.value, idx))
   }
   function addMonstersToCombat(specs: EncounterSpec[]): void {
     const c = combat.value
@@ -546,6 +558,6 @@ export const useGameStore = defineStore('game', () => {
     restAll, travelTo, enterLocation, leaveLocation, markVisited, dismissRoad,
     rollDie, luckCheck, findArtifact, giveScroll, trapFound, finalDuelAttack, drinkFountain,
     addCompanion, dismissCompanion,
-    startEncounter, attack, cast, flee, skip, toMelee, monstersAct, endCombat, abortCombat, addMonstersToCombat,
+    startEncounter, attack, cast, flee, skip, toMelee, monstersAct, endCombat, abortCombat, addMonstersToCombat, endHeroesTurn,
   }
 })

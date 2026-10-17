@@ -1,7 +1,7 @@
 /** Бой (стр. 17–19 Инструкции): раунды, инициатива, атаки, храбрость, доп. атаки, бегство, союзники, магия монстров. */
 import type { Monster, Spell } from '@/types'
 import type { DataIndex } from './data'
-import type { AllyInstance, CombatState, EquipSlot, Hero, LogEntry, MonsterInstance } from './model'
+import type { AllyInstance, Buff, CombatState, EquipSlot, Hero, LogEntry, MonsterInstance } from './model'
 import { uid } from './model'
 import { changeLives, gainXp, hasWard, heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, isActive, isConscious, levelRow, UNARMED, type HandWeapon, type LevelUp } from './character'
 import { k18, k6, roll, rollAttackTable, rollFormula } from './dice'
@@ -36,7 +36,8 @@ export function makeMonsterInstance(m: Monster, n: number): MonsterInstance {
     points: m.points ?? 10,
     extraAttacks: m.extraAttacks,
     mana: m.mana,
-    spells: m.spells,
+    // ХАУСРУЛ: «атаки — магия» без списка заклинаний (Белый маг) — боевые заклинания мага
+    spells: m.spells?.length ? m.spells : m.attacks === 'magic' ? ['Огненное копье', 'Ледяная молния'] : undefined,
     courageChecked: false,
     fled: false,
     dead: false,
@@ -259,6 +260,7 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
       total += p.total
       const rounds = k6()
       target.poison = (target.poison ?? 0) + rounds
+      target.dotBy = { ...target.dotBy, poison: hero.uid }
       w.entry.poisoned = false
       parts.push(`яд +${p.total}, действует ${rounds} раунд(ов)`)
     }
@@ -311,19 +313,34 @@ export function heroSkip(state: CombatState, hero: Hero, heroes: Hero[], idx: Da
  * на дистанции — переход в ближний бой с броском инициативы, в ближнем бою — ход монстров.
  */
 export function markActed(state: CombatState, hero: Hero, heroes: Hero[], idx: DataIndex): LogEntry[] {
-  if ((state.extraActions[hero.uid] ?? 0) > 0) {
-    state.extraActions[hero.uid] -= 1
-    checkEnd(state, heroes)
-    return state.finished ? [] : [entry(`${hero.name} может действовать ещё раз.`)]
-  }
-  if (!state.acted.includes(hero.uid)) state.acted.push(hero.uid)
   checkEnd(state, heroes)
   if (state.finished) return []
+  // дополнительное действие — только если герой ещё на поле и может действовать
+  if ((state.extraActions[hero.uid] ?? 0) > 0 && !state.escaped.includes(hero.uid) && isActive(hero)) {
+    state.extraActions[hero.uid] -= 1
+    return [entry(`${hero.name} может действовать ещё раз.`)]
+  }
+  if (!state.acted.includes(hero.uid)) state.acted.push(hero.uid)
+  return advanceIfDone(state, heroes, idx)
+}
+
+/** Если все способные действовать герои сходили — переход в ближний бой или ход монстров */
+export function advanceIfDone(state: CombatState, heroes: Hero[], idx: DataIndex): LogEntry[] {
+  checkEnd(state, heroes)
+  if (state.finished || state.turn !== 'heroes') return []
   const pending = activeHeroes(heroes, state).filter((h) => !state.acted.includes(h.uid))
   if (pending.length > 0) return []
   if (state.phase === 'ranged') return [closeToMelee(state, heroes, idx)]
   state.turn = 'monsters'
   return []
+}
+
+/** Принудительно закончить ход героев (запасной выход, если кто-то не может или не хочет действовать) */
+export function endHeroesTurn(state: CombatState, heroes: Hero[], idx: DataIndex): LogEntry[] {
+  if (state.finished || state.turn !== 'heroes') return []
+  for (const h of heroes) if (!state.acted.includes(h.uid)) state.acted.push(h.uid)
+  state.extraActions = {}
+  return [entry('Герои заканчивают ход.'), ...advanceIfDone(state, heroes, idx)]
 }
 
 /** Завершить фазу дистанции и перейти к ближнему бою (бросок инициативы) */
@@ -345,14 +362,27 @@ export function checkEnd(state: CombatState, heroes: Hero[]): void {
   else if (fighters.every((h) => !isConscious(h))) state.finished = 'defeat'
 }
 
-function monsterTargets(state: CombatState, heroes: Hero[], m: MonsterInstance): (Hero | AllyInstance)[] {
-  const heroesOk = fightingHeroes(heroes, state).filter((h) => {
+/** Герои, которых монстр может выбрать целью (невидимость, хрустальный щит, отворот мертвецов) */
+function targetableHeroes(state: CombatState, heroes: Hero[], m: MonsterInstance): Hero[] {
+  return fightingHeroes(heroes, state).filter((h) => {
     if (hasWard(h, 'invisible')) return false
     if (hasWard(h, 'crystal') && m.level <= 2) return false
     if (hasWard(h, 'undead') && UNDEAD.has(m.monsterId)) return false
     return true
   })
-  return [...heroesOk, ...aliveAllies(state)]
+}
+
+function monsterTargets(state: CombatState, heroes: Hero[], m: MonsterInstance): (Hero | AllyInstance)[] {
+  return [...targetableHeroes(state, heroes, m), ...aliveAllies(state)]
+}
+
+/** Опыт за урон со временем (яд, удушье, окаменение, паралич) тому, кто его наложил */
+function dotXp(state: CombatState, heroes: Hero[], m: MonsterInstance, kind: keyof NonNullable<MonsterInstance['dotBy']>, dealt: number, idx: DataIndex, log: LogEntry[]): void {
+  const owner = m.dotBy?.[kind] ? heroes.find((h) => h.uid === m.dotBy![kind]) : undefined
+  if (!owner || dealt <= 0) return
+  const r = awardXp(state, owner, dealt, m, idx)
+  if (r.xp) log.push(entry(`${owner.name} получает ${r.xp} очков опыта.`, 'xp'))
+  for (const up of r.levelUps) log.push(entry(`${owner.name} достигает ${up.level} уровня!`, 'xp'))
 }
 
 /** Ход союзников (призванные существа): каждый атакует случайного монстра */
@@ -392,6 +422,7 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
       const r = damageMonster(m, rollFormula('1к6').total)
       m.poison -= 1
       log.push(entry(`${m.name} страдает от яда: −${r.dealt} жизней.${r.killed ? ` ${m.name} погибает.` : ''}`, r.killed ? 'death' : 'damage'))
+      dotXp(state, heroes, m, 'poison', r.dealt, idx, log)
       if (r.killed) continue
     }
     if (m.choke && m.choke > 0) {
@@ -399,11 +430,13 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
       m.choke -= 1
       if (m.choke === 0) { m.defenseMod += 4; m.attackMultiplier *= 2 }
       log.push(entry(`${m.name} задыхается: −${r.dealt} жизней.${r.killed ? ` ${m.name} погибает.` : m.choke === 0 ? ' Воздух возвращается.' : ''}`, r.killed ? 'death' : 'damage'))
+      dotXp(state, heroes, m, 'choke', r.dealt, idx, log)
       if (r.killed) continue
     }
     if (m.petrified) {
       const r = damageMonster(m, rollFormula('1к6').total)
       log.push(entry(`${m.name} окаменел и теряет ${r.dealt} жизней.${r.killed ? ' Рассыпается в прах.' : ''}`, r.killed ? 'death' : 'damage'))
+      dotXp(state, heroes, m, 'petrify', r.dealt, idx, log)
       continue
     }
     if (m.disabled && m.disabled > 0) {
@@ -411,6 +444,7 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
       if (m.disabledKind === 'paralysis') {
         const r = damageMonster(m, rollFormula('1к3').total)
         log.push(entry(`${m.name} парализован: −${r.dealt} жизней${m.disabled ? `, ещё ${m.disabled} раунд(ов)` : ''}.${r.killed ? ` ${m.name} погибает.` : ''}`, r.killed ? 'death' : 'damage'))
+        dotXp(state, heroes, m, 'paralysis', r.dealt, idx, log)
       } else {
         log.push(entry(`${m.name} ${m.disabledKind === 'sleep' ? 'спит' : m.disabledKind === 'freeze' ? 'вмёрз в лёд' : 'не может действовать'}${m.disabled ? ` (ещё ${m.disabled} раунд(ов))` : ' — приходит в себя'}.`))
       }
@@ -501,17 +535,26 @@ export function monsterCast(state: CombatState, m: MonsterInstance, heroes: Hero
   const cost = typeof spell.cost === 'number' ? spell.cost : m.level
   m.mana = (m.mana ?? 0) - cost
   const log: LogEntry[] = [entry(`${m.name} произносит «${spell.name}».`, 'spell')]
-  const candidates = fightingHeroes(heroes, state)
-  if (!candidates.length) return log
+  const candidates = targetableHeroes(state, heroes, m)
+  if (!candidates.length) return [...log, entry('Заклинание уходит в пустоту — цели не видно.')]
   const effect = spell.effect
   const targets = effect.type === 'damage' && effect.targets !== 'one' ? candidates : [candidates[roll(candidates.length) - 1]]
   for (const target of targets) {
-    // антимагия: «Воздушный щит», «Огненный щит»
-    const ward = hasWard(target, 'antimagic') ?? heroes.map((h) => hasWard(h, 'antimagic')).find((b) => b && (b.charge ?? 0) >= spell.level)
-    if (ward) {
-      ward.charge = (ward.charge ?? 99) - spell.level
-      log.push(entry(`${ward.source} поглощает заклинание (${target.name}).`, 'spell'))
-      if ((ward.charge ?? 0) <= 0) for (const h of heroes) h.buffs = h.buffs.filter((b) => b !== ward)
+    // Огненный щит защищает того, на кого наложен
+    const fire = hasWard(target, 'antimagic')
+    if (fire) {
+      log.push(entry(`${fire.source} поглощает заклинание (${target.name}).`, 'spell'))
+      continue
+    }
+    // Воздушный щит: общий запас уровней заклинаний; заклинание сильнее остатка проходит
+    const air = hasWard(target, 'spell-shield')
+    if (air && (air.charge ?? 0) >= spell.level) {
+      spendPool(heroes, air, spell.level)
+      log.push(entry(`${air.source} поглощает заклинание ${spell.level} уровня (${target.name}); запас ${Math.max(0, air.charge ?? 0)}.`, 'spell'))
+      continue
+    }
+    if (hasWard(target, 'invulnerable')) {
+      log.push(entry(`${target.name} неуязвим — заклинание не причиняет вреда.`, 'spell'))
       continue
     }
     if (spell.luck) {
@@ -535,6 +578,12 @@ export function monsterCast(state: CombatState, m: MonsterInstance, heroes: Hero
     }
   }
   return log
+}
+
+function spendPool(heroes: Hero[], ward: Buff, amount: number): void {
+  const buffs = heroes.flatMap((h) => h.buffs.filter((b) => b === ward || (ward.poolId && b.poolId === ward.poolId)))
+  for (const b of buffs) b.charge = (b.charge ?? 0) - amount
+  if ((ward.charge ?? 0) <= 0) for (const h of heroes) h.buffs = h.buffs.filter((b) => !buffs.includes(b))
 }
 
 export function monsterAttackAlly(m: MonsterInstance, a: AllyInstance): LogEntry[] {
@@ -569,7 +618,14 @@ export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex):
   }
   const monster = idx.monsterById.get(m.monsterId)
   if (m.attacks === 'death') {
-    const need = monster?.luckSave?.threshold ?? 10
+    if (!monster?.luckSave) {
+      // ХАУСРУЛ 8: если удача от атаки не указана — спасброска нет
+      target.lives = -10
+      changeLives(target, 0)
+      log.push(entry(`${m.name} поражает ${target.name} — ${target.name} погибает.`, 'death'))
+      return log
+    }
+    const need = monster.luckSave.threshold
     const lr = k18()
     const luck = heroLuck(target, idx)
     if (lr + luck >= need) {
@@ -588,6 +644,11 @@ export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex):
     const er = k18()
     if (er >= ex.threshold) {
       const rule = EXTRA_ATTACKS[ex.kind]
+      const shield = hasWard(target, 'spell-shield')
+      if (shield) {
+        log.push(entry(`${m.name} применяет «${rule.name}», но ${shield.source} отражает её.`, 'spell'))
+        return log
+      }
       const lr = k18()
       const luck = heroLuck(target, idx)
       if (lr + luck >= rule.luck) {
@@ -614,12 +675,14 @@ export function applyExtraAttack(target: Hero, kind: keyof typeof EXTRA_ATTACKS,
       const rounds = k6()
       if (sleep) {
         target.status.freeze = rounds
+        markFresh(target, 'freeze')
         log.push(entry(`${target.name} засыпает на ${rounds} раунд(ов).`, 'damage'))
         break
       }
       const d = rollFormula('1к18')
       const lost = -limitedLoss(target, d.total)
       target.status.freeze = rounds
+      markFresh(target, 'freeze')
       log.push(entry(`${target.name} превращается в глыбу льда: −${lost} жизней, обездвижен на ${rounds} раунд(ов).`, 'damage'))
       break
     }
@@ -630,6 +693,7 @@ export function applyExtraAttack(target: Hero, kind: keyof typeof EXTRA_ATTACKS,
     case 'paralysis': {
       const rounds = k6()
       target.status.paralysis = rounds
+      markFresh(target, 'paralysis')
       log.push(entry(`${target.name} парализован на ${rounds} раунд(ов), теряет 1к3 жизней за раунд.`, 'damage'))
       break
     }
@@ -649,16 +713,28 @@ function limitedLoss(hero: Hero, amount: number): number {
   return changeLives(hero, -loss)
 }
 
+function markFresh(h: Hero, kind: 'paralysis' | 'freeze'): void {
+  h.status.fresh = [...(h.status.fresh ?? []).filter((k) => k !== kind), kind]
+}
+
+/** Статус, наложенный в этот ход монстров, начинает отсчёт со следующего раунда */
+function consumeFresh(h: Hero, kind: 'paralysis' | 'freeze'): boolean {
+  if (!h.status.fresh?.includes(kind)) return false
+  h.status.fresh = h.status.fresh.filter((k) => k !== kind)
+  if (!h.status.fresh.length) delete h.status.fresh
+  return true
+}
+
 export function tickHeroStatus(h: Hero): LogEntry[] {
   const log: LogEntry[] = []
   if (!isConscious(h)) return log
-  if (h.status.paralysis && h.status.paralysis > 0) {
+  if (h.status.paralysis && h.status.paralysis > 0 && !consumeFresh(h, 'paralysis')) {
     const d = rollFormula('1к3')
     const lost = -limitedLoss(h, d.total)
     h.status.paralysis -= 1
     log.push(entry(`${h.name} парализован: −${lost} жизней${h.status.paralysis ? `, ещё ${h.status.paralysis} раунд(ов)` : ', паралич проходит'}.`, 'damage'))
   }
-  if (h.status.freeze && h.status.freeze > 0) {
+  if (h.status.freeze && h.status.freeze > 0 && !consumeFresh(h, 'freeze')) {
     h.status.freeze -= 1
     if (h.status.freeze === 0) log.push(entry(`${h.name} приходит в себя.`))
   }
@@ -672,6 +748,17 @@ export function tickHeroStatus(h: Hero): LogEntry[] {
     log.push(entry(`${h.name} страдает от яда: −${lost} жизнь.`, 'damage'))
   }
   return log
+}
+
+/** Снять боевые статусы и баффы (кроме благословения «Удача») — после боя и при прерывании */
+export function cleanupAfterCombat(heroes: Hero[]): void {
+  for (const h of heroes) {
+    h.buffs = h.buffs.filter((b) => b.stat === 'ward' && b.ward === 'luck')
+    delete h.status.petrified
+    delete h.status.freeze
+    delete h.status.paralysis
+    delete h.status.fresh
+  }
 }
 
 /** Завершение боя: снять боевые статусы и баффы, после победы подобрать дротики, копья и попавшие стрелы */
@@ -690,12 +777,7 @@ export function finishCombat(state: CombatState, heroes: Hero[], idx?: DataIndex
       if (parts.length) log.push(entry(`${h.name} подбирает: ${parts.join(', ')}.`))
     }
   }
-  for (const h of heroes) {
-    h.buffs = h.buffs.filter((b) => b.stat === 'ward' && b.ward === 'luck')
-    delete h.status.petrified
-    delete h.status.freeze
-    delete h.status.paralysis
-  }
+  cleanupAfterCombat(heroes)
   const total = Object.values(state.xpEarned).reduce((a, b) => a + b, 0)
   const verdict = state.finished === 'victory' ? 'Победа!' : state.finished === 'fled' ? 'Команда отступила.' : 'Поражение...'
   log.push(entry(`${verdict} Опыт за бой: ${total}.`, 'xp'))
