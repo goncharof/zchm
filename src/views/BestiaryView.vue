@@ -35,7 +35,7 @@ const EXTRA: Record<string, string> = { petrify: 'окаменение', freeze:
         <div>
           <div class="stat-table" v-if="open.level !== undefined">
             <div><b>Уровень</b> {{ open.level }}</div><div><b>Атаки</b> {{ attacksStr(open.attacks) }}</div><div><b>Защита</b> {{ open.defense ?? 'нет' }}</div>
-            <div><b>Храбрость</b> {{ open.courage ?? 'нет' }}</div><div v-if="open.mana"><b>Мана</b> {{ open.mana }}</div><div><b>Жизни</b> {{ open.lives ?? 'нет' }}</div><div><b>Очки</b> {{ open.points ?? '—' }} за жизнь</div>
+            <div><b>Храбрость</b> {{ open.courage ?? 'нет' }}</div><div v-if="open.mana"><b>Мана</b> {{ open.mana }}</div><div><b>Жизни</b> {{ open.lives ?? 'нет' }}<span v-if="open.heads" class="muted"> ({{ open.heads }} {{ open.heads > 4 ? 'голов' : 'головы' }} × {{ open.livesPerHead }})</span></div><div><b>Очки</b> {{ open.points ?? '—' }} за жизнь</div>
           </div>
           <p v-if="open.extraAttacks?.length" class="small"><b>Дополнительная атака:</b> {{ open.extraAttacks.map(e => `${EXTRA[e.kind]} — ${e.threshold}`).join(', ') }}</p>
           <p v-if="open.spells?.length" class="small"><b>Заклинания:</b> {{ open.spells.join(', ') }}</p>

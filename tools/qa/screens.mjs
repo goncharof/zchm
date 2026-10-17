@@ -47,6 +47,8 @@ async function run(label, viewport) {
   await buy(1, 'Оружие', 'кинжал')
   await buy(2, 'Оружие', 'палица')
   await buy(3, 'Оружие', 'арбалет')
+  await buyer.selectOption({ index: 3 })
+  await page.locator('tr', { hasText: /^\s*стрела/ }).first().getByRole('button', { name: '×10' }).click()
   await page.getByRole('button', { name: 'Оружие', exact: true }).click()
   await shot('03-shop')
 

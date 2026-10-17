@@ -95,6 +95,8 @@ export interface AllyInstance {
 
 export interface MonsterInstance {
   uid: string
+  /** головы одного многоголового чудовища (Гидра) */
+  groupId?: string
   monsterId: string
   name: string
   level: number
@@ -151,6 +153,8 @@ export interface CombatState {
   extraActions: Record<string, number>
   /** uid героев, сбежавших с поля боя */
   escaped: string[]
+  /** что можно подобрать после победы: heroUid → id оружия → количество (дротики, копья, попавшие стрелы) */
+  recover: Record<string, Record<string, number>>
   initiative?: { heroes: number; monsters: number }
   /** откуда начался бой — чтобы вернуться */
   returnTo?: string

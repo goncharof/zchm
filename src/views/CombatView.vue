@@ -47,12 +47,19 @@ function needRoll(h: Hero, slot: string) {
 }
 function weaponReady(w: ReturnType<typeof heroWeapons>[number]) {
   if (!c.value) return false
+  if (w.needsAmmo && !w.ammoEntry) return false
   if (c.value.phase === 'ranged') return w.ranged
-  if (w.ranged && w.entry?.kind === 'weapon') return !!idx.weapon(w.entry.ref).throwable
+  if (w.ranged) return !!w.thrown
   return true
 }
 function weaponWhy(w: ReturnType<typeof heroWeapons>[number]) {
+  if (w.needsAmmo && !w.ammoEntry) return 'Нет стрел — купите их в лавке'
   return c.value?.phase === 'ranged' && !w.ranged ? 'Сначала сойдитесь вплотную' : 'Противник вплотную — из лука не выстрелить'
+}
+function ammoText(w: ReturnType<typeof heroWeapons>[number]) {
+  if (w.needsAmmo) return ` · стрел ${w.ammoLeft ?? 0}${w.ammoEntry?.ref === 'elfiyskaya-strela' ? ' (эльф.)' : ''}`
+  if (w.thrown && (w.ammoLeft ?? 0) > 1) return ` · ${w.ammoLeft} шт.`
+  return ''
 }
 function finish() {
   const back = c.value?.returnTo
@@ -135,7 +142,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
           </div>
           <div v-if="h.buffs.length" class="row small" style="margin-bottom:.3rem"><span v-for="(b, i) in h.buffs" :key="i" class="badge accent" :title="b.stat === 'ward' && b.ward ? wardName(b.ward) : ''">{{ b.source }}<template v-if="b.rounds > 0"> ({{ b.rounds }})</template></span></div>
           <div v-if="canAct(h)" class="row">
-            <button v-for="w in heroWeapons(h, idx)" :key="w.slot + w.name" class="small primary" :disabled="!targetMonster || !weaponReady(w)" :title="weaponReady(w) ? needRoll(h, w.slot) : weaponWhy(w)" @click="store.attack(h.uid, w.slot, target)">{{ w.ranged ? '🏹' : '⚔' }} {{ w.name }} ({{ attacksLabel(w) }}) <span class="muted">{{ needRoll(h, w.slot) }}</span></button>
+            <button v-for="w in heroWeapons(h, idx)" :key="w.slot + w.name" class="small primary" :disabled="!targetMonster || !weaponReady(w)" :title="weaponReady(w) ? needRoll(h, w.slot) : weaponWhy(w)" @click="store.attack(h.uid, w.slot, target)">{{ w.ranged ? '🏹' : '⚔' }} {{ w.name }} ({{ attacksLabel(w) }}){{ ammoText(w) }} <span class="muted">{{ weaponReady(w) ? needRoll(h, w.slot) : '' }}</span></button>
             <button v-if="!heroWeapons(h, idx).some(w => !w.ranged)" class="small" :disabled="!targetMonster || c.phase === 'ranged'" :title="needRoll(h, 'unarmed')" @click="store.attack(h.uid, 'unarmed', target)">Голыми руками <span class="muted">{{ needRoll(h, 'unarmed') }}</span></button>
             <button class="small" @click="store.flee(h.uid)" :title="`Нужно выкинуть ${fleeNeed()}+`">Бежать ({{ fleeNeed() }}+)</button>
             <button class="small" @click="store.skip(h.uid)">Пропустить</button>

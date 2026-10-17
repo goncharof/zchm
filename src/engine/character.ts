@@ -136,6 +136,30 @@ export interface HandWeapon {
   alwaysHits?: boolean
   doubleDamage?: boolean
   poisoned?: boolean
+  /** лук или арбалет: нужны стрелы */
+  needsAmmo?: boolean
+  /** стрелы, которые будут выпущены следующим выстрелом */
+  ammoEntry?: InventoryEntry
+  /** сколько выстрелов/бросков осталось */
+  ammoLeft?: number
+  /** метательное оружие, которое улетает при броске (дротик, копьё в слоте метательного) */
+  thrown?: boolean
+}
+
+const BOW_GROUPS = ['bow', 'crossbow']
+/** ХАУСРУЛ: эльфийские стрелы расходуются первыми (меткость +3); арбалет стреляет теми же стрелами */
+export const AMMO_ORDER = ['elfiyskaya-strela', 'strela']
+
+export function pickAmmo(hero: Hero): InventoryEntry | undefined {
+  for (const ref of AMMO_ORDER) {
+    const e = hero.inventory.find((x) => x.kind === 'weapon' && x.ref === ref && x.qty > 0)
+    if (e) return e
+  }
+  return undefined
+}
+
+export function arrowsLeft(hero: Hero): number {
+  return hero.inventory.filter((x) => x.kind === 'weapon' && AMMO_ORDER.includes(x.ref)).reduce((a, x) => a + x.qty, 0)
 }
 
 export function attacksLabel(w: HandWeapon): string {
@@ -156,13 +180,25 @@ export function heroWeapons(hero: Hero, idx: DataIndex): HandWeapon[] {
     if (e.kind === 'weapon') {
       const w = idx.weapon(e.ref)
       if (!w.attacks) continue
-      out.push({ slot, entry: e, name: w.name, attacks: w.attacks, ranged: !!w.ranged, hand: w.hand, accuracyBonus: w.accuracyBonus ?? 0, poisoned: e.poisoned })
+      const thrown = w.group === 'dart' || (slot === 'ranged' && !!w.throwable)
+      const needsAmmo = BOW_GROUPS.includes(w.group)
+      const ammo = needsAmmo ? pickAmmo(hero) : undefined
+      const ammoBonus = ammo ? idx.weapon(ammo.ref).accuracyBonus ?? 0 : 0
+      out.push({
+        slot, entry: e, name: w.name, attacks: w.attacks, ranged: !!w.ranged || thrown, hand: w.hand,
+        accuracyBonus: (w.accuracyBonus ?? 0) + ammoBonus, poisoned: e.poisoned,
+        needsAmmo, ammoEntry: ammo, thrown, ammoLeft: needsAmmo ? arrowsLeft(hero) : thrown ? e.qty : undefined,
+      })
     } else if (e.kind === 'artifact') {
       const a = idx.artifact(parseInt(e.ref, 10))
       if (!a.attacks) continue
       const special = (a.special ?? '').toLowerCase()
+      const bow = a.kind === 'ranged'
+      const ammo = bow ? pickAmmo(hero) : undefined
+      const ammoBonus = ammo ? idx.weapon(ammo.ref).accuracyBonus ?? 0 : 0
       out.push({
-        slot, entry: e, name: a.name, attacks: a.attacks, ranged: a.kind === 'ranged', hand: a.hand, accuracyBonus: a.accuracyBonus ?? 0,
+        slot, entry: e, name: a.name, attacks: a.attacks, ranged: bow, hand: a.hand, accuracyBonus: (a.accuracyBonus ?? 0) + ammoBonus,
+        needsAmmo: bow, ammoEntry: ammo, ammoLeft: bow ? arrowsLeft(hero) : undefined,
         alwaysHits: /всегда попадает/.test(special),
         doubleDamage: /раздваива/.test(special),
         poisoned: e.poisoned,

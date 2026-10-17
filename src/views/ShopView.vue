@@ -18,10 +18,11 @@ const tavern = computed(() => !!store.game && (services.value.includes('tavern')
 const restDays = ref(1)
 const weapons = computed(() => gameData.weapons.filter((w) => w.price > 0))
 
-function buy(kind: 'weapon' | 'armor' | 'item', ref_: string) {
+function buy(kind: 'weapon' | 'armor' | 'item', ref_: string, qty = 1) {
   if (!buyer.value) return
-  try { store.buyItem(buyer.value.uid, kind, ref_) } catch (e) { store.say((e as Error).message) }
+  try { store.buyItem(buyer.value.uid, kind, ref_, qty) } catch (e) { store.say((e as Error).message) }
 }
+const STACKS = ['strela', 'elfiyskaya-strela', 'drotik']
 function usable(wId: string) {
   return buyer.value ? canUseWeapon(idx.cls(buyer.value.classId), idx.weapon(wId)) : true
 }
@@ -49,7 +50,7 @@ function usable(wId: string) {
         <tr v-for="w in weapons" :key="w.id" :class="{ muted: !usable(w.id) }">
           <td data-label="Оружие">{{ w.name }} <span v-if="w.ranged" class="badge">метательное</span><span v-if="w.throwable" class="badge">можно метать</span><span v-if="w.accuracyBonus" class="badge">меткость +{{ w.accuracyBonus }}</span></td>
           <td data-label="Атаки (к6)">{{ attacksStr(w.attacks) }}</td><td data-label="Рука" class="small">{{ w.hand ? HAND_NAMES[w.hand] : '' }}</td><td data-label="Цена">{{ w.price }}</td>
-          <td><button class="small" :disabled="!buyer || buyer.money < w.price" :title="usable(w.id) ? '' : 'Класс не может этим пользоваться, но купить можно'" @click="buy('weapon', w.id)">Купить</button></td>
+          <td><button class="small" :disabled="!buyer || buyer.money < w.price" :title="usable(w.id) ? '' : 'Класс не может этим пользоваться, но купить можно'" @click="buy('weapon', w.id)">Купить</button><button v-if="STACKS.includes(w.id)" class="small" :disabled="!buyer || buyer.money < w.price * 10" @click="buy('weapon', w.id, 10)">×10</button></td>
         </tr>
       </tbody>
     </table>

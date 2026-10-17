@@ -173,6 +173,11 @@ export interface Monster {
   luckSave?: { against: string; threshold: number }
   /** NPC без боевых характеристик (Мерлин, Торговец, Чёрный маг...) */
   special?: boolean
+  /** многоголовые: число голов и жизни на голову (lives = heads × livesPerHead) */
+  heads?: number
+  livesPerHead?: number
+  /** отрубленные головы отрастают (Гидра): в бою каждая голова — отдельный противник */
+  regrows?: boolean
   description: string
   image: string
 }

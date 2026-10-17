@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { idx } from '@/data'
-import { createHero, gainXp, hasWard, heroWeapons } from '@/engine/character'
+import { arrowsLeft, createHero, gainXp, hasWard, heroWeapons } from '@/engine/character'
 import { buy, equip } from '@/engine/inventory'
 import { seededRng, setRng } from '@/engine/dice'
-import { closeToMelee, heroAttack, heroFlee, monstersTurn, startCombat, finishCombat } from '@/engine/combat'
+import { checkEnd, closeToMelee, heroAttack, heroFlee, monstersTurn, regrowHeads, startCombat, finishCombat } from '@/engine/combat'
 import { castSpell, resolveCost } from '@/engine/spells'
 import { addToInventory } from '@/engine/inventory'
 
@@ -41,6 +41,7 @@ describe('бой', () => {
     const w = createHero('Воин', 'warrior', idx); w.money = 500
     equip(w, buy(w, 'weapon', 'mech-korotkiy', idx).uid, idx)
     equip(w, buy(w, 'weapon', 'korotkiy-luk', idx).uid, idx)
+    buy(w, 'weapon', 'strela', idx, 5)
     const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
     const t = state.monsters[0]
     const r1 = heroAttack(state, w, [w], 'rightHand', t.uid, idx)
@@ -218,5 +219,59 @@ describe('бой', () => {
     }
     expect(casts).toBeGreaterThan(0)
     expect(state.monsters[0].mana!).toBeLessThan(14)
+  })
+
+  it('стрелы: без стрел лук не стреляет; эльфийские расходуются первыми и дают +3', () => {
+    const t = createHero('Вор', 'thief', idx); t.money = 500
+    equip(t, buy(t, 'weapon', 'korotkiy-luk', idx).uid, idx)
+    const { state } = startCombat([{ monsterId: 'chernyy-drakon', count: 1 }], idx)
+    const target = state.monsters[0]
+    const none = heroAttack(state, t, [t], 'ranged', target.uid, idx)
+    expect(none.log[0].text).toMatch(/стрелы кончились/)
+    expect(state.acted).toHaveLength(0)
+    buy(t, 'weapon', 'strela', idx, 3)
+    buy(t, 'weapon', 'elfiyskaya-strela', idx, 1)
+    const bow = heroWeapons(t, idx).find((w) => w.slot === 'ranged')!
+    expect(bow.ammoEntry?.ref).toBe('elfiyskaya-strela'); expect(bow.accuracyBonus).toBe(3); expect(bow.ammoLeft).toBe(4)
+    heroAttack(state, t, [t], 'ranged', target.uid, idx)
+    expect(arrowsLeft(t)).toBe(3)
+    expect(t.inventory.some((e) => e.ref === 'elfiyskaya-strela')).toBe(false)
+  })
+
+  it('дротики и копьё улетают при броске и подбираются после победы', () => {
+    const w = createHero('Воин', 'warrior', idx); w.money = 500
+    const darts = buy(w, 'weapon', 'drotik', idx, 3)
+    equip(w, darts.uid, idx)
+    const spear = buy(w, 'weapon', 'kope', idx)
+    const { state } = startCombat([{ monsterId: 'kobold', count: 1 }], idx)
+    heroAttack(state, w, [w], 'ranged', state.monsters[0].uid, idx)
+    expect(w.inventory.find((e) => e.ref === 'drotik')?.qty).toBe(2)
+    expect(state.recover[w.uid].drotik).toBe(1)
+    // копьё в слот метательного, бросок в ближнем бою разрешён
+    equip(w, spear.uid, idx, 'ranged')
+    expect(w.equipment.ranged).toBe(spear.uid)
+    state.acted = []; state.turn = 'heroes'
+    if (!state.finished) heroAttack(state, w, [w], 'ranged', state.monsters[0].uid, idx)
+    expect(w.inventory.some((e) => e.ref === 'kope')).toBe(state.finished === 'victory' && !state.recover[w.uid].kope)
+    state.finished = 'victory'
+    finishCombat(state, [w], idx)
+    expect(w.inventory.find((e) => e.ref === 'drotik')?.qty).toBe(3)
+    expect(w.inventory.some((e) => e.ref === 'kope')).toBe(true)
+  })
+
+  it('гидра: девять голов по одной жизни, отрубленная голова отрастает без опыта', () => {
+    const w = createHero('Воин', 'warrior', idx)
+    const { state } = startCombat([{ monsterId: 'gidra', count: 1 }], idx)
+    expect(state.monsters).toHaveLength(9)
+    expect(state.monsters.every((m) => m.lives === 1 && m.groupId === state.monsters[0].groupId)).toBe(true)
+    state.monsters[0].dead = true; state.monsters[0].lives = 0
+    const log = regrowHeads(state)
+    expect(log).toHaveLength(1)
+    expect(state.monsters[0].dead).toBe(false); expect(state.monsters[0].points).toBe(0)
+    for (const m of state.monsters) { m.dead = true; m.lives = 0 }
+    expect(regrowHeads(state)).toHaveLength(0)
+    checkEnd(state, [w]); expect(state.finished).toBe('victory')
+    const ogre = startCombat([{ monsterId: 'ogr', count: 1 }], idx).state.monsters
+    expect(ogre).toHaveLength(1); expect(ogre[0].lives).toBe(16)
   })
 })

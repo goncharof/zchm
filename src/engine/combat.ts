@@ -7,6 +7,7 @@ import { changeLives, gainXp, hasWard, heroAccuracy, heroDefense, heroDexterity,
 import { k18, k6, roll, rollAttackTable, rollFormula } from './dice'
 import { EXTRA_ATTACKS, fleeTarget } from './rules'
 import { rollSpellDamage } from './spells'
+import { addToInventory, removeFromInventory } from './inventory'
 
 export interface EncounterSpec {
   monsterId: string
@@ -45,6 +46,40 @@ export function makeMonsterInstance(m: Monster, n: number): MonsterInstance {
   }
 }
 
+/** ХАУСРУЛ: каждая голова Гидры — отдельный противник со своими жизнями и атакой */
+export function makeHeads(m: Monster, n: number): MonsterInstance[] {
+  const groupId = uid('grp')
+  const out: MonsterInstance[] = []
+  for (let h = 1; h <= (m.heads ?? 1); h++) {
+    const inst = makeMonsterInstance(m, 0)
+    inst.name = `${m.name}${n ? ` ${n}` : ''}, голова ${h}`
+    inst.lives = inst.maxLives = m.livesPerHead ?? 1
+    inst.groupId = groupId
+    out.push(inst)
+  }
+  return out
+}
+
+/** В конце раунда у Гидры на месте одной отрубленной головы вырастает новая (без опыта за неё) */
+export function regrowHeads(state: CombatState): LogEntry[] {
+  const log: LogEntry[] = []
+  const groups = new Map<string, MonsterInstance[]>()
+  for (const m of state.monsters) if (m.groupId) groups.set(m.groupId, [...(groups.get(m.groupId) ?? []), m])
+  for (const heads of groups.values()) {
+    const alive = heads.filter((h) => !h.dead && !h.fled)
+    const cut = heads.filter((h) => h.dead)
+    if (!alive.length || !cut.length) continue
+    const head = cut[0]
+    head.dead = false
+    head.lives = head.maxLives
+    head.points = 0
+    head.disabled = 0
+    head.petrified = false
+    log.push(entry(`На месте отрубленной головы вырастает новая: ${head.name}.`, 'hit'))
+  }
+  return log
+}
+
 export function makeAlly(ownerUid: string, name: string, defense: number, attacks: string, lives: number, rounds = -1, decoy = false): AllyInstance {
   return { uid: uid('ally'), ownerUid, name, defense, attacks, lives, maxLives: lives, rounds, decoy, attackMultiplier: 1 }
 }
@@ -53,7 +88,10 @@ export function startCombat(specs: EncounterSpec[], idx: DataIndex, returnTo?: s
   const monsters: MonsterInstance[] = []
   for (const s of specs) {
     const m = idx.monster(s.monsterId)
-    for (let i = 1; i <= s.count; i++) monsters.push(makeMonsterInstance(m, s.count > 1 ? i : 0))
+    for (let i = 1; i <= s.count; i++) {
+      if (m.regrows && m.heads && m.livesPerHead) monsters.push(...makeHeads(m, s.count > 1 ? i : 0))
+      else monsters.push(makeMonsterInstance(m, s.count > 1 ? i : 0))
+    }
   }
   const state: CombatState = {
     round: 1,
@@ -64,6 +102,7 @@ export function startCombat(specs: EncounterSpec[], idx: DataIndex, returnTo?: s
     acted: [],
     extraActions: {},
     escaped: [],
+    recover: {},
     returnTo,
     xpEarned: {},
   }
@@ -158,9 +197,13 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
     out.log.push(entry('На дистанции можно только стрелять или колдовать. Переходите в ближний бой.'))
     return out
   }
-  if (state.phase === 'melee' && ranged && w?.entry?.kind === 'weapon' && !idx.weapon(w.entry.ref).throwable) {
+  if (state.phase === 'melee' && ranged && !w?.thrown) {
     // ХАУСРУЛ: луки и арбалеты в ближнем бою не используются; дротики и копья — можно
     out.log.push(entry('Противник вплотную — из лука уже не выстрелить.'))
+    return out
+  }
+  if (w?.needsAmmo && !w.ammoEntry) {
+    out.log.push(entry(`${hero.name}: стрелы кончились.`))
     return out
   }
   const name = w?.name ?? 'голые руки'
@@ -169,12 +212,24 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
   const helpless = (target.disabled ?? 0) > 0 || target.petrified
   const swings = w?.attacksPerRound ?? 1
   for (let swing = 0; swing < swings; swing++) {
+    // расход боеприпасов: стрела улетает, дротик или копьё ложится на поле боя
+    let arrowRef: string | undefined
+    if (w?.needsAmmo && w.ammoEntry) {
+      arrowRef = w.ammoEntry.ref
+      removeFromInventory(hero, w.ammoEntry.uid, 1)
+    }
+    if (w?.thrown && w.entry) {
+      addRecover(state, hero.uid, w.entry.ref, 1)
+      removeFromInventory(hero, w.entry.uid, 1)
+    }
     const r = k18()
     // ХАУСРУЛ: по спящему, парализованному или окаменевшему противнику попадают автоматически
     const hit = w?.alwaysHits || helpless || r + bonus >= need
     out.log.push(entry(`${hero.name} атакует ${target.name} (${name}): к18 = ${r}${bonus ? ` + ${bonus}` : ''} против защиты ${need} — ${hit ? (helpless ? 'беззащитная цель, попадание' : 'попадание') : 'промах'}.`, hit ? 'hit' : 'miss'))
     if (!hit) continue
     out.hit = true
+    // ХАУСРУЛ: попавшие стрелы можно подобрать после победы, промахнувшиеся теряются
+    if (arrowRef) addRecover(state, hero.uid, arrowRef, 1)
     let total = 0
     const parts: string[] = []
     const rollsCount = w?.doubleDamage ? 2 : 1
@@ -224,6 +279,11 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
   }
   out.log.push(...markActed(state, hero, heroes, idx))
   return out
+}
+
+export function addRecover(state: CombatState, heroUid: string, ref: string, n: number): void {
+  const bag = (state.recover[heroUid] ??= {})
+  bag[ref] = (bag[ref] ?? 0) + n
 }
 
 /** Попытка бегства: к18 против таблицы по уровню самого сильного монстра */
@@ -388,6 +448,7 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
   }
   checkEnd(state, heroes)
   if (state.finished) return log
+  log.push(...regrowHeads(state))
   // новый раунд
   state.round += 1
   state.turn = 'heroes'
@@ -613,9 +674,22 @@ export function tickHeroStatus(h: Hero): LogEntry[] {
   return log
 }
 
-/** Завершение боя: снять боевые статусы и баффы */
-export function finishCombat(state: CombatState, heroes: Hero[]): LogEntry[] {
+/** Завершение боя: снять боевые статусы и баффы, после победы подобрать дротики, копья и попавшие стрелы */
+export function finishCombat(state: CombatState, heroes: Hero[], idx?: DataIndex): LogEntry[] {
   const log: LogEntry[] = []
+  if (state.finished === 'victory') {
+    for (const h of heroes) {
+      const bag = state.recover?.[h.uid]
+      if (!bag || h.status.dead) continue
+      const parts: string[] = []
+      for (const [ref, n] of Object.entries(bag)) {
+        if (n <= 0) continue
+        addToInventory(h, 'weapon', ref, n)
+        parts.push(`${idx?.weaponById.get(ref)?.name ?? ref}${n > 1 ? ` ×${n}` : ''}`)
+      }
+      if (parts.length) log.push(entry(`${h.name} подбирает: ${parts.join(', ')}.`))
+    }
+  }
   for (const h of heroes) {
     h.buffs = h.buffs.filter((b) => b.stat === 'ward' && b.ward === 'luck')
     delete h.status.petrified

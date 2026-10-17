@@ -57,6 +57,7 @@ function migrate(g: GameState): GameState {
     g.combat.allies ??= []
     g.combat.extraActions ??= {}
     g.combat.escaped ??= []
+    g.combat.recover ??= {}
   }
   for (const h of g.heroes) {
     h.buffs ??= []
@@ -429,7 +430,7 @@ export const useGameStore = defineStore('game', () => {
   }
   function endCombat(): void {
     if (!game.value || !game.value.combat) return
-    logAll(finishCombat(game.value.combat, heroes.value))
+    logAll(finishCombat(game.value.combat, heroes.value, idx))
     game.value.combat = null
   }
   function abortCombat(): void {

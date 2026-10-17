@@ -94,7 +94,7 @@ export function equip(hero: Hero, entryUid: string, idx: DataIndex, preferredSlo
     if (!canUseWeapon(cls, w)) throw new Error(`${cls.name} не может пользоваться: ${w.name}`)
     if (w.group === 'ammo') throw new Error('Это боеприпас, его не берут в руки')
     if (w.ranged && !w.throwable) return place('ranged')
-    if (w.ranged && w.throwable && preferredSlot === 'ranged') return place('ranged')
+    if (w.throwable && preferredSlot === 'ranged') return place('ranged')
     return placeMelee(hero, entryUid, w.hand ?? 'any', !!cls.oneHandOnly, preferredSlot)
   }
   if (e.kind === 'armor') {

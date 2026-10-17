@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { idx } from '@/data'
 import type { EquipSlot, Hero, InventoryEntry } from '@/engine/model'
-import { heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, levelRow } from '@/engine/character'
+import { heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, levelRow } from '@/engine/character'
 import { entryName, entryPrice } from '@/engine/inventory'
 import { useGameStore } from '@/stores/game'
 import { SLOT_NAMES, attacksStr, pct } from '@/ui/format'
@@ -33,6 +33,7 @@ function detail(e: InventoryEntry): string {
 }
 function isEquipped(e: InventoryEntry) { return Object.values(props.hero.equipment).includes(e.uid) }
 function canEquip(e: InventoryEntry) { return e.kind === 'weapon' ? idx.weapon(e.ref).group !== 'ammo' : e.kind === 'armor' || e.kind === 'artifact' }
+const needsArrows = computed(() => heroWeapons(props.hero, idx).some((w) => w.needsAmmo && !w.ammoEntry))
 function act(fn: () => void) { try { fn() } catch (e) { store.say((e as Error).message) } }
 const statusText = computed(() => {
   const s = props.hero.status
@@ -81,6 +82,7 @@ const statusText = computed(() => {
       </tbody>
     </table>
 
+    <p v-if="needsArrows" class="small" style="color:var(--danger);margin-top:.3rem">Лук без стрел: купите стрелы в лавке.</p>
     <h3 style="margin-top:.9rem">Инвентарь</h3>
     <div v-if="!hero.inventory.length" class="muted small">Пусто.</div>
     <table v-else class="list">
@@ -91,6 +93,7 @@ const statusText = computed(() => {
             <template v-if="canEquip(e) && !isEquipped(e)">
               <button class="small" @click="act(() => store.equipItem(hero.uid, e.uid))">Надеть</button>
               <button v-if="e.kind === 'weapon' && idx.weapon(e.ref).hand === 'any'" class="small" @click="act(() => store.equipItem(hero.uid, e.uid, 'leftHand'))">В левую</button>
+              <button v-if="e.kind === 'weapon' && idx.weapon(e.ref).throwable" class="small" @click="act(() => store.equipItem(hero.uid, e.uid, 'ranged'))">Метать</button>
             </template>
             <button v-if="e.kind === 'bottle'" class="small" @click="act(() => store.drink(hero.uid, e.uid))">Выпить</button>
             <button v-if="e.kind === 'bottle' && !e.identified" class="small" @click="act(() => store.identifyBottle(hero.uid, e.uid))">Распознать</button>

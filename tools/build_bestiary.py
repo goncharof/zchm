@@ -23,6 +23,7 @@ EXTRA_KIND = {'Окаменение': 'petrify', 'Оледенение': 'freeze
 SPELLS_RE = re.compile(r'Владе\w+\s+заклинани\w+:\s*([^.]+)\.')
 LUCK_RE = re.compile(r'Удача от ([^—–-]+?)\s*[–—-]\s*(\d+)')
 SCALE = 1.6
+HEAD_WORDS = {'двухголов': 2, 'двуглав': 2, 'трехголов': 3, 'трёхголов': 3, 'треглав': 3, 'семиглав': 7, 'девятиглав': 9}
 
 def parse_value(key, raw):
     raw = raw.strip().rstrip('.')
@@ -105,6 +106,20 @@ for i in range(2, len(doc) - 1):  # skip cover (p1), credits (p2) and back page 
     m = LUCK_RE.search(description)
     if m:
         entry['luckSave'] = {'against': m.group(1).strip(), 'threshold': int(m.group(2))}
+    # многоголовые: «жизни – 8 у головы», число голов — из описания («Двухголовый», «Девятиглавое»)
+    if isinstance(entry.get('lives'), str):
+        m = re.match(r'(\d+)', entry['lives'])
+        heads = None
+        for word, n in HEAD_WORDS.items():
+            if re.search(word, description, re.IGNORECASE):
+                heads = n
+                break
+        if m and heads:
+            entry['livesPerHead'] = int(m.group(1))
+            entry['heads'] = heads
+            entry['lives'] = int(m.group(1)) * heads
+            if re.search(r'вырастает новая голова', description):
+                entry['regrows'] = True  # отрубленные головы отрастают (Гидра)
     if 'level' not in entry:
         entry['special'] = True
     entry['description'] = description
