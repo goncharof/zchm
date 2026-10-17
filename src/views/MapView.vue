@@ -16,6 +16,20 @@ const mounted = computed(() => store.heroes.length > 0 && store.heroes.every((h)
 const days = computed(() => (route.value ? (mounted.value ? Math.ceil(route.value.days / 2) : route.value.days) : 0))
 const current = computed(() => store.worldNode)
 
+const routeSegments = computed(() => {
+  if (!route.value || !store.world || route.value.nodes.length < 2) return []
+  const byId = new Map(store.world.nodes.map((n) => [n.id, n]))
+  const out: number[][] = []
+  for (let i = 1; i < route.value.nodes.length; i++) {
+    const a = byId.get(route.value.nodes[i - 1])!
+    const b = byId.get(route.value.nodes[i])!
+    out.push([a.x * 100, a.y * 100, b.x * 100, b.y * 100])
+  }
+  return out
+})
+function isVisited(locationId?: string) {
+  return !!locationId && (store.game?.visited[locationId]?.length ?? 0) > 0
+}
 function go() {
   if (!selectedId.value) return
   store.travelTo(selectedId.value)
@@ -34,10 +48,13 @@ function enter(locationId: string) {
       <div v-if="!store.world" class="card">Карта мира не загружена (нет src/data/world.json).</div>
       <div v-else class="map-wrap">
         <img :src="mapSrc" alt="Карта мира" />
+        <svg class="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <line v-for="(s, i) in routeSegments" :key="i" :x1="s[0]" :y1="s[1]" :x2="s[2]" :y2="s[3]" class="route-line" />
+        </svg>
         <button v-for="n in store.world.nodes" :key="n.id" class="map-node"
-          :class="{ junction: !n.locationId, current: n.id === current?.id, selected: n.id === selectedId, 'anchor-left': !!n.locationId && n.x < 0.14, 'anchor-right': !!n.locationId && n.x > 0.86 }"
+          :class="{ junction: !n.locationId, current: n.id === current?.id, selected: n.id === selectedId, visited: isVisited(n.locationId), 'anchor-left': !!n.locationId && n.x < 0.14, 'anchor-right': !!n.locationId && n.x > 0.86 }"
           :style="{ left: n.x * 100 + '%', top: n.y * 100 + '%' }" :title="n.name" @click="selectedId = n.id">
-          <template v-if="n.locationId">{{ n.name }}</template>
+          <template v-if="n.locationId">{{ n.name }}<span v-if="isVisited(n.locationId)" class="visited-mark"> ✓</span></template>
         </button>
       </div>
     </div>

@@ -11,6 +11,20 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const allDead = computed(() => store.heroes.length > 0 && store.heroes.every((h) => h.status.dead))
 const where = computed(() => store.combat ? 'в бою' : store.location ? store.location.name : store.worldNode?.name ?? '—')
 
+const slotsVersion = ref(0)
+const slots = computed(() => { void slotsVersion.value; return [1, 2, 3].map((n) => store.slotInfo(n)) })
+function save(n: number) {
+  if (slots.value[n - 1] && !confirm(`Перезаписать слот ${n}?`)) return
+  store.saveSlot(n); slotsVersion.value++
+}
+function load(n: number) {
+  if (store.started && !confirm('Текущая партия будет заменена сохранением. Продолжить?')) return
+  store.loadSlot(n); slotsVersion.value++; continueGame()
+}
+function clear(n: number) {
+  if (!confirm(`Удалить слот ${n}?`)) return
+  store.clearSlot(n); slotsVersion.value++
+}
 function continueGame() {
   if (store.combat) router.push('/combat')
   else if (store.location) router.push(`/location/${store.location.id}`)
@@ -54,6 +68,26 @@ function newGame() {
           <button @click="fileInput?.click()">Импорт сохранения</button>
           <input ref="fileInput" type="file" accept="application/json" style="display:none" @change="importSave" />
         </div>
+      </div>
+      <div class="card">
+        <h2>Сохранения</h2>
+        <p class="small muted">Партия сохраняется автоматически. Слоты — дополнительные копии в этом браузере.</p>
+        <table class="list stack">
+          <tbody>
+            <tr v-for="n in [1, 2, 3]" :key="n">
+              <td data-label="Слот"><b>Слот {{ n }}</b></td>
+              <td data-label="Партия" class="small">
+                <template v-if="slots[n - 1]">День {{ slots[n - 1]!.day }} · {{ slots[n - 1]!.heroes || 'без героев' }} · {{ new Date(slots[n - 1]!.savedAt).toLocaleString('ru-RU') }}</template>
+                <span v-else class="muted">пусто</span>
+              </td>
+              <td style="text-align:right;white-space:nowrap">
+                <button class="small" :disabled="!store.started" @click="save(n)">Сохранить</button>
+                <button class="small" :disabled="!slots[n - 1]" @click="load(n)">Загрузить</button>
+                <button class="small" :disabled="!slots[n - 1]" @click="clear(n)">✕</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <div class="card" v-if="store.heroes.length">
         <h2>Партия</h2>

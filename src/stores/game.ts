@@ -144,6 +144,32 @@ export const useGameStore = defineStore('game', () => {
     if (!g || g.version !== SAVE_VERSION || !Array.isArray(g.heroes)) throw new Error('Это не сохранение игры')
     game.value = migrate(g)
   }
+  // ---------- слоты сохранения ----------
+  const SLOT_KEY = (n: number) => `zchm.slot.${n}`
+  function slotInfo(n: number): { day: number; heroes: string; savedAt: number } | null {
+    try {
+      const raw = localStorage.getItem(SLOT_KEY(n))
+      if (!raw) return null
+      const g = JSON.parse(raw) as GameState
+      return { day: g.day, heroes: g.heroes.map((h) => h.name).join(', '), savedAt: g.updatedAt }
+    } catch {
+      return null
+    }
+  }
+  function saveSlot(n: number): void {
+    if (!game.value) return
+    localStorage.setItem(SLOT_KEY(n), JSON.stringify(game.value))
+    say(`Сохранено в слот ${n}`)
+  }
+  function loadSlot(n: number): void {
+    const raw = localStorage.getItem(SLOT_KEY(n))
+    if (!raw) { say('Слот пуст'); return }
+    importSave(raw)
+    say(`Загружен слот ${n}`)
+  }
+  function clearSlot(n: number): void {
+    localStorage.removeItem(SLOT_KEY(n))
+  }
   function toggleGm(): void {
     if (game.value) game.value.gmMode = !game.value.gmMode
   }
@@ -450,6 +476,7 @@ export const useGameStore = defineStore('game', () => {
     game, world, notice, heroes, combat, location, worldNode, started,
     log, say, hero,
     newGame, addHero, removeHero, renameHero, resetGame, exportSave, importSave, toggleGm,
+    slotInfo, saveSlot, loadSlot, clearSlot,
     buyItem, sellItem, equipItem, unequipItem, giveItem, dropItem, transferItem, drink, identifyBottle, copyScroll, learnSpell,
     useAntidote, useParalysisPotion, poisonWeapon, adjustLives, adjustMana, adjustMoney, giveXp,
     restAll, travelTo, enterLocation, leaveLocation, markVisited, dismissRoad,
