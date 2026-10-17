@@ -8,7 +8,7 @@ import { toHit } from '@/engine/combat'
 import { fleeTarget } from '@/engine/rules'
 import { wardName } from '@/engine/spells'
 import { useGameStore } from '@/stores/game'
-import { pct } from '@/ui/format'
+import { classArt, pct } from '@/ui/format'
 import LogPanel from '@/components/LogPanel.vue'
 import MonsterPicker from '@/components/MonsterPicker.vue'
 import SpellCaster from '@/components/SpellCaster.vue'
@@ -148,7 +148,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
       <div>
         <h3>Герои</h3>
         <div v-for="h in store.heroes" :key="h.uid" class="card tight" :class="{ 'hero-down': !isActive(h) || c.escaped.includes(h.uid) }" :style="canAct(h) ? 'border-color: var(--accent)' : ''">
-          <div class="row between"><b>{{ h.name }}</b><span class="small muted">{{ idx.cls(h.classId).name }} {{ h.level }} · защита {{ heroDefense(h, idx) }} <span v-if="heroState(h)">· {{ heroState(h) }}</span><span v-if="(c.extraActions[h.uid] ?? 0) > 0"> · +{{ c.extraActions[h.uid] }} действие</span></span></div>
+          <div class="row between"><b class="row" style="gap:.45rem"><img :src="classArt(h.classId)" alt="" class="portrait small-portrait" />{{ h.name }}</b><span class="small muted">{{ idx.cls(h.classId).name }} {{ h.level }} · защита {{ heroDefense(h, idx) }} <span v-if="heroState(h)">· {{ heroState(h) }}</span><span v-if="(c.extraActions[h.uid] ?? 0) > 0"> · +{{ c.extraActions[h.uid] }} действие</span></span></div>
           <div class="row" style="gap:1rem;margin:.3rem 0">
             <div style="flex:1;min-width:120px"><div class="bar" :class="{ danger: h.lives * 3 <= h.maxLives }"><i :style="{ width: pct(h.lives, h.maxLives) }" /></div><div class="small muted">♥ {{ h.lives }}/{{ h.maxLives }}</div></div>
             <div v-if="h.maxMana" style="flex:1;min-width:120px"><div class="bar mana"><i :style="{ width: pct(h.mana, h.maxMana) }" /></div><div class="small muted">✦ {{ h.mana }}/{{ h.maxMana }}</div></div>

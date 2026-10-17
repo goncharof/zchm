@@ -5,7 +5,7 @@ import type { EquipSlot, Hero, InventoryEntry } from '@/engine/model'
 import { heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, levelRow } from '@/engine/character'
 import { entryName, entryPrice } from '@/engine/inventory'
 import { useGameStore } from '@/stores/game'
-import { SLOT_NAMES, attacksStr, pct } from '@/ui/format'
+import { SLOT_NAMES, attacksStr, classArt, pct } from '@/ui/format'
 import SpellPicker from './SpellPicker.vue'
 import SpellCaster from './SpellCaster.vue'
 
@@ -48,7 +48,7 @@ const statusText = computed(() => {
 <template>
   <div class="card" :class="{ 'hero-down': hero.status.dead }">
     <div class="row between">
-      <h2 v-if="!renaming">{{ hero.name }} <span class="badge accent">{{ cls.name }} {{ hero.level }} ур.</span> <span v-if="statusText" class="badge" style="border-color:var(--danger);color:var(--danger)">{{ statusText }}</span></h2>
+      <h2 v-if="!renaming" class="row" style="gap:.6rem"><img :src="classArt(hero.classId)" alt="" class="portrait" />{{ hero.name }} <span class="badge accent">{{ cls.name }} {{ hero.level }} ур.</span> <span v-if="statusText" class="badge" style="border-color:var(--danger);color:var(--danger)">{{ statusText }}</span></h2>
       <div v-else class="row"><input v-model="newName" /><button class="small primary" @click="store.renameHero(hero.uid, newName); renaming = false">Ок</button></div>
       <div class="row">
         <button class="small" @click="renaming = !renaming">Имя</button>

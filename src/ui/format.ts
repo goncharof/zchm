@@ -35,3 +35,15 @@ export function plural(n: number, one: string, few: string, many: string): strin
   if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few
   return many
 }
+
+/** Портрет класса — рисунок Олега Гвалии из Бестиария */
+const CLASS_ART: Record<string, string> = {
+  warrior: 'img/bestiary/rytsar.jpg',
+  barbarian: 'img/bestiary/berserker.jpg',
+  thief: 'img/bestiary/razboynik.jpg',
+  mage: 'img/bestiary/belyy-mag.jpg',
+  priest: 'img/bestiary/druid.jpg',
+}
+export function classArt(classId: string): string {
+  return import.meta.env.BASE_URL + (CLASS_ART[classId] ?? CLASS_ART.warrior)
+}
