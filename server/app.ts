@@ -11,6 +11,7 @@ import { stateForClients, type Ack, type ClientToServer, type GmMode, type Joine
 import { authorize, isCommand } from './permissions'
 import { Schemas, limit, makeLimiters, parse, type Limits } from './guard'
 import { Room, RoomStore, type Player } from './rooms'
+import { castVote, clearVotes, tally, voteComplete, votingOn } from './votes'
 
 import { GmDirector } from './gm/ai'
 import type { GmContext, GmDriver, GmEvent, GmFactory, GmInput } from './gm/types'
@@ -120,6 +121,18 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
   function checkReady(r: Room): void {
     if (r.turnMode === 'ready' && autoGm(r) && r.ready.size && r.allReady()) flushTurn(r, undefined, true)
   }
+  /** Подвести итог голосования по сообщению (все проголосовали или хозяин торопит) */
+  function resolveVote(r: Room, messageId: string): void {
+    const win = tally(r, messageId)
+    clearVotes(r, messageId)
+    const msg = r.chatById(messageId)
+    if (msg) ctx.updateChat(r, msg)
+    if (win) gm.choose(r, win.playerId, messageId, win.choiceId)
+  }
+  /** Голосования, где уже проголосовали все активные игроки (например, после ухода игрока) */
+  function checkVotes(r: Room): void {
+    for (const id of Object.keys(r.votes)) if (voteComplete(r, id)) resolveVote(r, id)
+  }
 
   io.on('connection', (socket) => {
     let room: Room | null = null
@@ -196,6 +209,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!player.isHost) throw new GameError('Это может только хозяин комнаты')
         limit(limiters.choose.take(socket.id), 'Слишком часто')
         room.turnMode = mode
+        if (mode === 'instant') for (const id of Object.keys(room.votes)) resolveVote(room, id)
         ctx.chat(room, { from: 'system', author: 'Игра', text: mode === 'ready' ? 'Ведущий отвечает, когда все игроки готовы: каждый пишет, что делает его герой, или жмёт «Готов».' : 'Ведущий отвечает сразу на каждую реплику.' })
         if (mode === 'instant') flushTurn(room)
         else { ctx.roomChanged(room); store.touch(room) }
@@ -225,7 +239,10 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!player.isHost) throw new GameError('Начать ход без готовности всех может только хозяин комнаты')
         limit(limiters.choose.take(socket.id), 'Слишком часто')
         if (!autoGm(room)) throw new GameError('В этом режиме ведущий не отвечает сам')
-        flushTurn(room, undefined, true)
+        // хозяин торопит: открытые голосования решаются по текущим голосам
+        const pending = Object.keys(room.votes)
+        for (const id of pending) resolveVote(room, id)
+        flushTurn(room, undefined, !pending.length)
         ack({ ok: true })
       } catch (e) { fail(ack, e) }
     })
@@ -337,7 +354,13 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         const req = parse(Schemas.choose, raw)
         if (!room || !player) throw new GameError('Вы не в комнате')
         limit(limiters.choose.take(socket.id), 'Слишком часто')
-        gm.choose(room, player.id, req.messageId, req.choiceId)
+        if (votingOn(room)) {
+          // режим «когда все готовы»: нажатие — голос, вариант срабатывает, когда проголосуют все
+          ctx.updateChat(room, castVote(room, player.id, req.messageId, req.choiceId))
+          if (voteComplete(room, req.messageId)) resolveVote(room, req.messageId)
+        } else {
+          gm.choose(room, player.id, req.messageId, req.choiceId)
+        }
         ack({ ok: true })
       } catch (e) { fail(ack, e) }
     })
@@ -348,6 +371,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         ctx.roomChanged(room)
         // ушёл тот, кого ждали, — остальные могут быть уже готовы
         checkReady(room)
+        checkVotes(room)
       }
     })
   })

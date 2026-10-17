@@ -38,6 +38,12 @@ const waiting = computed(() => {
   return r.players.filter((p) => r.active.includes(p.id)).map((p) => ({ name: p.name, ready: r.ready.includes(p.id) }))
 })
 
+/** мой голос за вариант */
+function myVote(m: { votes?: Record<string, { id: string }[]> }, choiceId: string): boolean {
+  const me = store.room?.me.id
+  return !!me && !!m.votes?.[choiceId]?.some((v) => v.id === me)
+}
+
 async function send() {
   const t = text.value.trim()
   if (!t) return
@@ -56,8 +62,9 @@ async function send() {
         <div class="gm-author">{{ m.author }}<span v-if="m.from === 'player' && ai && !m.toGm" class="muted"> · игрокам</span></div>
         <div class="gm-text">{{ m.text }}</div>
         <div v-if="m.choices?.length" class="row" style="margin-top:.35rem">
-          <button v-for="c in m.choices" :key="c.id" class="small" :class="{ primary: !m.used?.includes(c.id) && c.label.startsWith('▸') }" :disabled="m.used?.includes(c.id)" @click="store.choose(m.id, c.id)">{{ c.label }}</button>
+          <button v-for="c in m.choices" :key="c.id" class="small" :class="{ primary: !m.used?.includes(c.id) && c.label.startsWith('▸'), voted: myVote(m, c.id) }" :disabled="m.used?.includes(c.id)" :title="m.votes?.[c.id]?.length ? `Голоса: ${m.votes[c.id].map((v) => v.name).join(', ')}` : ''" @click="store.choose(m.id, c.id)">{{ c.label }}<span v-if="m.votes?.[c.id]?.length" class="vote-count"> · {{ m.votes[c.id].length }}</span></button>
         </div>
+        <div v-if="m.votes && Object.keys(m.votes).length" class="small muted" style="margin-top:.2rem">Голосование: вариант сработает, когда проголосуют все{{ store.room?.me.isHost ? ' (или нажмите «Ход ведущего»)' : '' }}.</div>
       </div>
       <div v-for="[id, t] in live" :key="id" class="gm-msg gm">
         <div class="gm-author">Ведущий <span class="muted">пишет…</span></div>

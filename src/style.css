@@ -139,3 +139,7 @@ button.primary .muted { color: rgba(27, 20, 9, .7); }
 .gm-msg.system .gm-text { color: var(--muted); font-size: .85rem; font-style: italic; }
 nav.main a.hot-online { color: var(--ok); font-weight: 700; }
 @media (max-width: 820px) { .cols.chat-first > :last-child { order: -1; } }
+
+/* голос за вариант сценарного ведущего */
+button.voted { outline: 2px solid var(--ok); outline-offset: 1px; }
+.vote-count { font-weight: 700; }

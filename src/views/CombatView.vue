@@ -40,7 +40,7 @@ onBeforeUnmount(() => { if (autoTimer) clearTimeout(autoTimer) })
 const targetMonster = computed(() => alive.value.find((m) => m.uid === target.value) ?? null)
 
 // трофеи после победы: забирает выбранный свой живой герой
-const takers = computed(() => store.heroes.filter((h) => !h.status.dead && store.canControl(h.uid)))
+const takers = computed(() => store.heroes.filter((h) => !h.status.dead && store.canControl(h.uid)).sort((a, b) => Number(store.isMine(b.uid)) - Number(store.isMine(a.uid))))
 const taker = ref('')
 watch(takers, (list) => { if (!list.some((h) => h.uid === taker.value)) taker.value = list[0]?.uid ?? '' }, { immediate: true })
 const lootEntry = (it: LootItem) => ({ uid: it.uid, kind: it.kind, ref: it.ref, qty: 1 })

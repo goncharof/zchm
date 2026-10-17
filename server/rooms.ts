@@ -41,6 +41,7 @@ export interface RoomData {
   script?: ScriptState
   turnMode?: TurnMode
   held?: HeldInput[]
+  votes?: Record<string, Record<string, string>>
   choiceActions?: Record<string, ChoiceRecord>
   createdAt: number
   updatedAt: number
@@ -94,6 +95,8 @@ export class Room {
   turnMode: TurnMode = 'instant'
   held: HeldInput[] = []
   ready = new Set<string>()
+  /** голосование за варианты сценарного ведущего: id сообщения → игрок → id варианта */
+  votes: Record<string, Record<string, string>> = {}
   createdAt = Date.now()
   updatedAt = Date.now()
 
@@ -163,7 +166,7 @@ export class Room {
       code: this.code, gm: this.gm, state: this.state,
       players: [...this.players.values()].map(({ sockets: _s, ...rest }) => { void _s; return rest }),
       chat: this.chat, gmHistories: this.gmHistories, gmSeen: this.gmSeen, script: this.script, choiceActions: this.choiceActions,
-      turnMode: this.turnMode, held: this.held,
+      turnMode: this.turnMode, held: this.held, votes: this.votes,
       createdAt: this.createdAt, updatedAt: this.updatedAt,
     }
   }
@@ -177,6 +180,7 @@ export class Room {
     r.choiceActions = d.choiceActions ?? {}
     r.turnMode = d.turnMode ?? 'instant'
     r.held = d.held ?? []
+    r.votes = d.votes ?? {}
     r.createdAt = d.createdAt
     r.updatedAt = d.updatedAt
     return r

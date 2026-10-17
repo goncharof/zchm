@@ -29,6 +29,7 @@ function client(s: GameServer) {
   c.onState((x) => { state = x })
   c.onRoom((x) => { room = x })
   c.onChat((m) => chat.push(m))
+  c.onChatUpdate((m) => { const i = chat.findIndex((x) => x.id === m.id); if (i >= 0) chat[i] = m })
   return { c, chat, get state() { return state! }, get room() { return room! } }
 }
 const gmMessages = (chat: ChatMessage[]) => chat.filter((m) => m.from === 'gm')
@@ -89,5 +90,50 @@ describe('ход по готовности', () => {
     await until(() => gmMessages(host.chat).some((m) => /помещение 7/.test(m.text)))
     await host.c.chat('Помещение 8', true)
     await until(() => gmMessages(host.chat).some((m) => /помещение 8/.test(m.text)))
+  })
+
+  describe('голосование за варианты', () => {
+    async function scene() {
+      const t = await table()
+      await t.host.c.chat('Помещение 1', true)
+      await t.guest.c.setReady(true)
+      await until(() => gmMessages(t.guest.chat).some((m) => /помещение 1/.test(m.text) && !!m.choices))
+      const msg = gmMessages(t.guest.chat).find((m) => /помещение 1/.test(m.text))!
+      const luck = msg.choices!.find((c) => c.label.includes('удачи 12'))!
+      const free = msg.choices!.find((c) => c.label.startsWith('▸ Если вы его освобождаете'))!
+      return { ...t, msg, luck, free }
+    }
+    const current = (chat: ChatMessage[], id: string) => chat.find((m) => m.id === id)!
+
+    it('нажатие — голос; при ничьей побеждает выбор хозяина', async () => {
+      const { host, guest, msg, luck, free } = await scene()
+      await host.c.choose(msg.id, luck.id)
+      await until(() => current(guest.chat, msg.id).votes?.[luck.id]?.length === 1)
+      expect(current(guest.chat, msg.id).used ?? []).toEqual([])
+      await guest.c.choose(msg.id, free.id)
+      await until(() => gmMessages(guest.chat).some((m) => m.text.includes('испытывает удачу')))
+      expect(current(guest.chat, msg.id).used).toEqual([luck.id])
+      expect(current(guest.chat, msg.id).votes).toBeUndefined()
+    })
+
+    it('единогласно — сразу; хозяин может решить по текущим голосам', async () => {
+      const { host, guest, msg, luck, free } = await scene()
+      await guest.c.choose(msg.id, free.id)
+      await host.c.choose(msg.id, free.id)
+      await until(() => current(guest.chat, msg.id).used?.includes(free.id) ?? false)
+      await guest.c.choose(msg.id, luck.id)
+      await until(() => current(host.chat, msg.id).votes?.[luck.id]?.length === 1)
+      await host.c.turnGo()
+      await until(() => gmMessages(guest.chat).some((m) => m.text.includes('испытывает удачу')))
+      expect(gmMessages(guest.chat).some((m) => m.text.startsWith('Все готовы'))).toBe(false)
+    })
+
+    it('один игрок за столом — вариант срабатывает сразу', async () => {
+      const { host, guest, msg, luck } = await scene()
+      guest.c.close()
+      await until(() => host.room.active.length === 1)
+      await host.c.choose(msg.id, luck.id)
+      await until(() => gmMessages(host.chat).some((m) => m.text.includes('испытывает удачу')))
+    })
   })
 })

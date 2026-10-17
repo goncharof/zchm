@@ -55,6 +55,8 @@ export interface ChatMessage {
   choices?: ChatChoice[]
   /** уже выбранные варианты */
   used?: string[]
+  /** голоса за варианты (режим «когда все готовы»): id варианта → проголосовавшие */
+  votes?: Record<string, { id: string; name: string }[]>
 }
 
 export interface Ack<T = unknown> {
