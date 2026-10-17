@@ -116,3 +116,9 @@ button.primary .muted { color: rgba(27, 20, 9, .7); }
   table.stack td { display: block; border: none; padding: .1rem 0; }
   table.stack td[data-label]::before { content: attr(data-label) ': '; color: var(--muted); }
 }
+/* ветки параграфа */
+.branch { margin: .45rem 0; border-left: 3px solid var(--border); padding-left: .6rem; }
+.branch.open { border-left-color: var(--accent); }
+.branch-head { background: transparent; border: 1px dashed var(--border); text-align: left; width: 100%; color: var(--accent); }
+.branch-head:hover { border-style: solid; }
+.branch-body { margin-top: .4rem; }

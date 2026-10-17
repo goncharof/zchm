@@ -187,15 +187,37 @@ export interface ParagraphHints {
   coins?: number[]
   /** id монстров из бестиария, упомянутых в тексте */
   monsters?: string[]
+  /** число монстров по тексту («5 пьяных орков»), если больше одного */
+  monsterCounts?: Record<string, number>
   artifact?: boolean
   /** свитки: уровень и тип заклинания, если указан */
   scrolls?: { caster?: Caster; level?: number }[]
+}
+
+export interface RollOption {
+  /** результаты кубика, при которых срабатывает вариант */
+  values: number[]
+  text: string
+  hints?: ParagraphHints
+}
+
+export type SegmentBlock = { text: string } | { roll: RollOption[] }
+
+/** Часть параграфа: сцена (видна сразу) или ветка решения (исход раскрывается по выбору) */
+export interface ParagraphSegment {
+  kind: 'scene' | 'branch'
+  /** условие ветки: «Если вы его освобождаете» */
+  label?: string
+  blocks: SegmentBlock[]
+  hints?: ParagraphHints
 }
 
 export interface Paragraph {
   n: number
   text: string
   hints?: ParagraphHints
+  /** разбиение на сцену и ветки (tools/segment.py); нет — параграф без выборов */
+  segments?: ParagraphSegment[]
 }
 
 export interface Location {

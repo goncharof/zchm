@@ -97,6 +97,12 @@ async function run(label, viewport) {
   const finish = page.getByRole('button', { name: 'Завершить бой' })
   if (await finish.count()) await finish.click()
 
+  await page.goto(BASE + '#/location/zolotoy-gorod?p=2'); await page.waitForSelector('.branch-head')
+  await page.locator('.branch-head').first().click()
+  await page.getByRole('button', { name: /^Бросить к/ }).first().click()
+  await page.locator('.branch-head').nth(2).click()
+  await shot('09b-branches')
+
   await page.goto(BASE + '#/bestiary'); await page.waitForSelector('.thumb')
   await shot('10-bestiary')
   await page.locator('.card', { hasText: 'Василиск' }).first().click()

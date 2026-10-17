@@ -297,6 +297,11 @@ export const useGameStore = defineStore('game', () => {
   }
 
   // ---------- действия по параграфу ----------
+  function rollDie(sides: number, context?: string): number {
+    const r = roll(sides)
+    log(`${context ? `${context}: ` : ''}к${sides} = ${r}.`, 'luck')
+    return r
+  }
   function luckCheck(heroUid: string, target: number): { ok: boolean; roll: number; luck: number } {
     const h = hero(heroUid)
     const blessing = hasWard(h, 'luck')
@@ -447,7 +452,7 @@ export const useGameStore = defineStore('game', () => {
     buyItem, sellItem, equipItem, unequipItem, giveItem, dropItem, transferItem, drink, identifyBottle, copyScroll, learnSpell,
     useAntidote, useParalysisPotion, poisonWeapon, adjustLives, adjustMana, adjustMoney, giveXp,
     restAll, travelTo, enterLocation, leaveLocation, markVisited, dismissRoad,
-    luckCheck, findArtifact, giveScroll, trapFound, finalDuelAttack, drinkFountain,
+    rollDie, luckCheck, findArtifact, giveScroll, trapFound, finalDuelAttack, drinkFountain,
     startEncounter, attack, cast, flee, skip, toMelee, monstersAct, endCombat, abortCombat, addMonstersToCombat,
   }
 })

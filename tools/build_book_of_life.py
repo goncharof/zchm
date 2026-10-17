@@ -16,6 +16,7 @@ from PIL import Image, ImageOps
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import slug, clean_text
+from segment import segment
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PDF = os.path.join(ROOT, 'source', 'pdf', 'ZChM Kniga Zhizni.pdf')
@@ -156,6 +157,9 @@ CAPITAL_ONLY = {'Гор', 'Рот', 'Дух', 'Меч', 'Тень', 'Смерт�
 STEM_OVERRIDE = {'сгусток': 'сгуст', 'лишайник-пожиратель': 'лишайник'}
 
 
+SHORT_END = r'(?:а|я|у|ю|ом|ем|ой|ей|е|ы|и|ов|ев|ам|ям|ами|ями|ах|ях)?(?![а-яё])'
+
+
 def stem(word):
     w = word.lower().replace('ё', 'е')
     if w in STEM_OVERRIDE:
@@ -182,13 +186,29 @@ def build_monster_patterns():
             pat = re.compile(r'(?<![\w-])' + re.escape(STEM_OVERRIDE[name.lower()]) + r'\w*', re.IGNORECASE)
         else:
             words = [w for w in re.split(r'[\s-]+', name) if w]
-            parts = [re.escape(stem(w)) + r'\w*' for w in words]
-            pat = re.compile(r'(?<![\w-])' + r'\s+'.join(parts), re.IGNORECASE)
+            # короткие основы («огр», «орк», «энт») — только с падежными окончаниями, иначе «огромный» = огр
+            parts = [re.escape(stem(w)) + (SHORT_END if len(stem(w)) <= 4 else r'\w*') for w in words]
+            pat = re.compile(r'(?<![\w-])' + r'[\s-]+'.join(parts), re.IGNORECASE)
         pats.append((m['id'], pat))
     return pats
 
 
 MONSTER_PATTERNS = None
+NUM_WORDS = {'два': 2, 'две': 2, 'двое': 2, 'пара': 2, 'пару': 2, 'три': 3, 'трое': 3, 'четыре': 4, 'четверо': 4,
+             'пять': 5, 'пятеро': 5, 'шесть': 6, 'шестеро': 6, 'семь': 7, 'семеро': 7, 'восемь': 8, 'девять': 9,
+             'десять': 10, 'дюжина': 12}
+COUNT_BEFORE = re.compile(r'(?:\(|\b)(\d{1,3}|' + '|'.join(NUM_WORDS) + r')\s+(?:[а-яё-]+\s+){0,2}$', re.IGNORECASE)
+
+
+def count_before(text, start):
+    """Число непосредственно перед упоминанием монстра: «5 пьяных орков», «(19 урук-хайев)», «два гнолла»."""
+    m = COUNT_BEFORE.search(text[max(0, start - 40):start])
+    if not m:
+        return None
+    v = m.group(1).lower()
+    n = int(v) if v.isdigit() else NUM_WORDS.get(v)
+    return n if n and 1 < n <= 40 else None
+
 
 
 def hints_for(text):
@@ -214,15 +234,20 @@ def hints_for(text):
         for mm in pat.finditer(text):
             spans.append((mm.start(), mm.end(), mid))
     spans.sort(key=lambda s: (s[0], -(s[1] - s[0])))
-    found, taken = [], []
+    found, taken, counts = [], [], {}
     for s, e, mid in spans:
         if any(ts <= s and e <= te and (ts, te) != (s, e) for ts, te, _ in taken):
             continue
         taken.append((s, e, mid))
         if mid not in found:
             found.append(mid)
+        n = count_before(text, s)
+        if n and n > counts.get(mid, 1):
+            counts[mid] = n
     if found:
         h['monsters'] = found
+    if counts:
+        h['monsterCounts'] = counts
     if re.search(r'артефакт', text, re.IGNORECASE):
         h['artifact'] = True
     scrolls = []
@@ -256,6 +281,9 @@ def main():
             h = hints_for(p['text'])
             if h:
                 p['hints'] = h
+            segs = segment(p['text'], hints_for)
+            if segs:
+                p['segments'] = segs
         loc['paragraphs'] = paras
         locations.append(loc)
         ns = [p['n'] for p in paras]
@@ -264,6 +292,9 @@ def main():
               f'нумерация {"ok" if ok else "BROKEN"}  план: {size}')
     with open(OUT_JSON, 'w', encoding='utf-8') as w:
         json.dump(locations, w, ensure_ascii=False, indent=1)
+    allp = [p for l in locations for p in l['paragraphs']]
+    print(f"\nсегменты: {sum(1 for p in allp if p.get('segments'))} параграфов с ветками/бросками из {len(allp)}, "
+          f"веток {sum(1 for p in allp for g in p.get('segments', []) if g['kind'] == 'branch')}")
     print(f'\n-> {OUT_JSON}')
     if issues:
         print('\nЗамечания:')

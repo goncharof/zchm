@@ -5,8 +5,9 @@ import { idx } from '@/data'
 import type { EncounterSpec } from '@/engine/combat'
 import { SERVICES } from '@/engine/world'
 import { useGameStore } from '@/stores/game'
-import { casterName } from '@/ui/format'
 import MonsterPicker from '@/components/MonsterPicker.vue'
+import ParagraphActions from '@/components/ParagraphActions.vue'
+import RollBlock from '@/components/RollBlock.vue'
 
 const props = defineProps<{ id: string }>()
 const store = useGameStore()
@@ -17,23 +18,24 @@ const planSrc = computed(() => (loc.value?.plan ? `${import.meta.env.BASE_URL}${
 const current = ref<number | null>(null)
 const paragraph = computed(() => loc.value?.paragraphs.find((p) => p.n === current.value) ?? null)
 const revealed = ref(false)
-const heroUid = ref(store.heroes[0]?.uid ?? '')
-const counts = ref<Record<string, number>>({})
+const fullText = ref(false)
+const opened = ref<Set<number>>(new Set())
+const heroUid = ref(store.heroes.find((h) => !h.status.dead)?.uid ?? '')
 const picker = ref(false)
-const lastLuck = ref('')
 const visited = computed(() => store.game?.visited[props.id] ?? [])
 const services = computed(() => SERVICES[props.id] ?? [])
 const gm = computed(() => store.game?.gmMode ?? false)
 const activeHeroes = computed(() => store.heroes.filter((h) => !h.status.dead))
-const fightable = computed(() => (paragraph.value?.hints?.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special))
-const npcs = computed(() => (paragraph.value?.hints?.monsters ?? []).filter((m) => idx.monsterById.get(m)?.special))
+const segments = computed(() => paragraph.value?.segments ?? null)
+const isFinal = computed(() => props.id === 'zamok-chernogo-maga' && current.value === 13)
+const lastFinal = ref('')
 
 function open(n: number) {
   current.value = n
   revealed.value = false
-  lastLuck.value = ''
-  counts.value = {}
-  for (const m of paragraph.value?.hints?.monsters ?? []) if (!idx.monsterById.get(m)?.special) counts.value[m] = 1
+  fullText.value = false
+  opened.value = new Set()
+  lastFinal.value = ''
 }
 onMounted(() => {
   if (store.game && store.game.locationId !== props.id && props.id !== 'doroga' && store.worldNode?.locationId === props.id) store.enterLocation(props.id)
@@ -42,19 +44,14 @@ onMounted(() => {
 })
 watch(() => route.query.p, (p) => { if (p) open(Number(p)) })
 
-function need(): string | null {
-  if (!heroUid.value) { store.say('Выберите героя'); return null }
-  return heroUid.value
-}
-function luck(target: number) {
-  const h = need(); if (!h) return
-  const r = store.luckCheck(h, target)
-  lastLuck.value = `к18 = ${r.roll}${r.luck ? ` + ${r.luck}` : ''} против ${target}: ${r.ok ? 'удача!' : 'неудача'}`
-}
-function fight(ids?: string[]) {
-  const specs: EncounterSpec[] = (ids ?? fightable.value).map((monsterId) => ({ monsterId, count: counts.value[monsterId] ?? 1 })).filter((s) => s.count > 0)
-  if (!specs.length) return
-  startFight(specs)
+function toggleBranch(i: number, label?: string) {
+  const s = new Set(opened.value)
+  if (s.has(i)) s.delete(i)
+  else {
+    s.add(i)
+    if (label && current.value) store.log(`${loc.value?.name}, § ${current.value}: ${label}.`)
+  }
+  opened.value = s
 }
 function startFight(specs: EncounterSpec[]) {
   picker.value = false
@@ -62,21 +59,30 @@ function startFight(specs: EncounterSpec[]) {
   store.startEncounter(specs, `/location/${props.id}${current.value ? `?p=${current.value}` : ''}`)
   router.push('/combat')
 }
-function coins(n: number) { const h = need(); if (h) store.adjustMoney(h, n) }
-function bottle(n: number) { const h = need(); if (h) store.giveItem(h, 'bottle', String(n), 1, false) }
-function artifact() { const h = need(); if (h) store.findArtifact(h) }
-function scroll(s: { caster?: 'mage' | 'priest'; level?: number }) { const h = need(); if (h) store.giveScroll(h, s.caster, s.level) }
-function trap() { const h = need(); if (h) store.trapFound(h) }
-function lives(n: number) { const h = need(); if (h) store.adjustLives(h, n) }
-const isFinal = computed(() => props.id === 'zamok-chernogo-maga' && current.value === 13)
+function done() {
+  if (!current.value) return
+  store.markVisited(props.id, current.value)
+  if (props.id === 'doroga') store.dismissRoad(current.value)
+}
+function next() {
+  if (!loc.value || current.value === null) return
+  const i = loc.value.paragraphs.findIndex((p) => p.n === current.value)
+  const nxt = loc.value.paragraphs[i + 1]
+  done()
+  if (nxt) open(nxt.n)
+}
+function leave() { store.leaveLocation(); router.push('/map') }
 function finalAttack() {
-  const h = need(); if (!h) return
-  const won = store.finalDuelAttack(h)
-  lastLuck.value = won ? 'Попадание! Чёрный маг повержен.' : 'Промах — маг отвечает огненным шаром (см. журнал).'
+  if (!heroUid.value) return
+  const won = store.finalDuelAttack(heroUid.value)
+  lastFinal.value = won ? 'Попадание! Чёрный маг повержен.' : 'Промах — маг отвечает огненным шаром (см. журнал).'
   if (won && current.value) store.markVisited(props.id, current.value)
 }
-function done() { if (current.value) store.markVisited(props.id, current.value); if (props.id === 'doroga' && current.value) store.dismissRoad(current.value) }
-function leave() { store.leaveLocation(); router.push('/map') }
+function trap() { if (heroUid.value) store.trapFound(heroUid.value) }
+function lives(n: number) { if (heroUid.value) store.adjustLives(heroUid.value, n) }
+function coins(n: number) { if (heroUid.value) store.adjustMoney(heroUid.value, n) }
+function artifact() { if (heroUid.value) store.findArtifact(heroUid.value) }
+function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
 </script>
 
 <template>
@@ -93,54 +99,80 @@ function leave() { store.leaveLocation(); router.push('/map') }
     </div>
     <div v-if="id === 'doroga' && store.game?.pendingRoad.length" class="card tight row">
       <b>Встречи в пути:</b>
-      <button v-for="(n, i) in store.game.pendingRoad" :key="i" class="small" @click="open(n)">{{ n }}</button>
+      <button v-for="(n, i) in store.game.pendingRoad" :key="i" class="small" @click="open(n)">§ {{ n }}</button>
     </div>
     <div class="cols c11">
       <div>
         <div class="card tight">
           <div class="numgrid">
-            <button v-for="p in loc.paragraphs" :key="p.n" :class="{ visited: visited.includes(p.n), active: p.n === current }" @click="open(p.n)">{{ p.n }}</button>
+            <button v-for="p in loc.paragraphs" :key="p.n" :class="{ visited: visited.includes(p.n), active: p.n === current }" :title="p.segments ? 'есть выбор' : ''" @click="open(p.n)">{{ p.n }}<sup v-if="p.segments" style="color:var(--accent)">•</sup></button>
           </div>
-          <p class="small muted" style="margin:.4rem 0 0">{{ id === 'doroga' ? 'Ведущий выбирает любое приключение из главы «Дорога».' : 'Номера соответствуют плану локации. Пройденные параграфы приглушены.' }}</p>
+          <p class="small muted" style="margin:.4rem 0 0">{{ id === 'doroga' ? 'Ведущий выбирает любое приключение из главы «Дорога».' : 'Номера соответствуют плану локации. Пройденные приглушены, точкой отмечены параграфы с выбором.' }}</p>
         </div>
         <div v-if="planSrc" class="card tight"><a :href="planSrc" target="_blank" rel="noopener" title="Открыть план целиком"><img class="plan-img" :src="planSrc" :alt="`План: ${loc.name}`" /></a></div>
       </div>
       <div>
         <div v-if="!paragraph" class="card muted">Выберите номер параграфа.</div>
         <div v-else class="card">
-          <div class="row between"><h2>§ {{ paragraph.n }}</h2><button class="small" @click="done">Отметить пройденным</button></div>
-          <div v-if="gm && !revealed" class="row"><span class="muted">Режим ведущего: текст скрыт.</span><button class="small" @click="revealed = true">Показать текст</button></div>
-          <p v-else class="paragraph-text">{{ paragraph.text }}</p>
-
-          <div class="row" style="margin:.6rem 0 .3rem"><label>Действует</label><select v-model="heroUid"><option v-for="h in activeHeroes" :key="h.uid" :value="h.uid">{{ h.name }}</option></select></div>
-          <div class="row" v-if="paragraph.hints">
-            <template v-for="t in paragraph.hints.luck ?? []" :key="'l' + t"><button @click="luck(t)">Бросок удачи {{ t }}</button></template>
-            <template v-for="m in fightable" :key="m">
-              <span class="row" style="gap:.2rem"><input type="number" min="0" max="20" v-model.number="counts[m]" style="width:3.6rem" /><button class="danger" @click="fight([m])">⚔ {{ idx.monsterById.get(m)?.name }}</button></span>
-            </template>
-            <button v-if="fightable.length > 1" class="danger" @click="fight()">⚔ Бой со всеми</button>
-            <span v-for="m in npcs" :key="'npc' + m" class="badge" :title="idx.monsterById.get(m)?.description">{{ idx.monsterById.get(m)?.name }} — персонаж, не противник</span>
-            <template v-for="c in paragraph.hints.coins ?? []" :key="'c' + c"><button @click="coins(c)">+{{ c }} монет</button></template>
-            <template v-for="b in paragraph.hints.bottles ?? []" :key="'b' + b"><button @click="bottle(b)">Взять бутылку ({{ b }})</button></template>
-            <button v-if="paragraph.hints.artifact" @click="artifact">Найти артефакт (к18)</button>
-            <template v-for="(s, i) in paragraph.hints.scrolls ?? []" :key="'s' + i"><button @click="scroll(s)">Свиток{{ s.caster ? ` ${casterName(s.caster)}а` : '' }}{{ s.level ? ` ${s.level} ур.` : '' }}</button></template>
+          <div class="row between">
+            <h2>§ {{ paragraph.n }}</h2>
+            <div class="row">
+              <label class="row small" style="gap:.3rem">Действует
+                <select v-model="heroUid" class="small"><option v-for="h in activeHeroes" :key="h.uid" :value="h.uid">{{ h.name }}</option></select>
+              </label>
+            </div>
           </div>
-          <p v-if="lastLuck" class="small" style="color:#d7c56a;margin-top:.4rem">{{ lastLuck }}</p>
+
+          <div v-if="gm && !revealed" class="row"><span class="muted">Режим ведущего: текст скрыт от игроков.</span><button class="small" @click="revealed = true">Показать текст</button></div>
+          <template v-else-if="segments && !fullText">
+            <template v-for="(seg, i) in segments" :key="i">
+              <div v-if="seg.kind === 'scene'">
+                <template v-for="(b, j) in seg.blocks" :key="j">
+                  <p v-if="'text' in b" class="paragraph-text">{{ b.text }}</p>
+                  <RollBlock v-else :options="b.roll" :context="`${loc.name}, § ${paragraph.n}`" :hero-uid="heroUid" @fight="startFight" />
+                </template>
+                <ParagraphActions :hints="seg.hints" :hero-uid="heroUid" @fight="startFight" />
+              </div>
+              <p v-else-if="!seg.blocks.length" class="paragraph-text muted" style="font-style:italic">{{ seg.label }}.</p>
+              <div v-else class="branch" :class="{ open: opened.has(i) }">
+                <button class="branch-head" @click="toggleBranch(i, seg.label)">{{ opened.has(i) ? '▾' : '▸' }} {{ seg.label }}</button>
+                <div v-if="opened.has(i)" class="branch-body">
+                  <template v-for="(b, j) in seg.blocks" :key="j">
+                    <p v-if="'text' in b" class="paragraph-text">{{ b.text }}</p>
+                    <RollBlock v-else :options="b.roll" :context="`${loc.name}, § ${paragraph.n}`" :hero-uid="heroUid" @fight="startFight" />
+                  </template>
+                  <ParagraphActions :hints="seg.hints" :hero-uid="heroUid" @fight="startFight" />
+                </div>
+              </div>
+            </template>
+            <p class="small muted" style="margin-top:.5rem">Выберите, что делает партия: исход ветки откроется по нажатию.</p>
+          </template>
+          <template v-else>
+            <p class="paragraph-text">{{ paragraph.text }}</p>
+            <ParagraphActions :hints="paragraph.hints" :hero-uid="heroUid" @fight="startFight" />
+          </template>
+
           <div v-if="isFinal" class="card tight" style="border-color:var(--accent);margin-top:.6rem">
             <h3>Схватка с Чёрным магом</h3>
             <p class="small muted">Попасть в мага — бросок удачи 15. При промахе маг бросает огненный шар: удача 11, иначе −1к18 жизней. Попадание — победа.</p>
             <div v-if="store.game?.victory"><b>Победа!</b> {{ store.game.victory.heroName }} сразил Чёрного мага на {{ store.game.victory.day }}-й день.</div>
-            <div v-else class="row">
-              <button class="primary" @click="finalAttack">⚔ Атаковать Чёрного мага (удача 15)</button>
-            </div>
+            <button v-else class="primary" @click="finalAttack">⚔ Атаковать Чёрного мага (удача 15)</button>
+            <p v-if="lastFinal" class="small" style="color:#d7c56a;margin:.3rem 0 0">{{ lastFinal }}</p>
             <div class="row" style="margin-top:.4rem"><button class="small" @click="store.drinkFountain()">Выпить из фонтана (все жизни и мана)</button></div>
+          </div>
+
+          <div class="row" style="margin-top:.8rem">
+            <button class="small" @click="done">Отметить пройденным</button>
+            <button class="small" @click="next">Дальше →</button>
+            <button v-if="segments && (!gm || revealed)" class="small" @click="fullText = !fullText">{{ fullText ? 'По веткам' : 'Весь текст' }}</button>
           </div>
           <details style="margin-top:.6rem"><summary class="small muted">Другие действия</summary>
             <div class="row" style="margin-top:.4rem">
-              <button class="small" @click="trap">Ловушка/тайник найден (+400 вору)</button>
+              <button class="small" @click="trap">Ловушка/тайник найден (+400)</button>
               <button class="small" @click="coins(-10)">−10 монет</button>
+              <button class="small" @click="coins(10)">+10 монет</button>
               <button class="small" @click="artifact">Артефакт</button>
-              <button class="small" @click="scroll({})">Случайный свиток</button>
+              <button class="small" @click="scroll">Случайный свиток</button>
               <button class="small" @click="lives(-1)">−1 жизнь</button>
               <button class="small" @click="lives(-3)">−3 жизни</button>
               <button class="small" @click="lives(3)">+3 жизни</button>
