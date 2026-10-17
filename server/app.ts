@@ -52,8 +52,11 @@ function gmEventFor(name: CommandName, room: Room, before: GameState): GmEvent |
     return { type: 'enter', text: `Партия входит в локацию «${s.locationId}».` }
   }
   if (name === 'endCombat') {
-    const last = [...s.log].reverse().find((e) => /Победа!|Команда отступила|Поражение/.test(e.text))
-    return { type: 'combatEnd', text: `Бой окончен. ${last?.text ?? ''}`.trim() }
+    const log = [...s.log].reverse()
+    const last = log.find((e) => /Победа!|Команда отступила|Поражение/.test(e.text))
+    const start = log.findIndex((e) => e.text.startsWith('Бой начинается'))
+    const loot = log.slice(0, start < 0 ? 30 : start).filter((e) => /забирает трофей|подбирает:/.test(e.text)).reverse()
+    return { type: 'combatEnd', text: [`Бой окончен. ${last?.text ?? ''}`.trim(), ...loot.map((e) => e.text)].join(' ') }
   }
   if (name === 'restAll') return { type: 'rest', text: `Партия отдыхает в трактире. День ${s.day}.` }
   return null

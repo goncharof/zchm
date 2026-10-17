@@ -5,6 +5,8 @@ import { idx } from '@/data'
 import type { Hero } from '@/engine/model'
 import { attacksLabel, heroDefense, heroWeapons, isActive } from '@/engine/character'
 import { toHit } from '@/engine/combat'
+import { entryName, salePrice } from '@/engine/inventory'
+import type { LootItem } from '@/engine/loot'
 import { fleeTarget } from '@/engine/rules'
 import { wardName } from '@/engine/spells'
 import { useGameStore } from '@/stores/game'
@@ -36,6 +38,12 @@ watch(() => [c.value?.turn, c.value?.round, c.value?.finished, autoMonsters.valu
 }, { immediate: true })
 onBeforeUnmount(() => { if (autoTimer) clearTimeout(autoTimer) })
 const targetMonster = computed(() => alive.value.find((m) => m.uid === target.value) ?? null)
+
+// трофеи после победы: забирает выбранный свой живой герой
+const takers = computed(() => store.heroes.filter((h) => !h.status.dead && store.canControl(h.uid)))
+const taker = ref('')
+watch(takers, (list) => { if (!list.some((h) => h.uid === taker.value)) taker.value = list[0]?.uid ?? '' }, { immediate: true })
+const lootEntry = (it: LootItem) => ({ uid: it.uid, kind: it.kind, ref: it.ref, qty: 1 })
 
 function canAct(h: Hero) {
   return !!c.value && store.canControl(h.uid) && c.value.turn === 'heroes' && !c.value.finished && !c.value.acted.includes(h.uid) && !c.value.escaped.includes(h.uid) && isActive(h)
@@ -118,6 +126,19 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
       </div>
     </div>
     <MonsterPicker v-if="picker" @close="picker = false" @start="(s) => { picker = false; store.addMonstersToCombat(s) }" />
+
+    <div v-if="c.finished === 'victory' && c.loot?.length" class="card tight">
+      <h3>Трофеи</h3>
+      <p class="small muted">После боя можно обобрать убитых врагов. Что не заберёте до завершения боя, останется на поле.</p>
+      <div v-if="takers.length > 1" class="row" style="margin-bottom:.4rem">
+        <label>Забирает</label>
+        <select v-model="taker"><option v-for="h in takers" :key="h.uid" :value="h.uid">{{ h.name }}</option></select>
+      </div>
+      <div v-for="it in c.loot" :key="it.uid" class="row between" style="padding:.2rem 0;flex-wrap:nowrap">
+        <span style="flex:1;min-width:0">{{ entryName(lootEntry(it), idx) }} <span class="small muted">— {{ it.from }}, в лавке дадут {{ salePrice(lootEntry(it), idx) }}</span></span>
+        <button class="small" :disabled="!taker" @click="store.takeLoot(taker, it.uid)">Взять</button>
+      </div>
+    </div>
 
     <div class="cols c11">
       <div>

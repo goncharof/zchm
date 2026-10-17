@@ -13,6 +13,7 @@ import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
 import { makeAlly, cleanupAfterCombat, endHeroesTurn as endHeroesTurnEngine, closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
+import { takeLootItem } from '@/engine/loot'
 import { plural } from '@/ui/format'
 import { REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
 
@@ -462,6 +463,15 @@ export class GameSession {
     if (c.turn !== 'monsters' || c.finished) return
     this.logAll(monstersTurn(c, this.heroes, idx))
   }
+  /** Забрать трофей с поля боя после победы */
+  takeLoot(heroUid: string, lootUid: string): void {
+    const h = this.hero(heroUid)
+    if (h.status.dead) throw new GameError(`${h.name} мёртв`)
+    let item
+    try { item = takeLootItem(this.requireCombat(), lootUid) } catch (e) { throw new GameError((e as Error).message) }
+    const entry = inv.addToInventory(h, item.kind, item.ref, 1)
+    this.log(`${h.name} забирает трофей: ${inv.entryName(entry, idx)} (${item.from}).`)
+  }
   endCombat(): void {
     const combat = this.requireCombat()
     // спутники: сохранить жизни, засчитать бой
@@ -526,7 +536,7 @@ export const COMMANDS = {
   addCompanion: 'gm', dismissCompanion: 'party',
   startEncounter: 'gm', addMonstersToCombat: 'gm', abortCombat: 'gm',
   attack: 'owner', cast: 'owner', flee: 'owner', skip: 'owner',
-  toMelee: 'party', monstersAct: 'party', endCombat: 'party', endHeroesTurn: 'party',
+  toMelee: 'party', monstersAct: 'party', endCombat: 'party', takeLoot: 'owner', endHeroesTurn: 'party',
 } as const satisfies Record<string, CommandRole>
 
 export type CommandName = keyof typeof COMMANDS

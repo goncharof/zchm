@@ -240,6 +240,7 @@ export const useGameStore = defineStore('game', () => {
     toMelee: () => cmd('toMelee'),
     monstersAct: () => cmd('monstersAct'),
     endCombat: () => cmd('endCombat'),
+    takeLoot: (heroUid: string, lootUid: string) => cmd('takeLoot', heroUid, lootUid),
     abortCombat: () => cmd('abortCombat'),
     endHeroesTurn: () => cmd('endHeroesTurn'),
     addMonstersToCombat: (specs: EncounterSpec[]) => cmd('addMonstersToCombat', specs),

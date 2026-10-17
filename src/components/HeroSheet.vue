@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { idx } from '@/data'
 import type { EquipSlot, Hero, InventoryEntry } from '@/engine/model'
 import { heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, levelRow } from '@/engine/character'
-import { entryName, entryPrice } from '@/engine/inventory'
+import { entryName, salePrice } from '@/engine/inventory'
 import { useGameStore } from '@/stores/game'
 import { SLOT_NAMES, attacksStr, classArt, pct } from '@/ui/format'
 import SpellPicker from './SpellPicker.vue'
@@ -35,6 +35,7 @@ function detail(e: InventoryEntry): string {
   if (e.kind === 'artifact') { const a = idx.artifact(parseInt(e.ref, 10)); return [a.attacks && `атаки ${attacksStr(a.attacks)}`, a.defense && `защита ${a.defense}`, a.defenseBonus && `защита +${a.defenseBonus}`, a.strengthBonus && `сила +${a.strengthBonus}`, a.luckBonus && `удача +${a.luckBonus}`, a.accuracyBonus && `меткость +${a.accuracyBonus}`].filter(Boolean).join(', ') }
   if (e.kind === 'scroll') { const s = idx.spell(e.ref); return `${s.level} ур.` }
   if (e.kind === 'item') return idx.item(e.ref).description
+  if (e.kind === 'trophy') return 'трофей, только на продажу'
   return ''
 }
 function isEquipped(e: InventoryEntry) { return Object.values(props.hero.equipment).includes(e.uid) }
@@ -111,7 +112,7 @@ const statusText = computed(() => {
             <button v-if="e.kind === 'bottle' && !e.identified" class="small" @click="act(() => store.identifyBottle(hero.uid, e.uid))">Распознать</button>
             <button v-if="e.kind === 'scroll'" class="small" @click="act(() => store.copyScroll(hero.uid, e.uid))">В книгу</button>
             <button v-if="(e.kind === 'weapon' || e.kind === 'artifact') && !e.poisoned && hero.inventory.some(x => x.kind === 'item' && x.ref === 'yad')" class="small" @click="act(() => store.poisonWeapon(hero.uid, e.uid))">Смазать ядом</button>
-            <button v-if="shop && entryPrice(e, idx) > 0" class="small" @click="act(() => store.sellItem(hero.uid, e.uid))">Продать за {{ Math.floor(entryPrice(e, idx) / 2) }}</button>
+            <button v-if="shop && salePrice(e, idx) > 0" class="small" @click="act(() => store.sellItem(hero.uid, e.uid))">Продать за {{ salePrice(e, idx) }}</button>
             <select v-if="store.heroes.length > 1" class="small" v-model="transferTo" @change="act(() => { if (transferTo) store.transferItem(hero.uid, transferTo, e.uid); transferTo = '' })">
               <option value="">Передать…</option>
               <option v-for="h in store.heroes.filter(x => x.uid !== hero.uid)" :key="h.uid" :value="h.uid">{{ h.name }}</option>

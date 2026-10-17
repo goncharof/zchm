@@ -6,8 +6,9 @@ import { uid } from './model'
 import { artifactSlot, canUseWeapon, changeLives, entryByUid, heroLuck } from './character'
 import { k18, rollFormula } from './dice'
 import { BOTTLES, DEAD_AT } from './rules'
+import { TROPHIES } from './loot'
 
-const STACKABLE: InventoryKind[] = ['item', 'bottle']
+const STACKABLE: InventoryKind[] = ['item', 'bottle', 'trophy']
 
 export function addToInventory(hero: Hero, kind: InventoryKind, ref: string, qty = 1, extra: Partial<InventoryEntry> = {}): InventoryEntry {
   if (STACKABLE.includes(kind) || isAmmo(kind, ref)) {
@@ -47,6 +48,7 @@ export function entryName(e: InventoryEntry, idx: DataIndex): string {
     case 'artifact': return idx.artifact(parseInt(e.ref, 10)).name
     case 'scroll': return `Свиток: ${e.identified === false ? '?' : idx.spell(e.ref).name}`
     case 'bottle': return e.identified ? `Бутылка (${e.ref}): ${BOTTLES[parseInt(e.ref, 10) - 1]?.label}` : 'Бутылка без этикетки'
+    case 'trophy': return TROPHIES[e.ref]?.name ?? e.ref
   }
 }
 
@@ -66,11 +68,17 @@ export function buy(hero: Hero, kind: 'weapon' | 'armor' | 'item', ref: string, 
   return addToInventory(hero, kind, ref, qty)
 }
 
-/** ХАУСРУЛ: продажа за половину цены (в правилах цену трофеев назначает ведущий) */
+/** Цена продажи одной штуки. ХАУСРУЛ: половина цены лавки (в правилах цену трофеев назначает ведущий);
+ *  у шкур и ятаганов цена из Бестиария */
+export function salePrice(e: InventoryEntry, idx: DataIndex): number {
+  if (e.kind === 'trophy') return TROPHIES[e.ref]?.price ?? 0
+  return Math.floor(entryPrice(e, idx) / 2)
+}
+
 export function sell(hero: Hero, entryUid: string, idx: DataIndex, qty = 1): number {
   const e = entryByUid(hero, entryUid)
   if (!e) return 0
-  const gain = Math.floor(entryPrice(e, idx) / 2) * qty
+  const gain = salePrice(e, idx) * qty
   hero.money += gain
   removeFromInventory(hero, entryUid, qty)
   return gain

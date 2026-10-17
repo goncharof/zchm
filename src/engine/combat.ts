@@ -7,7 +7,8 @@ import { changeLives, consumePrayer, gainXp, hasWard, heroAccuracy, heroDefense,
 import { k18, k6, roll, rollAttackTable, rollFormula } from './dice'
 import { EXTRA_ATTACKS, fleeTarget } from './rules'
 import { rollSpellDamage } from './spells'
-import { addToInventory, removeFromInventory } from './inventory'
+import { addToInventory, entryName, removeFromInventory } from './inventory'
+import { collectLoot } from './loot'
 
 export interface EncounterSpec {
   monsterId: string
@@ -357,6 +358,7 @@ export function checkEnd(state: CombatState, heroes: Hero[]): void {
   if (state.finished) return
   if (aliveMonsters(state).length === 0) {
     state.finished = 'victory'
+    state.loot = collectLoot(state.monsters)
     return
   }
   const fighters = heroes.filter((h) => !state.escaped.includes(h.uid))
@@ -836,6 +838,8 @@ export function finishCombat(state: CombatState, heroes: Hero[], idx?: DataIndex
       }
       if (parts.length) log.push(entry(`${h.name} подбирает: ${parts.join(', ')}.`))
     }
+    const left = state.loot ?? []
+    if (left.length && idx) log.push(entry(`На поле боя остались трофеи: ${left.map((it) => entryName({ uid: it.uid, kind: it.kind, ref: it.ref, qty: 1 }, idx)).join(', ')}.`))
   }
   cleanupAfterCombat(heroes)
   const total = Object.values(state.xpEarned).reduce((a, b) => a + b, 0)

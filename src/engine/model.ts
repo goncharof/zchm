@@ -2,14 +2,16 @@
  * Модель состояния партии. Всё сериализуемо в JSON (сохранения в localStorage / файл).
  */
 import type { ClassId, ExtraAttackKind, WardKind } from '@/types'
+import type { LootItem } from './loot'
 
-export type InventoryKind = 'weapon' | 'armor' | 'item' | 'artifact' | 'bottle' | 'scroll'
+export type InventoryKind = 'weapon' | 'armor' | 'item' | 'artifact' | 'bottle' | 'scroll' | 'trophy'
 
 export interface InventoryEntry {
   /** уникальный id экземпляра */
   uid: string
   kind: InventoryKind
-  /** id из weapons/armor/items; для артефакта — номер 1..18 строкой; для свитка — id заклинания; для бутылки — номер 1..6 */
+  /** id из weapons/armor/items; для артефакта — номер 1..18 строкой; для свитка — id заклинания; для бутылки — номер 1..6;
+   *  для трофея — id из TROPHIES (src/engine/loot.ts) */
   ref: string
   qty: number
   /** бутылка/свиток опознаны */
@@ -179,6 +181,8 @@ export interface CombatState {
   escaped: string[]
   /** что можно подобрать после победы: heroUid → id оружия → количество (дротики, копья, попавшие стрелы) */
   recover: Record<string, Record<string, number>>
+  /** трофеи с убитых врагов — появляются при победе, герои забирают их до завершения боя */
+  loot?: LootItem[]
   initiative?: { heroes: number; monsters: number }
   /** откуда начался бой — чтобы вернуться */
   returnTo?: string
