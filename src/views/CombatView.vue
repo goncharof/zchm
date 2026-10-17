@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { idx } from '@/data'
 import type { Hero } from '@/engine/model'
@@ -23,6 +23,18 @@ const picker = ref(false)
 const EXTRA: Record<string, string> = { petrify: 'окаменение', freeze: 'оледенение', paralysis: 'паралич', poison: 'яд' }
 
 watch(alive, (list) => { if (!list.find((m) => m.uid === target.value)) target.value = list[0]?.uid ?? '' }, { immediate: true })
+
+// монстры ходят сами (настройка зрителя, хранится в браузере)
+const AUTO_KEY = 'zchm.autoMonsters'
+const autoMonsters = ref(readAuto())
+function readAuto(): boolean { try { return localStorage.getItem(AUTO_KEY) === '1' } catch { return false } }
+watch(autoMonsters, (v) => { try { localStorage.setItem(AUTO_KEY, v ? '1' : '0') } catch { /* нет хранилища */ } })
+let autoTimer: ReturnType<typeof setTimeout> | null = null
+watch(() => [c.value?.turn, c.value?.round, c.value?.finished, autoMonsters.value] as const, ([turn, , finished, auto]) => {
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null }
+  if (auto && turn === 'monsters' && !finished) autoTimer = setTimeout(() => { if (store.combat?.turn === 'monsters' && !store.combat.finished) store.monstersAct() }, 600)
+}, { immediate: true })
+onBeforeUnmount(() => { if (autoTimer) clearTimeout(autoTimer) })
 const targetMonster = computed(() => alive.value.find((m) => m.uid === target.value) ?? null)
 
 function canAct(h: Hero) {
@@ -97,6 +109,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
       </div>
       <div class="row">
         <button v-if="!c.finished && c.phase === 'ranged'" @click="store.toMelee()">Сойтись вплотную</button>
+        <label class="row small" style="gap:.3rem" title="Ход монстров выполняется автоматически"><input type="checkbox" v-model="autoMonsters" /> монстры ходят сами</label>
         <button v-if="!c.finished && c.turn === 'monsters'" class="primary" @click="store.monstersAct()">Ход монстров</button>
         <button v-if="!c.finished" class="small" @click="picker = true">Добавить монстров</button>
         <button v-if="c.finished" class="primary" @click="finish">Завершить бой</button>
