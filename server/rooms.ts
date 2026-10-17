@@ -24,10 +24,41 @@ export interface RoomData {
   state: GameState
   players: Omit<Player, 'sockets'>[]
   chat: ChatMessage[]
-  /** история разговора ИИ-ведущего (сообщения Claude API) */
-  gmHistory: unknown[]
+  /** истории разговора ИИ-ведущих по провайдерам (форматы API различаются) */
+  gmHistories?: Record<string, unknown[]>
+  /** устаревшее поле: история Claude до появления цепочки моделей */
+  gmHistory?: unknown[]
+  /** последний сообщение чата, которое видел каждый провайдер (для сводки пропущенного) */
+  gmSeen?: Record<string, string>
+  script?: ScriptState
+  choiceActions?: Record<string, ChoiceRecord>
   createdAt: number
   updatedAt: number
+}
+
+/** Где сейчас сценарный ведущий: последний открытый параграф */
+export interface ScriptState {
+  locationId: string | null
+  n: number | null
+}
+
+/** Действие за кнопкой-вариантом сценарного ведущего (сериализуемое) */
+export type ScriptAction =
+  | { t: 'branch'; loc: string; n: number; seg: number }
+  | { t: 'roll'; loc: string; n: number; seg: number; block: number }
+  | { t: 'luck'; target: number }
+  | { t: 'fight'; specs: { monsterId: string; count: number }[] }
+  | { t: 'coins'; amount: number }
+  | { t: 'pay'; amount: number }
+  | { t: 'bottle'; n: number }
+  | { t: 'artifact' }
+  | { t: 'scroll'; caster?: 'mage' | 'priest'; level?: number }
+  | { t: 'rest' }
+  | { t: 'next' }
+
+export interface ChoiceRecord {
+  messageId: string
+  action: ScriptAction
 }
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -41,7 +72,10 @@ export function newCode(): string {
 export class Room {
   players = new Map<string, Player>()
   chat: ChatMessage[] = []
-  gmHistory: unknown[] = []
+  gmHistories: Record<string, unknown[]> = {}
+  gmSeen: Record<string, string> = {}
+  script: ScriptState = { locationId: null, n: null }
+  choiceActions: Record<string, ChoiceRecord> = {}
   gmBusy = false
   createdAt = Date.now()
   updatedAt = Date.now()
@@ -75,29 +109,40 @@ export class Room {
   addChat(m: Omit<ChatMessage, 'id' | 't'> & { id?: string }): ChatMessage {
     const msg: ChatMessage = { id: m.id ?? randomUUID(), t: Date.now(), ...m } as ChatMessage
     this.chat.push(msg)
-    if (this.chat.length > CHAT_CAP) this.chat.splice(0, this.chat.length - CHAT_CAP)
+    if (this.chat.length > CHAT_CAP) {
+      const dropped = this.chat.splice(0, this.chat.length - CHAT_CAP)
+      const gone = new Set(dropped.map((x) => x.id))
+      for (const [cid, rec] of Object.entries(this.choiceActions)) if (gone.has(rec.messageId)) delete this.choiceActions[cid]
+    }
     return msg
+  }
+  chatById(id: string): ChatMessage | undefined {
+    return this.chat.find((m) => m.id === id)
   }
 
   playerView(p: Player): PlayerView {
     return { id: p.id, name: p.name, isHost: p.isHost, heroUids: [...p.heroUids], online: p.sockets.size > 0 }
   }
-  view(p: Player, aiAvailable: boolean): RoomView {
-    return { code: this.code, gm: this.gm, players: [...this.players.values()].map((x) => this.playerView(x)), me: this.playerView(p), aiAvailable, gmBusy: this.gmBusy }
+  view(p: Player, gmChain: string[]): RoomView {
+    return { code: this.code, gm: this.gm, players: [...this.players.values()].map((x) => this.playerView(x)), me: this.playerView(p), aiAvailable: true, gmChain, gmBusy: this.gmBusy }
   }
 
   toData(): RoomData {
     return {
       code: this.code, gm: this.gm, state: this.state,
       players: [...this.players.values()].map(({ sockets: _s, ...rest }) => { void _s; return rest }),
-      chat: this.chat, gmHistory: this.gmHistory, createdAt: this.createdAt, updatedAt: this.updatedAt,
+      chat: this.chat, gmHistories: this.gmHistories, gmSeen: this.gmSeen, script: this.script, choiceActions: this.choiceActions,
+      createdAt: this.createdAt, updatedAt: this.updatedAt,
     }
   }
   static fromData(d: RoomData, world: WorldMap | null): Room {
     const r = new Room(d.code, d.gm, migrate(d.state), world)
     for (const p of d.players) r.players.set(p.id, { ...p, sockets: new Set() })
     r.chat = d.chat ?? []
-    r.gmHistory = d.gmHistory ?? []
+    r.gmHistories = d.gmHistories ?? (d.gmHistory?.length ? { claude: d.gmHistory } : {})
+    r.gmSeen = d.gmSeen ?? {}
+    r.script = d.script ?? { locationId: null, n: null }
+    r.choiceActions = d.choiceActions ?? {}
     r.createdAt = d.createdAt
     r.updatedAt = d.updatedAt
     return r

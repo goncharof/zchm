@@ -30,6 +30,7 @@ export class NetClient {
   private noticeCbs: ((t: string) => void)[] = []
   private chatCbs: ((m: ChatMessage) => void)[] = []
   private historyCbs: ((m: ChatMessage[]) => void)[] = []
+  private updateCbs: ((m: ChatMessage) => void)[] = []
   private deltaCbs: ((d: { id: string; text: string }) => void)[] = []
   private doneCbs: ((d: { id: string }) => void)[] = []
 
@@ -41,6 +42,7 @@ export class NetClient {
     this.socket.on('notice', (t) => this.noticeCbs.forEach((cb) => cb(t)))
     this.socket.on('chat', (m) => this.chatCbs.forEach((cb) => cb(m)))
     this.socket.on('chat:history', (m) => this.historyCbs.forEach((cb) => cb(m)))
+    this.socket.on('chat:update', (m) => this.updateCbs.forEach((cb) => cb(m)))
     this.socket.on('gm:delta', (d) => this.deltaCbs.forEach((cb) => cb(d)))
     this.socket.on('gm:done', (d) => this.doneCbs.forEach((cb) => cb(d)))
     // после обрыва связи — вернуться в комнату под тем же игроком
@@ -54,6 +56,7 @@ export class NetClient {
   onNotice(cb: (t: string) => void) { this.noticeCbs.push(cb) }
   onChat(cb: (m: ChatMessage) => void) { this.chatCbs.push(cb) }
   onChatHistory(cb: (m: ChatMessage[]) => void) { this.historyCbs.push(cb) }
+  onChatUpdate(cb: (m: ChatMessage) => void) { this.updateCbs.push(cb) }
   onGmDelta(cb: (d: { id: string; text: string }) => void) { this.deltaCbs.push(cb) }
   onGmDone(cb: (d: { id: string }) => void) { this.doneCbs.push(cb) }
 
@@ -86,6 +89,7 @@ export class NetClient {
   async claimHero(heroUid: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('hero:claim', heroUid)) }
   async releaseHero(heroUid: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('hero:release', heroUid)) }
   async chat(text: string, toGm: boolean): Promise<void> { this.unwrap(await this.socket.emitWithAck('chat', { text, toGm })) }
+  async choose(messageId: string, choiceId: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('gm:choose', { messageId, choiceId })) }
 
   /** Выйти из комнаты (забыть сохранённый вход) */
   close(): void {

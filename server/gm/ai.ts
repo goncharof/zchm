@@ -1,37 +1,38 @@
 /**
- * ИИ-ведущий на Claude API: очередь ходов по комнатам, стриминг реплик, цикл с инструментами.
+ * ИИ-ведущий: диспетчер ходов и провайдер Claude API.
  *
- * Кэширование: инструменты и системный промпт неизменны (кэшируются целиком), история разговора
- * только дописывается; состояние партии приходит отдельным системным сообщением после реплики игроков,
- * поэтому префикс не меняется. Параграфы Книги Жизни ведущий читает инструментом open_paragraph.
+ * GmDirector — очередь ходов по комнатам и цепочка провайдеров: на каждый ход пробует модели по порядку,
+ * недоступную (нет ключа, лимит, сбой) ставит на паузу и переходит к следующей; если не ответил никто,
+ * ход ведёт сценарный ведущий без ИИ. Провайдер, пропустивший часть разговора, получает сводку пропущенного.
+ *
+ * AnthropicProvider — Claude API: неизменные инструменты и системный промпт (кэш), история только
+ * дописывается, состояние партии — системным сообщением посреди разговора, резервная модель при отказе.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import type { BetaMessageStreamParams } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import { randomUUID } from 'node:crypto'
-import type { GmContext, GmDriver, GmFactory, GmInput } from '../app'
 import type { Room } from '../rooms'
 import { buildSystemPrompt, snapshot } from './prompt'
+import { ScriptedGm } from './script'
 import { GM_TOOLS, executeGmTool } from './tools'
+import { ProviderError, type GmContext, type GmDriver, type GmEvent, type GmFactory, type GmInput, type LlmProvider } from './types'
 
 type Msg = Anthropic.Beta.BetaMessageParam
-type Params = BetaMessageStreamParams
 
-/** Минимум, который нужен ведущему от клиента модели (в тестах подменяется имитацией) */
+/** Минимум, который нужен от клиента Claude API (в тестах подменяется имитацией) */
 export interface ModelStream {
   on(event: 'text', cb: (delta: string) => void): unknown
   finalMessage(): Promise<Anthropic.Beta.BetaMessage>
 }
 export interface ModelClient {
-  stream(params: Params): ModelStream
+  stream(params: BetaMessageStreamParams): ModelStream
 }
 
-export interface AiGmOptions {
+export interface AnthropicOptions {
   client?: ModelClient
   model?: string
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-  /** предел шагов с инструментами за один ход ведущего */
   maxSteps?: number
-  /** писать расход токенов в консоль */
   logUsage?: boolean
 }
 
@@ -39,39 +40,115 @@ export function aiConfigured(): boolean {
   return !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN)
 }
 
-const DEFAULT_MODEL = 'claude-opus-5-5'
 const BETAS: Anthropic.Beta.AnthropicBeta[] = ['server-side-fallback-2026-07-01']
 
-function formatInputs(batch: GmInput[]): string {
-  const players = batch.filter((b): b is Extract<GmInput, { kind: 'player' }> => b.kind === 'player')
-  const events = batch.filter((b): b is Extract<GmInput, { kind: 'event' }> => b.kind === 'event')
-  const parts: string[] = []
-  if (events.length) parts.push(`[События игры]\n${events.map((e) => `• ${e.text}`).join('\n')}`)
-  if (players.length) parts.push(`[Реплики игроков — это слова и действия их героев]\n${players.map((p) => `— ${p.author}: «${p.text}»`).join('\n')}`)
-  return parts.join('\n\n') || '[Игроки ждут продолжения]'
+function cooldownForApiError(err: unknown): number {
+  if (err instanceof Anthropic.RateLimitError) return 60_000
+  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError || err instanceof Anthropic.NotFoundError) return 3600_000
+  return 30_000
 }
 
-export function aiGmFactory(opts: AiGmOptions = {}): GmFactory {
-  return (ctx: GmContext) => new AiGm(ctx, opts)
-}
-
-export class AiGm implements GmDriver {
-  private queues = new Map<string, GmInput[]>()
-  private running = new Map<string, Promise<void>>()
+export class AnthropicProvider implements LlmProvider {
+  readonly id = 'claude'
+  readonly label = 'Claude'
   private client: ModelClient
   private model: string
-  private effort: NonNullable<AiGmOptions['effort']>
-  private maxSteps: number
+  private effort: NonNullable<AnthropicOptions['effort']>
   private system: Anthropic.Beta.BetaTextBlockParam[]
 
-  constructor(private ctx: GmContext, private opts: AiGmOptions) {
+  constructor(private opts: AnthropicOptions = {}) {
     const sdk = opts.client ? null : new Anthropic()
     this.client = opts.client ?? { stream: (p) => sdk!.beta.messages.stream(p) }
-    this.model = opts.model ?? process.env.GM_MODEL ?? DEFAULT_MODEL
-    this.effort = (opts.effort ?? (process.env.GM_EFFORT as AiGmOptions['effort']) ?? 'medium')!
-    this.maxSteps = opts.maxSteps ?? 12
+    this.model = opts.model ?? process.env.GM_MODEL ?? 'claude-opus-5-5'
+    this.effort = (opts.effort ?? (process.env.GM_EFFORT as AnthropicOptions['effort']) ?? 'medium')!
     // системный промпт неизменен: один и тот же текст для всех комнат и ходов
     this.system = [{ type: 'text', text: buildSystemPrompt(), cache_control: { type: 'ephemeral' } }]
+  }
+
+  async turn(room: Room, input: { userText: string; snapshot: string }, io: { delta(text: string): void; stateChanged(): void }): Promise<string> {
+    const history = (room.gmHistories[this.id] ??= []) as Msg[]
+    const mark = history.length
+    history.push({ role: 'user', content: [{ type: 'text', text: input.userText }] })
+    // системное сообщение посреди разговора: не трогает кэшированный префикс и не подделывается игроками
+    history.push({ role: 'system', content: input.snapshot })
+    let text = ''
+    let jsonRetries = 0
+    try {
+      for (let step = 0; step < (this.opts.maxSteps ?? 12); step++) {
+        const stream = this.client.stream({
+          model: this.model,
+          max_tokens: 16000,
+          system: this.system,
+          tools: GM_TOOLS,
+          messages: history,
+          thinking: { type: 'adaptive' },
+          output_config: { effort: this.effort },
+          cache_control: { type: 'ephemeral' },
+          // при отказе модели запрос повторяется на подходящей резервной модели
+          betas: BETAS,
+          fallbacks: 'default',
+        })
+        if (text && !text.endsWith('\n')) { text += '\n\n'; io.delta('\n\n') }
+        stream.on('text', (d) => { text += d; io.delta(d) })
+        let msg: Anthropic.Beta.BetaMessage
+        try {
+          msg = await stream.finalMessage()
+          jsonRetries = 0
+        } catch (err) {
+          if (err instanceof Anthropic.APIError || jsonRetries++ >= 2) throw err
+          continue
+        }
+        if (this.opts.logUsage ?? true) {
+          const u = msg.usage
+          console.log(`[ведущий Claude ${room.code}] шаг ${step + 1}: вход ${u.input_tokens}, из кэша ${u.cache_read_input_tokens ?? 0}, в кэш ${u.cache_creation_input_tokens ?? 0}, выход ${u.output_tokens}`)
+        }
+        history.push({ role: 'assistant', content: msg.content })
+        if (msg.stop_reason === 'refusal') throw new ProviderError('Claude отказался вести эту сцену', 0)
+        const uses = msg.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use')
+        if (!uses.length || msg.stop_reason === 'max_tokens') break
+        const results: Anthropic.Beta.BetaToolResultBlockParam[] = uses.map((u) => {
+          const out = executeGmTool(room, u.name, u.input)
+          return { type: 'tool_result', tool_use_id: u.id, content: out.content, ...(out.isError ? { is_error: true } : {}) }
+        })
+        history.push({ role: 'user', content: results })
+        io.stateChanged()
+      }
+    } catch (err) {
+      // откатить незавершённый ход: история остаётся корректной для следующего запроса
+      history.length = mark
+      if (err instanceof ProviderError) throw err
+      const why = err instanceof Anthropic.APIError ? `ошибка API ${err.status ?? ''}`.trim() : (err as Error).message
+      throw new ProviderError(`Claude: ${why}`, cooldownForApiError(err))
+    }
+    return text.trim() || '…'
+  }
+}
+
+export interface DirectorOptions {
+  providers: LlmProvider[]
+  /** множитель пауз после ошибок (в тестах 0) */
+  cooldownScale?: number
+}
+
+const EVENT_HINT: Record<GmEvent['type'], string> = {
+  travel: 'Если в пути были встречи, разыграй их по очереди (open_paragraph с location_id "doroga"), затем опиши прибытие.',
+  enter: 'Опиши вход и спроси, куда герои направятся (номера помещений видны игрокам на плане).',
+  combatEnd: 'Опиши исход боя и продолжи сцену.',
+  rest: 'Коротко опиши отдых.',
+}
+
+export class GmDirector implements GmDriver {
+  private queues = new Map<string, GmInput[]>()
+  private running = new Map<string, Promise<void>>()
+  private cooling = new Map<string, number>()
+  private script: ScriptedGm
+
+  constructor(private ctx: GmContext, private opts: DirectorOptions) {
+    this.script = new ScriptedGm(ctx)
+  }
+
+  chain(): string[] {
+    return this.opts.providers.map((p) => p.label)
   }
 
   enqueue(room: Room, input: GmInput): void {
@@ -82,6 +159,10 @@ export class AiGm implements GmDriver {
       const p = this.pump(room).finally(() => this.running.delete(room.code))
       this.running.set(room.code, p)
     }
+  }
+
+  choose(room: Room, playerId: string, messageId: string, choiceId: string): void {
+    this.script.choose(room, playerId, messageId, choiceId)
   }
 
   async idle(): Promise<void> {
@@ -95,90 +176,80 @@ export class AiGm implements GmDriver {
       for (;;) {
         const q = this.queues.get(room.code) ?? []
         if (!q.length) break
-        const batch = q.splice(0)
-        await this.turn(room, batch)
+        await this.turn(room, q.splice(0))
       }
+    } catch (e) {
+      console.error('[ведущий]', e)
+      this.ctx.notice(room, 'Ведущий споткнулся о внутреннюю ошибку. Попробуйте ещё раз.')
     } finally {
       room.gmBusy = false
       this.ctx.roomChanged(room)
     }
   }
 
-  /** Один ход ведущего: реплики игроков и события → рассказ и вызовы инструментов */
   private async turn(room: Room, batch: GmInput[]): Promise<void> {
-    const history = room.gmHistory as Msg[]
-    const mark = history.length
-    history.push({ role: 'user', content: [{ type: 'text', text: formatInputs(batch) }] })
-    // системное сообщение посреди разговора: не трогает кэшированный префикс и не подделывается игроками
-    history.push({ role: 'system', content: snapshot(room) })
-    const id = randomUUID()
-    let text = ''
-    let jsonRetries = 0
-    try {
-      for (let step = 0; step < this.maxSteps; step++) {
-        const stream = this.client.stream({
-          model: this.model,
-          max_tokens: 16000,
-          system: this.system,
-          tools: GM_TOOLS,
-          messages: history,
-          thinking: { type: 'adaptive' },
-          output_config: { effort: this.effort },
-          // автоматический кэш истории: последняя кэшируемая часть запроса
-          cache_control: { type: 'ephemeral' },
-          // при отказе модели запрос повторяется на подходящей резервной модели
-          betas: BETAS,
-          fallbacks: 'default',
-        })
-        if (text && !text.endsWith('\n')) { text += '\n\n'; this.ctx.delta(room, id, '\n\n') }
-        stream.on('text', (d) => { text += d; this.ctx.delta(room, id, d) })
-        let msg: Anthropic.Beta.BetaMessage
-        try {
-          msg = await stream.finalMessage()
-          jsonRetries = 0
-        } catch (err) {
-          // нечитаемый JSON во входе инструмента — повторить шаг; ошибки API — наверх
-          if (err instanceof Anthropic.APIError || jsonRetries++ >= 2) throw err
-          continue
-        }
-        if (this.opts.logUsage ?? true) {
-          const u = msg.usage
-          console.log(`[ИИ-ведущий ${room.code}] шаг ${step + 1}: вход ${u.input_tokens}, из кэша ${u.cache_read_input_tokens ?? 0}, в кэш ${u.cache_creation_input_tokens ?? 0}, выход ${u.output_tokens}`)
-        }
-        history.push({ role: 'assistant', content: msg.content })
-        if (msg.stop_reason === 'refusal') {
-          this.ctx.notice(room, 'Ведущий отказался продолжать эту сцену. Попробуйте другое действие.')
-          break
-        }
-        const uses = msg.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use')
-        if (!uses.length || msg.stop_reason === 'max_tokens') break
-        const results: Anthropic.Beta.BetaToolResultBlockParam[] = []
-        let endsTurn = false
-        for (const u of uses) {
-          const out = executeGmTool(room, u.name, u.input)
-          results.push({ type: 'tool_result', tool_use_id: u.id, content: out.content, ...(out.isError ? { is_error: true } : {}) })
-          endsTurn ||= !!out.endsTurn
-        }
-        history.push({ role: 'user', content: results })
-        this.ctx.stateChanged(room)
-        void endsTurn // после начала боя модель сама завершает реплику по указанию в результате
-      }
-    } catch (err) {
-      // откатить незавершённый ход: история остаётся корректной для следующего запроса
-      history.length = mark
-      const why = err instanceof Anthropic.AuthenticationError ? 'неверный ключ API'
-        : err instanceof Anthropic.RateLimitError ? 'превышен лимит запросов, попробуйте чуть позже'
-        : err instanceof Anthropic.APIError ? `ошибка API ${err.status ?? ''}`.trim()
-        : 'внутренняя ошибка'
-      console.error('[ИИ-ведущий]', err)
-      this.ctx.notice(room, `Ведущий недоступен: ${why}.`)
-      if (text) this.ctx.chat(room, { id, from: 'gm', author: 'Ведущий', text: text.trim() })
-      this.ctx.done(room, id)
+    const events = batch.flatMap((b) => (b.kind === 'event' ? [b.event] : []))
+    const texts = batch.flatMap((b) => (b.kind === 'player' ? [b] : []))
+    if (room.gm === 'script' || !this.opts.providers.length) {
+      this.script.handle(room, events, texts)
       return
     }
-    this.ctx.chat(room, { id, from: 'gm', author: 'Ведущий', text: text.trim() || '…' })
-    this.ctx.done(room, id)
-    this.ctx.stateChanged(room)
-    this.ctx.persist(room)
+    const userText = formatInputs(events, texts)
+    const exclude = new Set(texts.map((t) => t.chatId).filter(Boolean) as string[])
+    for (const p of this.opts.providers) {
+      if ((this.cooling.get(p.id) ?? 0) > Date.now()) continue
+      const id = randomUUID()
+      try {
+        const text = await p.turn(room, { userText: this.catchup(room, p.id, exclude) + userText, snapshot: snapshot(room) }, {
+          delta: (d) => this.ctx.delta(room, id, d),
+          stateChanged: () => this.ctx.stateChanged(room),
+        })
+        const msg = this.ctx.chat(room, { id, from: 'gm', author: `Ведущий · ${p.label}`, text })
+        this.ctx.done(room, id)
+        room.gmSeen[p.id] = msg.id
+        this.ctx.stateChanged(room)
+        this.ctx.persist(room)
+        return
+      } catch (e) {
+        // убрать у игроков недописанный текст и перейти к следующей модели
+        this.ctx.done(room, id)
+        const err = e instanceof ProviderError ? e : new ProviderError(String((e as Error)?.message ?? e), 30_000)
+        this.cooling.set(p.id, Date.now() + err.cooldownMs * (this.opts.cooldownScale ?? 1))
+        console.warn('[ведущий]', err.message)
+      }
+    }
+    this.ctx.notice(room, 'ИИ-ведущий сейчас недоступен — ход ведёт сценарный ведущий.')
+    this.script.handle(room, events, texts)
+  }
+
+  /** Сводка разговора, пропущенного этим провайдером (вели другие модели или сценарный ведущий) */
+  private catchup(room: Room, providerId: string, exclude: Set<string>): string {
+    const seen = room.gmSeen[providerId]
+    const hasHistory = (room.gmHistories[providerId]?.length ?? 0) > 0
+    let from = 0
+    if (seen) {
+      const i = room.chat.findIndex((m) => m.id === seen)
+      from = i >= 0 ? i + 1 : Math.max(0, room.chat.length - 20)
+    } else if (hasHistory) {
+      return ''
+    }
+    const missed = room.chat.slice(from).filter((m) => !exclude.has(m.id) && m.from !== 'system').slice(-20)
+    if (!missed.length) return ''
+    return `[Что было в игре, пока ты не вёл разговор (вели другой ведущий или игроки)]\n${missed.map((m) => `— ${m.author}: ${m.text.slice(0, 300)}`).join('\n')}\n\n`
   }
 }
+
+function formatInputs(events: GmEvent[], texts: { author: string; text: string }[]): string {
+  const parts: string[] = []
+  if (events.length) parts.push(`[События игры]\n${events.map((e) => `• ${e.text} ${EVENT_HINT[e.type]}`).join('\n')}`)
+  if (texts.length) parts.push(`[Реплики игроков — это слова и действия их героев]\n${texts.map((p) => `— ${p.author}: «${p.text}»`).join('\n')}`)
+  return parts.join('\n\n') || '[Игроки ждут продолжения]'
+}
+
+/** Ведущий с заданной цепочкой провайдеров; client — имитация Claude для тестов */
+export function aiGmFactory(opts: { providers?: LlmProvider[]; client?: ModelClient; logUsage?: boolean; cooldownScale?: number } = {}): GmFactory {
+  const providers = opts.providers ?? (opts.client ? [new AnthropicProvider({ client: opts.client, logUsage: opts.logUsage })] : [])
+  return (ctx: GmContext) => new GmDirector(ctx, { providers, cooldownScale: opts.cooldownScale })
+}
+
+export type { GmContext, GmDriver, GmEvent, GmFactory, GmInput, LlmProvider }

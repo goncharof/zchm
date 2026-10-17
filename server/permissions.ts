@@ -21,7 +21,7 @@ export function authorize(gm: GmMode, player: PlayerRights, name: string, args: 
     case 'party':
       return null
     case 'gm':
-      if (gm === 'ai') return 'Это решает ведущий'
+      if (gm === 'ai' || gm === 'script') return 'Это решает ведущий'
       if (gm === 'human') return player.isHost ? null : 'Это решает ведущий'
       return null
     case 'owner': {
@@ -29,7 +29,7 @@ export function authorize(gm: GmMode, player: PlayerRights, name: string, args: 
       if (typeof heroUid !== 'string') return 'Не указан герой'
       if (player.heroUids.includes(heroUid)) return null
       // хозяин может действовать за любого героя, кроме игры с ИИ-ведущим
-      if (player.isHost && gm !== 'ai') return null
+      if (player.isHost && gm !== 'ai' && gm !== 'script') return null
       // ничей герой — может любой игрок (например, после ухода владельца)
       if (!heroOwned(heroUid)) return null
       return 'Это не ваш герой'

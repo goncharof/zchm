@@ -11,6 +11,12 @@ const RULES = `Кратко о правилах (механику считает
 - Артефакт определяется к18 (give_artifact), за находку все получают 500 опыта. Вор получает 400 опыта за найденную ловушку или тайник.
 - Классы: воин, варвар, вор, маг, жрец. Маги и жрецы колдуют сами через интерфейс игры.`
 
+/** Ужатый промпт для бесплатных моделей: без списков монстров и локаций (у бесплатных тарифов малы лимиты токенов) */
+export function buildCompactPrompt(): string {
+  return buildSystemPrompt().split('\n\nМонстры и персонажи Бестиария')[0]
+    + `\n\nМонстров в start_combat и add_companion указывай по имени из текста параграфа («орк», «зомби»). Локации: ${gameData.locations.map((l) => `${l.id} (${l.name})`).join(', ')}.`
+}
+
 export function buildSystemPrompt(): string {
   const monsters = gameData.bestiary
     .map((m) => (m.special ? `${m.id} — ${m.name} (персонаж, не для боя)` : `${m.id} — ${m.name} (ур. ${m.level}, защита ${m.defense ?? '—'}, жизни ${m.lives ?? '—'})`))

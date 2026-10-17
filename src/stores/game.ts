@@ -44,8 +44,8 @@ export const useGameStore = defineStore('game', () => {
   const location = computed(() => (game.value?.locationId ? idx.locationById.get(game.value.locationId) ?? null : null))
   const worldNode = computed(() => world.value?.nodes.find((n) => n.id === game.value?.worldNodeId) ?? null)
   const started = computed(() => !!game.value && game.value.heroes.length > 0)
-  /** ИИ-ведущий: текст Книги Жизни игрокам не показывается */
-  const aiGm = computed(() => online.value && room.value?.gm === 'ai')
+  /** ведущий-машина (ИИ или сценарный): текст Книги Жизни игрокам не показывается */
+  const aiGm = computed(() => online.value && (room.value?.gm === 'ai' || room.value?.gm === 'script'))
   /** этот зритель — ведущий (живой ведущий в сетевой игре) или игра без ведущего */
   const isGm = computed(() => !online.value || (room.value?.gm === 'human' && room.value.me.isHost) || room.value?.gm === 'book')
   /** герои, которыми управляет этот игрок (в одиночной игре — все) */
@@ -100,6 +100,9 @@ export const useGameStore = defineStore('game', () => {
       if (streaming.value[m.id] !== undefined) { const s = { ...streaming.value }; delete s[m.id]; streaming.value = s }
     })
     client.onGmDelta(({ id, text }) => { streaming.value = { ...streaming.value, [id]: (streaming.value[id] ?? '') + text } })
+    // ход закончен: недописанный текст (модель упала и ход передан дальше) убирается
+    client.onGmDone(({ id }) => { if (streaming.value[id] !== undefined) { const s = { ...streaming.value }; delete s[id]; streaming.value = s } })
+    client.onChatUpdate((m) => { const i = chat.value.findIndex((x) => x.id === m.id); if (i >= 0) chat.value.splice(i, 1, m) })
   }
   function detachNet(): void {
     net.value?.close()
@@ -138,6 +141,7 @@ export const useGameStore = defineStore('game', () => {
     detachNet()
   }
   const sendChat = (text: string, toGm: boolean) => netAction((c) => c.chat(text, toGm))
+  const choose = (messageId: string, choiceId: string) => netAction((c) => c.choose(messageId, choiceId))
   const claimHero = (heroUid: string) => netAction((c) => c.claimHero(heroUid))
   const releaseHero = (heroUid: string) => netAction((c) => c.releaseHero(heroUid))
   const setGmMode = (gm: GmMode) => netAction((c) => c.setGm(gm))
@@ -243,7 +247,7 @@ export const useGameStore = defineStore('game', () => {
 
   return {
     game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, chat, streaming, connecting,
-    createRoom, joinRoom, rejoin, leaveRoom, sendChat, claimHero, releaseHero, setGmMode, ownerOf,
+    createRoom, joinRoom, rejoin, leaveRoom, sendChat, choose, claimHero, releaseHero, setGmMode, ownerOf,
     heroes, combat, location, worldNode, started,
     say, hero, cmd, attachNet, detachNet,
     resetGame, exportSave, importSave, slotInfo, saveSlot, loadSlot, clearSlot,

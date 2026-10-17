@@ -1,5 +1,6 @@
 // Визуальный прогон сетевой игры: два игрока в одной комнате с (демо-)ИИ-ведущим.
-// Нужны: pnpm dev (5177) и pnpm exec tsx tools/qa/fake-gm-server.ts (8787).
+// Нужны: pnpm dev (5177) и сервер на 8787: pnpm server (без ключей — сценарный ведущий)
+// или pnpm exec tsx tools/qa/fake-gm-server.ts (демо-«ИИ»).
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
 const BASE = process.argv[2] ?? 'http://localhost:5177/'
@@ -51,8 +52,17 @@ await host.page.waitForURL(/#\/location/)
 await host.page.waitForTimeout(800)
 await guest.page.goto(BASE + '#/location/zolotoy-gorod')
 await guest.page.locator('.numgrid button').first().click()
-await host.page.waitForFunction(() => document.body.innerText.includes('Демо-ведущий пересказывает'), null, { timeout: 8000 })
+await host.page.waitForFunction(() => /Демо-ведущий пересказывает|помещение 1/.test(document.body.innerText), null, { timeout: 8000 })
 await host.shot('03-location-ai')
+// сценарный ведущий: кнопки вариантов
+const luckBtn = host.page.locator('.gm-msg button', { hasText: 'Проверка удачи' }).first()
+if (await luckBtn.count()) {
+  await luckBtn.click()
+  await host.page.waitForFunction(() => document.body.innerText.includes('испытывает удачу'), null, { timeout: 5000 })
+  const branch = guest.page.locator('.gm-msg button', { hasText: '▸' }).first()
+  if (await branch.count()) { await branch.click(); await guest.page.waitForTimeout(400) }
+  await host.shot('03b-choices')
+}
 await guest.page.waitForTimeout(400)
 await guest.shot('03-location-ai')
 await host.page.goto(BASE + '#/table')

@@ -52,7 +52,7 @@ async function until(fn: () => boolean, ms = 3000) {
 
 async function setup(replies: Reply[]) {
   const model = fakeModel(replies)
-  const s = await createGameServer({ port: 0, staticDir: null, world: world as unknown as WorldMap, gm: aiGmFactory({ client: model.client, logUsage: false }) })
+  const s = await createGameServer({ port: 0, staticDir: null, world: world as unknown as WorldMap, gm: aiGmFactory({ client: model.client, logUsage: false, cooldownScale: 0 }) })
   servers.push(s)
   const c = new NetClient(s.url)
   clients.push(c)
@@ -109,17 +109,21 @@ describe('ИИ-ведущий', () => {
     await expect(g.c.call('adjustMoney', [uid, 1000])).rejects.toThrow(/решает ведущий/)
   })
 
-  it('ошибка API: ход откатывается, игроки видят уведомление, следующий ход проходит', async () => {
+  it('ошибка API: ход откатывается, его берёт сценарный ведущий, следующий ход снова у модели', async () => {
     const err = new Anthropic.APIError(500, undefined, 'boom', new Headers())
     const g = await setup([{ error: err }, { text: 'Продолжаем.' }])
     await g.c.chat('Ау', true)
     await g.s.gm!.idle()
-    await until(() => g.notices.some((n) => /Ведущий недоступен/.test(n)))
+    await until(() => g.notices.some((n) => /сценарный ведущий/.test(n)))
+    await until(() => g.chat.some((m) => m.author === 'Ведущий · сценарий'))
     const room = (await g.s.store.get(g.j.code))!
-    expect(room.gmHistory).toHaveLength(0)
+    expect(room.gmHistories.claude ?? []).toHaveLength(0)
     await g.c.chat('Ещё раз', true)
     await g.s.gm!.idle()
     await until(() => g.chat.some((m) => m.from === 'gm' && m.text === 'Продолжаем.'))
-    expect((room.gmHistory as { role: string }[]).map((m) => m.role)).toEqual(['user', 'system', 'assistant'])
+    expect((room.gmHistories.claude as { role: string }[]).map((m) => m.role)).toEqual(['user', 'system', 'assistant'])
+    // модель получила сводку того, что ход вёл сценарный ведущий
+    const req = g.model.calls.at(-1) as { messages: { role: string; content: { text?: string }[] }[] }
+    expect(JSON.stringify(req.messages[0])).toContain('сценарий')
   })
 })

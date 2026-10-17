@@ -13,7 +13,13 @@ const gm = ref<GmMode>('ai')
 const withParty = ref(true)
 function readName(): string { try { return localStorage.getItem(NAME_KEY) ?? '' } catch { return '' } }
 function rememberName() { try { localStorage.setItem(NAME_KEY, name.value.trim()) } catch { /* нет хранилища */ } }
-const GM_LABEL: Record<GmMode, string> = { ai: 'ИИ-ведущий', book: 'без ведущего (читаем Книгу Жизни сами)', human: 'живой ведущий — хозяин комнаты' }
+const GM_LABEL: Record<GmMode, string> = {
+  ai: 'ИИ-ведущий (бесплатные модели, иначе сценарный)',
+  script: 'сценарный ведущий без ИИ',
+  book: 'без ведущего (читаем Книгу Жизни сами)',
+  human: 'живой ведущий — хозяин комнаты',
+}
+const SHORT: Record<GmMode, string> = { ai: 'ИИ', script: 'сценарный', book: 'без ведущего', human: 'живой' }
 const r = computed(() => store.room)
 
 async function create() {
@@ -56,17 +62,18 @@ function copyLink() {
           <button :disabled="store.connecting" @click="join">Войти</button>
         </div>
       </div>
-      <p class="small muted" style="margin-top:.4rem">ИИ-ведущий работает, если на сервере задан ключ Claude API.</p>
+      <p class="small muted" style="margin-top:.4rem">ИИ-ведущий использует бесплатные облачные модели, настроенные на сервере (или Claude по ключу). Если ни одна не отвечает, ход ведёт сценарный ведущий по Книге Жизни — с кнопками вариантов.</p>
     </template>
     <template v-else>
       <div class="row between">
         <div><span class="muted small">Комната</span> <b style="font-size:1.6rem;letter-spacing:.15em;color:var(--accent)">{{ r.code }}</b></div>
         <div class="row"><button class="small" @click="copyLink">Ссылка</button><button class="small" @click="router.push('/table')">За стол</button><button class="small danger" @click="store.leaveRoom()">Выйти</button></div>
       </div>
-      <p class="small">Ведущий: <b>{{ GM_LABEL[r.gm] }}</b><span v-if="r.gm === 'ai' && r.gmBusy" class="muted"> — пишет…</span></p>
+      <p class="small">Ведущий: <b>{{ GM_LABEL[r.gm] }}</b><span v-if="r.gmBusy" class="muted"> — пишет…</span></p>
+      <p v-if="r.gm === 'ai'" class="small muted">Модели по порядку: {{ r.gmChain.length ? `${r.gmChain.join(' → ')} → сценарный` : 'не настроены на сервере — ведёт сценарный ведущий' }}.</p>
       <div v-if="r.me.isHost" class="row small" style="margin-bottom:.4rem">
         <span class="muted">Сменить режим:</span>
-        <button v-for="(_label, k) in GM_LABEL" :key="k" class="small" :disabled="k === r.gm || (k === 'ai' && !r.aiAvailable)" :title="k === 'ai' && !r.aiAvailable ? 'На сервере нет ключа Claude API' : ''" @click="store.setGmMode(k)">{{ k === 'ai' ? 'ИИ' : k === 'book' ? 'без ведущего' : 'живой' }}</button>
+        <button v-for="(_label, k) in GM_LABEL" :key="k" class="small" :disabled="k === r.gm" @click="store.setGmMode(k)">{{ SHORT[k] }}</button>
       </div>
       <table class="list">
         <tbody>

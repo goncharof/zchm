@@ -42,7 +42,7 @@ const plan = computed(() => (store.location?.plan ? base + store.location.plan :
       </div>
       <div v-if="plan" class="card tight"><a :href="plan" target="_blank" rel="noopener"><img class="plan-img" :src="plan" :alt="store.location?.name" style="max-height:48vh" /></a></div>
       <OnlinePanel />
-      <p v-if="store.room?.gm === 'ai'" class="small muted">Пишите, что делают ваши герои. Ведущий читает Книгу Жизни, бросает за проверки удачи и начинает бои; сражаетесь вы на экране боя. Путешествие и вход в локации — с карты.</p>
+      <p v-if="store.aiGm" class="small muted">Пишите, что делают ваши герои. Ведущий читает Книгу Жизни, бросает за проверки удачи и начинает бои; сражаетесь вы на экране боя. Путешествие и вход в локации — с карты.</p>
     </div>
   </div>
   <button v-if="!store.online" class="small" style="margin-top:.5rem" @click="router.push('/')">На главную</button>

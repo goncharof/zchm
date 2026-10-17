@@ -8,7 +8,7 @@ const store = useGameStore()
 const text = ref('')
 const toGm = ref(true)
 const box = ref<HTMLElement | null>(null)
-const ai = computed(() => store.room?.gm === 'ai')
+const ai = computed(() => store.room?.gm === 'ai' || store.room?.gm === 'script')
 const live = computed(() => Object.entries(store.streaming).filter(([, t]) => t))
 const items = computed(() => store.chat.slice(-120))
 
@@ -32,12 +32,16 @@ async function send() {
       <div v-for="m in items" :key="m.id" class="gm-msg" :class="m.from">
         <div class="gm-author">{{ m.author }}<span v-if="m.from === 'player' && ai && !m.toGm" class="muted"> · игрокам</span></div>
         <div class="gm-text">{{ m.text }}</div>
+        <div v-if="m.choices?.length" class="row" style="margin-top:.35rem">
+          <button v-for="c in m.choices" :key="c.id" class="small" :class="{ primary: !m.used?.includes(c.id) && c.label.startsWith('▸') }" :disabled="m.used?.includes(c.id)" @click="store.choose(m.id, c.id)">{{ c.label }}</button>
+        </div>
       </div>
       <div v-for="[id, t] in live" :key="id" class="gm-msg gm">
         <div class="gm-author">Ведущий <span class="muted">пишет…</span></div>
         <div class="gm-text">{{ t }}</div>
       </div>
       <div v-if="ai && store.room?.gmBusy && !live.length" class="muted small">Ведущий обдумывает ход…</div>
+      <div v-if="store.room?.gm === 'script'" class="muted small">Сценарный ведущий понимает номера помещений и кнопки вариантов.</div>
     </div>
     <div class="row" style="margin-top:.5rem;flex-wrap:nowrap">
       <textarea v-model="text" rows="2" style="flex:1;resize:vertical" :placeholder="ai && toGm ? 'Что делают ваши герои? (Enter — отправить ведущему)' : 'Сообщение игрокам'" @keydown.enter.exact.prevent="send" />

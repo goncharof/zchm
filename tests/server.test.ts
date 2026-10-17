@@ -84,7 +84,9 @@ describe('сетевая игра', () => {
     await host.c.call('adjustMoney', [h.uid, 100])
     await until(() => guest.state.heroes[0].money === 140)
     await expect(guest.c.setGm('book')).rejects.toThrow(/хозяин/)
-    await expect(host.c.setGm('ai')).rejects.toThrow(/не настроен/)
+    // ИИ-ведущий доступен всегда: без моделей ходы ведёт сценарный ведущий
+    await host.c.setGm('ai')
+    await until(() => guest.room.gm === 'ai' && guest.room.gmChain.length === 0)
   })
 
   it('чат, переподключение по токену и сохранение комнаты на диск', async () => {

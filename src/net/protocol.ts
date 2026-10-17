@@ -1,8 +1,17 @@
 /** Протокол сетевой игры: общие типы клиента и сервера (socket.io). */
 import type { GameState } from '@/engine/model'
 
-/** Кто ведёт игру: ИИ-ведущий, сами игроки по Книге Жизни, живой ведущий (хозяин комнаты) */
-export type GmMode = 'ai' | 'book' | 'human'
+/**
+ * Кто ведёт игру: ИИ-ведущий (цепочка моделей, при недоступности — сценарный), сценарный ведущий без ИИ,
+ * сами игроки по Книге Жизни, живой ведущий (хозяин комнаты)
+ */
+export type GmMode = 'ai' | 'script' | 'book' | 'human'
+
+/** Кнопка-вариант в сообщении ведущего (сценарный ведущий) */
+export interface ChatChoice {
+  id: string
+  label: string
+}
 
 export interface PlayerView {
   id: string
@@ -17,8 +26,10 @@ export interface RoomView {
   gm: GmMode
   players: PlayerView[]
   me: PlayerView
-  /** на сервере настроен ключ Claude API */
+  /** ИИ-ведущий доступен всегда: без моделей ходы ведёт сценарный ведущий */
   aiAvailable: boolean
+  /** настроенные модели ИИ-ведущего по порядку перебора (пусто — только сценарный ведущий) */
+  gmChain: string[]
   /** ИИ-ведущий сейчас отвечает */
   gmBusy: boolean
 }
@@ -31,6 +42,10 @@ export interface ChatMessage {
   text: string
   /** реплика адресована ведущему (иначе — только игрокам) */
   toGm?: boolean
+  /** варианты действий (сценарный ведущий) */
+  choices?: ChatChoice[]
+  /** уже выбранные варианты */
+  used?: string[]
 }
 
 export interface Ack<T = unknown> {
@@ -50,6 +65,8 @@ export interface ServerToClient {
   room: (r: RoomView) => void
   chat: (m: ChatMessage) => void
   'chat:history': (m: ChatMessage[]) => void
+  /** сообщение изменилось (выбран вариант) */
+  'chat:update': (m: ChatMessage) => void
   'gm:delta': (d: { id: string; text: string }) => void
   'gm:done': (d: { id: string }) => void
   notice: (text: string) => void
@@ -64,6 +81,7 @@ export interface ClientToServer {
   'hero:release': (heroUid: string, ack: (a: Ack) => void) => void
   cmd: (req: CmdReq, ack: (a: Ack) => void) => void
   chat: (req: ChatReq, ack: (a: Ack) => void) => void
+  'gm:choose': (req: { messageId: string; choiceId: string }, ack: (a: Ack) => void) => void
 }
 
 /** Состояние для отправки клиентам: журнал урезан до последних записей */

@@ -7,31 +7,13 @@ import { Server } from 'socket.io'
 import type { WorldMap } from '@/types'
 import type { GameState } from '@/engine/model'
 import { GameError, parseSave, runCommand, type CommandArgs, type CommandName } from '@/game/session'
-import { stateForClients, type Ack, type ChatMessage, type ClientToServer, type GmMode, type Joined, type ServerToClient } from '@/net/protocol'
+import { stateForClients, type Ack, type ClientToServer, type GmMode, type Joined, type ServerToClient } from '@/net/protocol'
 import { authorize, isCommand } from './permissions'
 import { Room, RoomStore, type Player } from './rooms'
 
-/** Вход для ИИ-ведущего: реплика игрока или событие игры */
-export type GmInput = { kind: 'player'; author: string; text: string } | { kind: 'event'; text: string }
-
-/** Что сервер даёт ведущему: доступ к комнате и способы сообщить клиентам об изменениях */
-export interface GmContext {
-  stateChanged(room: Room): void
-  roomChanged(room: Room): void
-  chat(room: Room, m: Omit<ChatMessage, 'id' | 't'> & { id?: string }): ChatMessage
-  delta(room: Room, id: string, text: string): void
-  done(room: Room, id: string): void
-  notice(room: Room, text: string): void
-  persist(room: Room): void
-}
-
-export interface GmDriver {
-  enqueue(room: Room, input: GmInput): void
-  /** дождаться окончания всех ходов ведущего (для тестов и остановки сервера) */
-  idle(): Promise<void>
-}
-
-export type GmFactory = (ctx: GmContext) => GmDriver
+import { GmDirector } from './gm/ai'
+import type { GmContext, GmDriver, GmEvent, GmFactory, GmInput } from './gm/types'
+export type { GmContext, GmDriver, GmEvent, GmFactory, GmInput }
 
 export interface ServerOptions {
   port?: number
@@ -41,7 +23,7 @@ export interface ServerOptions {
   /** каталог для сохранения комнат; null — только в памяти */
   dataDir?: string | null
   world: WorldMap | null
-  /** ИИ-ведущий; если не задан, режим «ИИ» недоступен */
+  /** ведущий; по умолчанию — без моделей ИИ (ходы ведёт сценарный ведущий) */
   gm?: GmFactory
 }
 
@@ -51,26 +33,26 @@ export interface GameServer {
   http: HttpServer
   io: Server<ClientToServer, ServerToClient>
   store: RoomStore
-  gm: GmDriver | null
+  gm: GmDriver
   close(): Promise<void>
 }
 
-/** Команды, после которых ИИ-ведущему стоит описать происходящее */
-function gmEventFor(name: CommandName, room: Room, before: GameState): string | null {
+/** Команды, после которых ведущему стоит описать происходящее */
+function gmEventFor(name: CommandName, room: Room, before: GameState): GmEvent | null {
   const s = room.state
   if (name === 'travelTo' && s.worldNodeId !== before.worldNodeId) {
     const node = room.world?.nodes.find((n) => n.id === s.worldNodeId)
-    const enc = s.pendingRoad.slice(before.pendingRoad.length)
-    return `Партия прибыла: ${node?.name ?? s.worldNodeId}, день ${s.day}.${enc.length ? ` В пути случились встречи из главы «Дорога»: ${enc.map((n) => `§ ${n}`).join(', ')} — разыграй их по очереди, затем опиши прибытие.` : ' В пути ничего не случилось.'}`
+    const encounters = s.pendingRoad.slice(before.pendingRoad.length)
+    return { type: 'travel', encounters, text: `Партия прибыла: ${node?.name ?? s.worldNodeId}, день ${s.day}.${encounters.length ? ` В пути случились встречи из главы «Дорога»: ${encounters.map((n) => `§ ${n}`).join(', ')}.` : ' В пути ничего не случилось.'}` }
   }
   if (name === 'enterLocation' && s.locationId && s.locationId !== before.locationId) {
-    return `Партия входит в локацию «${s.locationId}». Опиши вход и спроси, куда герои направятся (номера помещений видны игрокам на плане).`
+    return { type: 'enter', text: `Партия входит в локацию «${s.locationId}».` }
   }
   if (name === 'endCombat') {
     const last = [...s.log].reverse().find((e) => /Победа!|Команда отступила|Поражение/.test(e.text))
-    return `Бой окончен. ${last?.text ?? ''} Опиши исход и продолжи сцену.`
+    return { type: 'combatEnd', text: `Бой окончен. ${last?.text ?? ''}`.trim() }
   }
-  if (name === 'restAll') return `Партия отдыхает в трактире. День ${s.day}.`
+  if (name === 'restAll') return { type: 'rest', text: `Партия отдыхает в трактире. День ${s.day}.` }
   return null
 }
 
@@ -89,16 +71,20 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
   const ctx: GmContext = {
     stateChanged(room) { io.to(room.code).emit('state', stateForClients(room.state)); store.touch(room) },
     roomChanged(room) {
-      for (const p of room.players.values()) for (const sid of p.sockets) io.to(sid).emit('room', room.view(p, !!gm))
+      const chain = gm.chain()
+      for (const p of room.players.values()) for (const sid of p.sockets) io.to(sid).emit('room', room.view(p, chain))
     },
     chat(room, m) { const msg = room.addChat(m); io.to(room.code).emit('chat', msg); store.touch(room); return msg },
+    updateChat(room, m) { io.to(room.code).emit('chat:update', m); store.touch(room) },
     delta(room, id, text) { io.to(room.code).emit('gm:delta', { id, text }) },
     done(room, id) { io.to(room.code).emit('gm:done', { id }) },
     notice(room, text) { io.to(room.code).emit('notice', text) },
     persist(room) { store.touch(room) },
   }
-  const gm = opts.gm ? opts.gm(ctx) : null
+  const gm: GmDriver = opts.gm ? opts.gm(ctx) : new GmDirector(ctx, { providers: [] })
   void socketsOf
+  const autoGm = (r: Room) => r.gm === 'ai' || r.gm === 'script'
+  const GM_TITLE: Record<GmMode, string> = { ai: 'ИИ (если модели недоступны — сценарный)', script: 'сценарный, без ИИ', human: 'хозяин комнаты', book: 'нет, читаем Книгу Жизни сами' }
 
   function fail(ack: (a: Ack) => void, e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -125,14 +111,13 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
 
     socket.on('room:create', async (req, ack) => {
       try {
-        const mode: GmMode = req.gm === 'ai' || req.gm === 'human' ? req.gm : 'book'
-        if (mode === 'ai' && !gm) throw new GameError('ИИ-ведущий не настроен на сервере (нужен ключ Claude API)')
+        const mode: GmMode = req.gm === 'ai' || req.gm === 'human' || req.gm === 'script' ? req.gm : 'book'
         const state = req.state ? parseSave(JSON.stringify(req.state)) : undefined
         const r = await store.create(mode, state)
         const p = r.addPlayer(req.name, true)
         // герои из загруженного сохранения поначалу принадлежат хозяину
         p.heroUids = r.state.heroes.map((h) => h.uid)
-        ctx.chat(r, { from: 'system', author: 'Игра', text: `Комната ${r.code} создана. Ведущий: ${mode === 'ai' ? 'ИИ' : mode === 'human' ? 'хозяин комнаты' : 'нет, читаем Книгу Жизни сами'}.` })
+        ctx.chat(r, { from: 'system', author: 'Игра', text: `Комната ${r.code} создана. Ведущий: ${GM_TITLE[mode]}.` })
         await enter(r, p, ack)
       } catch (e) { fail(ack, e) }
     })
@@ -156,9 +141,9 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       try {
         if (!room || !player) throw new GameError('Вы не в комнате')
         if (!player.isHost) throw new GameError('Это может только хозяин комнаты')
-        if (mode === 'ai' && !gm) throw new GameError('ИИ-ведущий не настроен на сервере')
+        if (!['ai', 'script', 'human', 'book'].includes(mode)) throw new GameError('Неизвестный режим')
         room.gm = mode
-        ctx.chat(room, { from: 'system', author: 'Игра', text: `Режим ведущего: ${mode === 'ai' ? 'ИИ' : mode === 'human' ? 'хозяин комнаты' : 'без ведущего'}.` })
+        ctx.chat(room, { from: 'system', author: 'Игра', text: `Режим ведущего: ${GM_TITLE[mode]}.` })
         ctx.roomChanged(room)
         store.touch(room)
         ack({ ok: true })
@@ -223,9 +208,9 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         ctx.stateChanged(r)
         if (['addHero', 'removeHero', 'quickStart', 'newGame'].includes(name)) ctx.roomChanged(r)
         ack({ ok: true, result: JSON.parse(JSON.stringify(result ?? null)) })
-        if (r.gm === 'ai' && gm) {
+        if (autoGm(r)) {
           const ev = gmEventFor(name, r, before)
-          if (ev) gm.enqueue(r, { kind: 'event', text: ev })
+          if (ev) gm.enqueue(r, { kind: 'event', event: ev })
         }
       } catch (e) { fail(ack, e) }
     })
@@ -237,9 +222,17 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!text) throw new GameError('Пустое сообщение')
         const heroes = room.state.heroes.filter((h) => player!.heroUids.includes(h.uid)).map((h) => h.name)
         const author = heroes.length ? `${player.name} (${heroes.join(', ')})` : player.name
-        const toGm = !!req.toGm && room.gm === 'ai'
-        ctx.chat(room, { from: 'player', author, text, toGm })
-        if (toGm && gm) gm.enqueue(room, { kind: 'player', author, text })
+        const toGm = !!req.toGm && autoGm(room)
+        const msg = ctx.chat(room, { from: 'player', author, text, toGm })
+        if (toGm) gm.enqueue(room, { kind: 'player', author, text, playerId: player.id, chatId: msg.id })
+        ack({ ok: true })
+      } catch (e) { fail(ack, e) }
+    })
+
+    socket.on('gm:choose', (req, ack) => {
+      try {
+        if (!room || !player) throw new GameError('Вы не в комнате')
+        gm.choose(room, player.id, String(req?.messageId ?? ''), String(req?.choiceId ?? ''))
         ack({ ok: true })
       } catch (e) { fail(ack, e) }
     })
@@ -257,7 +250,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
   return {
     url: `http://localhost:${port}`, port, http, io, store, gm,
     async close() {
-      await gm?.idle()
+      await gm.idle()
       await store.flush()
       await new Promise<void>((resolve) => { io.close(() => resolve()) })
     },

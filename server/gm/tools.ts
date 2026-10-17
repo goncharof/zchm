@@ -29,7 +29,7 @@ export const GM_TOOLS: Tool[] = ([
   },
   {
     name: 'start_combat',
-    description: 'Начать бой с монстрами из Бестиария (id из списка, число — как в тексте). Дальше игроки сражаются в интерфейсе боя; закончи реплику.',
+    description: 'Начать бой с монстрами из Бестиария (id или имя монстра, число — как в тексте). Дальше игроки сражаются в интерфейсе боя; закончи реплику.',
     input_schema: { type: 'object', properties: { monsters: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, count: { type: 'integer' } }, required: ['id', 'count'], additionalProperties: false } } }, required: ['monsters'], additionalProperties: false },
   },
   {
@@ -90,12 +90,12 @@ const SCHEMAS = {
   roll_luck: z.object({ hero: Hero, target: z.number().int().min(1).max(40) }),
   roll_dice: z.object({ formula: z.string().max(20) }),
   start_combat: z.object({ monsters: z.array(z.object({ id: z.string(), count: z.number().int().min(1).max(30) })).min(1).max(8) }),
-  change_lives: z.object({ hero: Hero, delta: z.number().int().min(-100).max(100), reason: z.string().max(200) }),
-  change_money: z.object({ hero: Hero, delta: z.number().int().min(-5000).max(5000), reason: z.string().max(200) }),
-  give_item: z.object({ hero: Hero, kind: z.enum(['bottle', 'weapon', 'armor', 'item']), ref: z.string().max(60), qty: z.number().int().min(1).max(50) }),
+  change_lives: z.object({ hero: Hero, delta: z.number().int().min(-100).max(100), reason: z.string().max(200).optional() }),
+  change_money: z.object({ hero: Hero, delta: z.number().int().min(-5000).max(5000), reason: z.string().max(200).optional() }),
+  give_item: z.object({ hero: Hero, kind: z.enum(['bottle', 'weapon', 'armor', 'item']), ref: z.string().max(60), qty: z.number().int().min(1).max(50).default(1) }),
   give_artifact: z.object({ hero: Hero }),
-  give_scroll: z.object({ hero: Hero, caster: z.enum(['mage', 'priest']).nullable(), level: z.number().int().min(0).max(12).nullable() }),
-  give_xp: z.object({ hero: Hero, amount: z.number().int().min(1).max(5000), reason: z.string().max(200) }),
+  give_scroll: z.object({ hero: Hero, caster: z.enum(['mage', 'priest']).nullable().optional(), level: z.number().int().min(0).max(12).nullable().optional() }),
+  give_xp: z.object({ hero: Hero, amount: z.number().int().min(1).max(5000), reason: z.string().max(200).optional() }),
   add_companion: z.object({ monster_id: z.string(), battles: z.number().int().min(1).max(20) }),
   rest: z.object({ days: z.number().int().min(1).max(30) }),
   final_duel_attack: z.object({ hero: Hero }),
@@ -108,6 +108,18 @@ export interface ToolOutcome {
   isError?: boolean
   /** инструмент начал бой — ведущему пора закончить реплику */
   endsTurn?: boolean
+}
+
+/** Монстр по id или имени (бесплатные модели получают ужатый промпт без списка id) */
+export function findMonster(ref: string) {
+  const s = ref.trim().toLowerCase().replace(/ё/g, 'е')
+  const byId = idx.monsterById.get(ref.trim())
+  if (byId) return byId
+  const all = [...idx.monsterById.values()]
+  const norm = (x: string) => x.toLowerCase().replace(/ё/g, 'е')
+  return all.find((m) => norm(m.name) === s)
+    ?? all.find((m) => s.startsWith(norm(m.name).slice(0, Math.max(3, norm(m.name).length - 2))))
+    ?? all.find((m) => norm(m.name).startsWith(s.slice(0, Math.max(3, s.length - 2))))
 }
 
 function findHero(room: Room, ref: string): Hero {
@@ -146,10 +158,10 @@ export function executeGmTool(room: Room, name: string, input: unknown): ToolOut
         return { content: json(s.rollDice(String(a.formula))) }
       case 'start_combat': {
         const specs = (a.monsters as { id: string; count: number }[]).map((m) => {
-          const mon = idx.monsterById.get(m.id)
-          if (!mon) throw new GameError(`Нет монстра ${m.id} в Бестиарии`)
+          const mon = findMonster(m.id)
+          if (!mon) throw new GameError(`Нет монстра «${m.id}» в Бестиарии`)
           if (mon.special) throw new GameError(`${mon.name} — персонаж без боевых характеристик, бой с ним невозможен`)
-          return { monsterId: m.id, count: m.count }
+          return { monsterId: mon.id, count: m.count }
         })
         s.startEncounter(specs)
         return { content: json({ бой: 'начат', противники: room.state.combat?.monsters.map((m) => m.name), указание: 'Игроки сражаются в интерфейсе боя. Опиши начало схватки одной-двумя фразами и закончи реплику.' }), endsTurn: true }
@@ -195,7 +207,7 @@ export function executeGmTool(room: Room, name: string, input: unknown): ToolOut
         return { content: json({ герой: h.name, опыт: h.xp, уровень: h.level }) }
       }
       case 'add_companion': {
-        const mon = idx.monsterById.get(String(a.monster_id))
+        const mon = findMonster(String(a.monster_id))
         if (!mon || mon.special) throw new GameError(`Нет подходящего существа ${a.monster_id}`)
         s.addCompanion(mon.id, Number(a.battles))
         return { content: json({ спутник: mon.name, боёв: a.battles }) }
@@ -217,3 +229,42 @@ export function executeGmTool(room: Room, name: string, input: unknown): ToolOut
   }
   return { content: 'Неизвестный инструмент', isError: true }
 }
+
+/** Инструменты для OpenAI-совместимых API: упрощённые схемы (без union-типов, strict и additionalProperties) */
+export interface OpenAiTool {
+  type: 'function'
+  function: { name: string; description: string; parameters: Record<string, unknown> }
+}
+
+function loosen(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(loosen)
+  if (!schema || typeof schema !== 'object') return schema
+  const out: Record<string, unknown> = {}
+  const src = schema as Record<string, unknown>
+  const nullable = new Set<string>()
+  for (const [k, v] of Object.entries(src)) {
+    if (k === 'additionalProperties' || k === 'strict' || k === 'eager_input_streaming') continue
+    if (k === 'properties' && v && typeof v === 'object') {
+      const props: Record<string, unknown> = {}
+      for (const [pk, pv] of Object.entries(v as Record<string, unknown>)) {
+        const p = { ...(pv as Record<string, unknown>) }
+        if (Array.isArray(p.type)) { p.type = (p.type as string[]).find((t) => t !== 'null') ?? 'string'; nullable.add(pk) }
+        if (Array.isArray(p.enum)) p.enum = (p.enum as unknown[]).filter((e) => e !== null)
+        props[pk] = loosen(p)
+      }
+      out.properties = props
+      continue
+    }
+    out[k] = loosen(v)
+  }
+  if (Array.isArray(out.required)) {
+    // необязательными становятся поля, допускавшие null, и пояснения reason
+    out.required = (out.required as string[]).filter((r) => !nullable.has(r) && r !== 'reason' && r !== 'qty')
+  }
+  return out
+}
+
+export const GM_TOOLS_OPENAI: OpenAiTool[] = GM_TOOLS.map((t) => ({
+  type: 'function',
+  function: { name: t.name, description: t.description ?? '', parameters: loosen(t.input_schema) as Record<string, unknown> },
+}))

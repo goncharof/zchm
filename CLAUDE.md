@@ -15,7 +15,8 @@
 ## Стек
 Фронтенд: Vue 3 + Vite + TypeScript + Pinia + vue-router (hash-режим); одиночная игра работает без сервера
 (localStorage, экспорт/импорт JSON, PWA). Сетевая игра: сервер Node.js + socket.io в `server/`, игровая
-логика общая (`src/game/session.ts`), ИИ-ведущий — Claude API (`@anthropic-ai/sdk`). Тесты — Vitest.
+логика общая (`src/game/session.ts`), ведущий — цепочка моделей (бесплатные через OpenAI-совместимый API,
+Claude через `@anthropic-ai/sdk`) с запасным сценарным ведущим без ИИ. Тесты — Vitest.
 Пакетный менеджер — pnpm.
 
 ## Команды
@@ -26,7 +27,9 @@ pnpm typecheck      # vue-tsc --noEmit
 pnpm build          # typecheck + vite build → dist/
 pnpm server         # сервер сетевой игры (tsx watch, порт 8787); вместе с pnpm dev — Vite проксирует /socket.io
 pnpm build:server && pnpm start   # продакшен: node server-dist/index.js раздаёт dist и сокеты на одном порту
-# окружение сервера: PORT, HOST, DATA_DIR (data/rooms), STATIC_DIR (dist), ANTHROPIC_API_KEY (включает ИИ-ведущего), GM_MODEL, GM_EFFORT
+# окружение сервера: PORT, HOST, DATA_DIR (data/rooms), STATIC_DIR (dist); модели ведущего — server/gm/providers.ts
+#   (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, LLM_BASE_URL+LLM_MODEL, ANTHROPIC_API_KEY, GM_CHAIN);
+#   без ключей ходы ведёт сценарный ведущий
 pnpm exec tsx tools/qa/fake-gm-server.ts   # сервер с демо-ведущим без Claude API (для проверки интерфейса)
 node tools/qa/online.mjs                    # при pnpm dev + демо-сервере: два игрока в комнате, скриншоты
 tools/fetch_sources.sh   # скачать оцифрованную коробку (120 МБ) в source/pdf и создать tools/.venv

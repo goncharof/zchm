@@ -74,9 +74,13 @@ source/pdf ──(tools/*.py)──► src/data/*.json + public/img/**
 | `app.ts` | `createGameServer`: HTTP (статика `dist`, `/health`) + socket.io; события `room:create/join/setGm/loadState`, `hero:claim/release`, `cmd`, `chat`; рассылка `state`, `room`, `chat`, `gm:delta`, `gm:done`, `notice`; события для ведущего после пути, входа в локацию, отдыха и боя |
 | `permissions.ts` | `authorize(gm, player, command, args)` по ролям `owner/party/gm/host` |
 | `rooms.ts` | `Room` (состояние, игроки, чат, история ведущего), `RoomStore` (память + JSON-файлы с отложенной записью) |
-| `gm/prompt.ts` | неизменный системный промпт и снимок состояния партии |
-| `gm/tools.ts` | инструменты ведущего: схемы и исполнение через `GameSession` |
-| `gm/ai.ts` | `AiGm`: очередь ходов по комнатам, стриминговый цикл с инструментами, откат при ошибке; модель подменяется (`ModelClient`) |
+| `gm/types.ts` | общие типы ведущих: `GmContext`, `GmDriver`, `GmEvent`, `LlmProvider`, `ProviderError` |
+| `gm/ai.ts` | `GmDirector` — очередь ходов по комнатам, перебор провайдеров с паузами после ошибок, передача хода сценарному ведущему, сводка пропущенного; `AnthropicProvider` — Claude API (кэш, резервная модель, откат) |
+| `gm/openai.ts` | `OpenAiCompatProvider` — любые OpenAI-совместимые API (fetch + SSE, function calling, окно истории) |
+| `gm/providers.ts` | цепочка провайдеров из переменных окружения (`GM_CHAIN`, ключи и модели) |
+| `gm/script.ts` | `ScriptedGm` — сценарный ведущий без ИИ: сцена и кнопки-варианты по разметке книги |
+| `gm/prompt.ts` | системный промпт (полный для Claude, ужатый для бесплатных моделей) и снимок состояния партии |
+| `gm/tools.ts` | инструменты ведущего: схемы (Claude и OpenAI-формат) и исполнение через `GameSession` |
 
 Протокол — `src/net/protocol.ts` (общие типы), клиент — `src/net/client.ts` (`NetClient`: вызов команд с
 подтверждением, чат, автоматический возврат в комнату после обрыва; вход хранится в `localStorage`).
