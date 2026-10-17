@@ -7,3 +7,5 @@ tools/.venv
 tools/qa/out
 tools/qa/out-prod
 .git
+*.local
+.env*
