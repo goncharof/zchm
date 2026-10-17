@@ -5,19 +5,36 @@ import type { Monster } from '@/types'
 import { attacksStr } from '@/ui/format'
 
 const q = ref('')
+const level = ref<'all' | 'npc' | '1-2' | '3-5' | '6-9' | '10-12'>('all')
+const sort = ref<'name' | 'level'>('name')
+const RANGES: Record<string, [number, number]> = { '1-2': [1, 2], '3-5': [3, 5], '6-9': [6, 9], '10-12': [10, 12] }
 const open = ref<Monster | null>(null)
 const base = import.meta.env.BASE_URL
 const list = computed(() => {
   const s = q.value.trim().toLowerCase()
-  return gameData.bestiary.filter((m) => !s || m.name.toLowerCase().includes(s) || m.description.toLowerCase().includes(s))
+  const out = gameData.bestiary.filter((m) => {
+    if (s && !m.name.toLowerCase().includes(s) && !m.description.toLowerCase().includes(s)) return false
+    if (level.value === 'npc') return !!m.special
+    if (level.value !== 'all') {
+      const [a, b] = RANGES[level.value]
+      return !m.special && (m.level ?? 0) >= a && (m.level ?? 0) <= b
+    }
+    return true
+  })
+  if (sort.value === 'level') out.sort((a, b) => (a.level ?? 99) - (b.level ?? 99) || a.name.localeCompare(b.name, 'ru'))
+  return out
 })
 const EXTRA: Record<string, string> = { petrify: 'окаменение', freeze: 'оледенение', paralysis: 'паралич', poison: 'яд' }
 </script>
 
 <template>
   <div class="row between" style="margin-bottom:.6rem">
-    <h1>Бестиарий <span class="badge">{{ gameData.bestiary.length }} статей</span></h1>
-    <input v-model="q" placeholder="Поиск…" />
+    <h1>Бестиарий <span class="badge">{{ list.length }} из {{ gameData.bestiary.length }}</span></h1>
+    <div class="row">
+      <input v-model="q" placeholder="Поиск…" />
+      <select v-model="level"><option value="all">все уровни</option><option value="1-2">1–2</option><option value="3-5">3–5</option><option value="6-9">6–9</option><option value="10-12">10–12</option><option value="npc">персонажи</option></select>
+      <select v-model="sort"><option value="name">по имени</option><option value="level">по уровню</option></select>
+    </div>
   </div>
   <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr))">
     <div v-for="m in list" :key="m.id" class="card tight" style="cursor:pointer" @click="open = m">
