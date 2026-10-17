@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { gameData } from '@/data'
 import type { Monster } from '@/types'
 import { attacksStr } from '@/ui/format'
@@ -10,6 +10,10 @@ const sort = ref<'name' | 'level'>('name')
 const RANGES: Record<string, [number, number]> = { '1-2': [1, 2], '3-5': [3, 5], '6-9': [6, 9], '10-12': [10, 12] }
 const open = ref<Monster | null>(null)
 const base = import.meta.env.BASE_URL
+// Esc закрывает карточку монстра
+const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') open.value = null }
+onMounted(() => window.addEventListener('keydown', onKey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 const list = computed(() => {
   const s = q.value.trim().toLowerCase()
   const out = gameData.bestiary.filter((m) => {
@@ -47,8 +51,8 @@ const EXTRA: Record<string, string> = { petrify: 'окаменение', freeze:
   <div v-if="open" class="modal-back" @click.self="open = null">
     <div class="modal">
       <div class="row between"><h2>{{ open.name }}</h2><button class="small" @click="open = null">Закрыть</button></div>
-      <div class="monster-card" style="grid-template-columns: 260px 1fr">
-        <img :src="base + open.image" :alt="open.name" style="width:260px;height:auto;object-fit:contain" />
+      <div class="monster-detail">
+        <img :src="base + open.image" :alt="open.name" />
         <div>
           <div class="stat-table" v-if="open.level !== undefined">
             <div><b>Уровень</b> {{ open.level }}</div><div><b>Атаки</b> {{ attacksStr(open.attacks) }}</div><div><b>Защита</b> {{ open.defense ?? 'нет' }}</div>
@@ -57,7 +61,7 @@ const EXTRA: Record<string, string> = { petrify: 'окаменение', freeze:
           <p v-if="open.extraAttacks?.length" class="small"><b>Дополнительная атака:</b> {{ open.extraAttacks.map(e => `${EXTRA[e.kind]} — ${e.threshold}`).join(', ') }}</p>
           <p v-if="open.spells?.length" class="small"><b>Заклинания:</b> {{ open.spells.join(', ') }}</p>
           <p v-if="open.luckSave" class="small"><b>Удача от {{ open.luckSave.against }}:</b> {{ open.luckSave.threshold }}</p>
-          <p style="margin-top:.5rem">{{ open.description }}</p>
+          <p class="book-text" style="margin-top:.5rem">{{ open.description }}</p>
           <p class="small muted">Бестиарий, стр. {{ open.page }}</p>
         </div>
       </div>

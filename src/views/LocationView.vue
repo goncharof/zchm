@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { paragraphText } from '@/game/book'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { idx } from '@/data'
 import type { EncounterSpec } from '@/engine/combat'
@@ -33,8 +33,14 @@ const isFinal = computed(() => props.id === 'zamok-chernogo-maga' && current.val
 const lastFinal = ref('')
 /** текст Книги Жизни скрыт: его читает ИИ-ведущий или живой ведущий */
 const hideText = computed(() => store.aiGm || (store.online && !store.isGm))
+const textCol = ref<HTMLElement | null>(null)
+/** на телефоне текст параграфа ниже номеров — прокрутить к нему после выбора */
+function revealText() {
+  if (window.innerWidth > 900) return
+  void nextTick(() => textCol.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }))
+}
 function pick(n: number) {
-  if (!hideText.value) { open(n); return }
+  if (!hideText.value) { open(n); revealText(); return }
   current.value = n
   void store.sendChat(`Идём в помещение ${n}.`, store.aiGm)
 }
@@ -110,17 +116,19 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
       <b>Встречи в пути:</b>
       <button v-for="(n, i) in store.game.pendingRoad" :key="i" class="small" @click="open(n)">§ {{ n }}</button>
     </div>
-    <div class="cols c11" :class="{ 'chat-first': hideText }">
-      <div>
+    <div class="loc-layout" :class="{ 'chat-first': hideText }">
+      <div class="loc-nums">
         <div class="card tight">
           <div class="numgrid">
             <button v-for="p in loc.paragraphs" :key="p.n" :class="{ visited: visited.includes(p.n), active: p.n === current }" :title="hideText ? 'идти сюда' : p.segments ? 'есть выбор' : ''" @click="pick(p.n)">{{ p.n }}<sup v-if="p.segments && !hideText" style="color:var(--accent)">•</sup></button>
           </div>
           <p class="small muted" style="margin:.4rem 0 0">{{ hideText ? 'Нажмите номер, чтобы пойти в это помещение. Пройденные приглушены.' : id === 'doroga' ? 'Ведущий выбирает любое приключение из главы «Дорога».' : 'Номера соответствуют плану локации. Пройденные приглушены, точкой отмечены параграфы с выбором.' }}</p>
         </div>
-        <div v-if="planSrc" class="card tight"><a :href="planSrc" target="_blank" rel="noopener" title="Открыть план целиком"><img class="plan-img" :src="planSrc" :alt="`План: ${loc.name}`" /></a></div>
       </div>
-      <div>
+      <div v-if="planSrc" class="loc-plan">
+        <div class="card tight"><a :href="planSrc" target="_blank" rel="noopener" title="Открыть план целиком"><img class="plan-img" :src="planSrc" :alt="`План: ${loc.name}`" /></a></div>
+      </div>
+      <div ref="textCol" class="loc-text">
         <div v-if="hideText" class="card">
           <template v-if="store.aiGm">
             <h3>Ведущий</h3>

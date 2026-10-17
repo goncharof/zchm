@@ -1,9 +1,9 @@
 // Офлайн-режим: страница — сначала сеть, потом кэш; ассеты и картинки — сначала кэш.
-const CACHE = 'zchm-v2'
+const CACHE = 'zchm-v3'
 
 self.addEventListener('install', (e) => {
   self.skipWaiting()
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './manifest.webmanifest', './icons/icon-192.png'])))
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './manifest.webmanifest', './icons/icon-192.png', './img/brand/logo-sm.png', './img/brand/logo.png'])))
 })
 
 self.addEventListener('activate', (e) => {

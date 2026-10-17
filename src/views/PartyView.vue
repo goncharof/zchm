@@ -26,7 +26,7 @@ function add() {
       <h1>Партия</h1>
       <div class="row">
         <label class="row" style="gap:.3rem" v-if="store.game && !store.online"><input type="checkbox" :checked="store.game.gmMode" @change="store.toggleGm()" /> режим ведущего</label>
-        <button v-if="store.heroes.length" class="primary" @click="router.push('/shop')">Лавка (снаряжение)</button>
+        <button v-if="store.heroes.length" @click="router.push('/shop')">Лавка (снаряжение)</button>
         <button v-if="store.heroes.length" @click="router.push('/map')">На карту</button>
       </div>
     </div>

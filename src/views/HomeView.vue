@@ -7,6 +7,8 @@ import LogPanel from '@/components/LogPanel.vue'
 import OnlinePanel from '@/components/OnlinePanel.vue'
 
 const store = useGameStore()
+const base = import.meta.env.BASE_URL
+const scrollToOnline = () => document.getElementById('online')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 const router = useRouter()
 const fileInput = ref<HTMLInputElement | null>(null)
 const allDead = computed(() => store.heroes.length > 0 && store.heroes.every((h) => h.status.dead))
@@ -61,28 +63,44 @@ async function newGame() {
 </script>
 
 <template>
+  <section class="hero-cover" :style="{ '--banner': `url(${base}img/brand/banner.jpg)` }">
+    <img class="cover" :src="`${base}img/brand/cover.jpg`" alt="Обложка коробки «Заклятье Чёрного мага», 1997" width="860" height="1315" />
+    <div>
+      <img class="logo" :src="`${base}img/brand/logo.png`" alt="Заклятье Чёрного мага" width="1100" height="191" />
+      <div class="series">серия «Долина Тмамрак» · первая российская настольная ролевая игра, 1997</div>
+      <p class="book-text">Группа искателей приключений отправляется в далёкий путь. Их задача — добраться до цитадели Чёрного мага, расправиться с ним и не дать силам Хаоса хлынуть в мир через Ворота Инкардагот.</p>
+      <p class="muted small">Движок ведёт механику: героев, кубики, бой, магию, лавку и опыт. Книга Жизни читается по локациям, а ведущим может быть ИИ, кто-то из игроков или никто.</p>
+      <div v-if="store.game?.victory" class="card tight" style="border-color:var(--ok)"><b>Победа!</b> {{ store.game.victory.heroName }} сразил Чёрного мага на {{ store.game.victory.day }}-й день. Ворота Инкардагот остались закрыты.</div>
+      <div v-if="allDead" class="card tight" style="border-color:var(--danger)"><b>Партия погибла.</b> Жрец мог бы оживить павших, но жрецов не осталось. Начните новую партию или загрузите сохранение.</div>
+      <div class="cta">
+        <button v-if="store.started" class="primary" @click="continueGame">Продолжить · день {{ store.game?.day }}, {{ where }}</button>
+        <template v-if="!store.online || store.room?.me.isHost">
+          <button :class="{ primary: !store.started }" @click="newGame">Новая партия</button>
+          <button @click="quick" title="Воин, маг, жрец и вор со снаряжением на 40 монет">Быстрый старт</button>
+        </template>
+        <button v-if="!store.online" @click="scrollToOnline">Игра по сети</button>
+      </div>
+    </div>
+  </section>
+
   <div class="cols c11">
     <div>
-      <div class="card">
-        <h1>Заклятье Чёрного мага</h1>
-        <p class="muted">Браузерная версия настольной ролевой игры 1997 года. Движок ведёт механику: персонажей, кубики, бой, магию, лавку и опыт. Книга Жизни читается как книга-игра по локациям.</p>
-        <p>Группа искателей приключений отправляется в далёкий путь. Их задача — добраться до цитадели Чёрного мага и расправиться с ним, спасти мир от вторжения сил Хаоса, которые хлынут через открытые Ворота Инкардагот.</p>
-        <div v-if="store.game?.victory" class="card tight" style="border-color:var(--accent)"><b>Победа!</b> {{ store.game.victory.heroName }} сразил Чёрного мага на {{ store.game.victory.day }}-й день. Ворота Инкардагот остались закрыты.</div>
-        <div v-if="allDead" class="card tight" style="border-color:var(--danger)"><b>Партия погибла.</b> Жрец мог бы оживить павших, но жрецов не осталось. Начните новую партию или загрузите сохранение.</div>
-        <div class="row" style="margin-top:1rem">
-          <button v-if="store.started" class="primary" @click="continueGame">Продолжить (день {{ store.game?.day }}, {{ where }})</button>
-          <template v-if="!store.online || store.room?.me.isHost">
-            <button :class="{ primary: !store.started }" @click="newGame">Новая партия</button>
-            <button @click="quick" title="Воин, маг, жрец и вор со снаряжением на 40 монет">Быстрый старт</button>
-          </template>
-          <button v-if="store.started" @click="exportSave">Экспорт сохранения</button>
-          <button @click="fileInput?.click()">Импорт сохранения</button>
-          <input ref="fileInput" type="file" accept="application/json" style="display:none" @change="importSave" />
-        </div>
+      <div id="online"><OnlinePanel /></div>
+      <div class="card" v-if="store.heroes.length">
+        <h2 class="title-ornament">Партия</h2>
+        <table class="list stack">
+          <thead><tr><th>Герой</th><th>Класс</th><th>Ур.</th><th>Жизни</th><th>Мана</th><th>Монеты</th><th>Опыт</th></tr></thead>
+          <tbody>
+            <tr v-for="h in store.heroes" :key="h.uid" :class="{ 'hero-down': h.status.dead }">
+              <td data-label="Герой"><b>{{ h.name }}</b><span v-if="h.status.dead" class="badge" style="margin-left:.3rem;border-color:var(--danger);color:var(--danger)">мёртв</span></td>
+              <td data-label="Класс">{{ idx.cls(h.classId).name }}</td><td data-label="Ур.">{{ h.level }}</td><td data-label="Жизни">{{ h.lives }}/{{ h.maxLives }}</td><td data-label="Мана">{{ h.maxMana ? `${h.mana}/${h.maxMana}` : '—' }}</td><td data-label="Монеты">{{ h.money }}</td><td data-label="Опыт">{{ h.xp }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="row" style="margin-top:.6rem"><router-link class="btn" to="/party">Листы персонажей</router-link><router-link class="btn" to="/map">Карта</router-link></div>
       </div>
-      <OnlinePanel />
       <div class="card">
-        <h2>Сохранения</h2>
+        <h2 class="title-ornament">Сохранения</h2>
         <p class="small muted">Партия сохраняется автоматически. Слоты — дополнительные копии в этом браузере.</p>
         <table class="list stack">
           <tbody>
@@ -95,40 +113,32 @@ async function newGame() {
               <td style="text-align:right;white-space:nowrap">
                 <button class="small" :disabled="!store.started" @click="save(n)">Сохранить</button>
                 <button class="small" :disabled="!slots[n - 1]" @click="load(n)">Загрузить</button>
-                <button class="small" :disabled="!slots[n - 1]" @click="clear(n)">✕</button>
+                <button class="small" :disabled="!slots[n - 1]" title="Удалить слот" @click="clear(n)">✕</button>
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
-      <div class="card" v-if="store.heroes.length">
-        <h2>Партия</h2>
-        <table class="list stack">
-          <thead><tr><th>Герой</th><th>Класс</th><th>Ур.</th><th>Жизни</th><th>Мана</th><th>Монеты</th><th>Опыт</th></tr></thead>
-          <tbody>
-            <tr v-for="h in store.heroes" :key="h.uid" :class="{ 'hero-down': h.status.dead }">
-              <td data-label="Герой"><b>{{ h.name }}</b><span v-if="h.status.dead" class="badge" style="margin-left:.3rem;border-color:var(--danger);color:var(--danger)">мёртв</span></td>
-              <td data-label="Класс">{{ idx.cls(h.classId).name }}</td><td data-label="Ур.">{{ h.level }}</td><td data-label="Жизни">{{ h.lives }}/{{ h.maxLives }}</td><td data-label="Мана">{{ h.maxMana ? `${h.mana}/${h.maxMana}` : '—' }}</td><td data-label="Монеты">{{ h.money }}</td><td data-label="Опыт">{{ h.xp }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="row" style="margin-top:.6rem"><router-link class="btn" to="/party">Листы персонажей</router-link><router-link class="btn" to="/map">Карта</router-link></div>
+        <div class="row" style="margin-top:.6rem">
+          <button v-if="store.started" class="small" @click="exportSave">Экспорт сохранения</button>
+          <button class="small" @click="fileInput?.click()">Импорт сохранения</button>
+          <input ref="fileInput" type="file" accept="application/json" style="display:none" @change="importSave" />
+        </div>
       </div>
     </div>
     <div>
       <div class="card">
-        <h2>Как играть</h2>
-        <ol class="small" style="padding-left:1.2rem">
+        <h2 class="title-ornament">Как играть</h2>
+        <ol class="small" style="padding-left:1.2rem;margin:0">
           <li>Соберите партию из 2–6 героев пяти классов, на 40 монет купите снаряжение в лавке.</li>
           <li>На карте мира выберите, куда идти. Переходы занимают дни; в пути возможны встречи из главы «Дорога».</li>
           <li>В локации выбирайте номера параграфов на плане, читайте текст и действуйте: проверки удачи, бои, находки.</li>
           <li>Бой пошаговый: первый раунд — дистанция, затем инициатива и ближний бой. Опыт начисляется за каждую отнятую жизнь.</li>
           <li>Отдыхайте в трактирах, копите опыт и артефакты, и лишь потом идите к Замку Чёрного мага.</li>
         </ol>
-        <p class="small muted">Режим ведущего (в разделе «Партия») прячет текст параграфов, чтобы их читал живой ведущий.</p>
+        <p class="small muted" style="margin:.6rem 0 0">Режим ведущего (в разделе «Партия») прячет текст параграфов, чтобы их читал живой ведущий.</p>
       </div>
       <div class="card" v-if="store.game?.log.length">
-        <h2>Журнал</h2>
+        <h2 class="title-ornament">Журнал</h2>
         <LogPanel :entries="store.game.log" :limit="25" />
       </div>
     </div>
