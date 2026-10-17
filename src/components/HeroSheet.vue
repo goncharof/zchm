@@ -57,9 +57,9 @@ const statusText = computed(() => {
       <h2 v-if="!renaming" class="row" style="gap:.6rem"><img :src="classArt(hero.classId)" alt="" class="portrait" />{{ hero.name }} <span class="badge accent">{{ cls.name }} {{ hero.level }} ур.</span> <span v-if="statusText" class="badge" style="border-color:var(--danger);color:var(--danger)">{{ statusText }}</span></h2>
       <div v-else class="row"><input v-model="newName" /><button class="small primary" @click="store.renameHero(hero.uid, newName); renaming = false">Ок</button></div>
       <div class="row">
-        <span v-if="store.online" class="badge" :style="ro ? '' : 'border-color:var(--ok);color:var(--ok)'">{{ owner ? (ro ? `игрок: ${owner}` : 'ваш герой') : 'ничей' }}</span>
-        <button v-if="store.online && ro" class="small" @click="store.claimHero(hero.uid)">Взять героя</button>
-        <button v-if="store.online && !ro && owner" class="small" @click="store.releaseHero(hero.uid)">Отпустить</button>
+        <span v-if="store.online" class="badge" :style="store.isMine(hero.uid) ? 'border-color:var(--ok);color:var(--ok)' : ''">{{ owner ? (store.isMine(hero.uid) ? 'ваш герой' : `игрок: ${owner}`) : 'ничей' }}</span>
+        <button v-if="store.online && !owner" class="small" @click="store.claimHero(hero.uid)">Взять героя</button>
+        <button v-if="store.online && store.isMine(hero.uid)" class="small" @click="store.releaseHero(hero.uid)">Отпустить</button>
         <template v-if="!ro">
           <button class="small" @click="renaming = !renaming">Имя</button>
           <button class="small danger" @click="store.removeHero(hero.uid)">Убрать</button>

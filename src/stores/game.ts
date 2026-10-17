@@ -49,12 +49,17 @@ export const useGameStore = defineStore('game', () => {
   /** этот зритель — ведущий (живой ведущий в сетевой игре) или игра без ведущего */
   const isGm = computed(() => !online.value || (room.value?.gm === 'human' && room.value.me.isHost) || room.value?.gm === 'book')
   /** герои, которыми управляет этот игрок (в одиночной игре — все) */
+  /** Герои, которыми можно управлять (как в server/permissions.ts): свои; хозяин без автоведущего — любые; ничьи — любой игрок */
   const myHeroUids = computed<string[]>(() => {
     if (!online.value || !room.value) return heroes.value.map((h) => h.uid)
-    if (room.value.me.isHost && room.value.gm !== 'ai') return heroes.value.map((h) => h.uid)
-    return room.value.me.heroUids
+    const r = room.value
+    if (r.me.isHost && r.gm !== 'ai' && r.gm !== 'script') return heroes.value.map((h) => h.uid)
+    const owned = new Set(r.players.flatMap((p) => p.heroUids))
+    return heroes.value.filter((h) => r.me.heroUids.includes(h.uid) || !owned.has(h.uid)).map((h) => h.uid)
   })
   const canControl = (heroUid: string) => myHeroUids.value.includes(heroUid)
+  /** Герой закреплён за мной (сетевая игра) */
+  const isMine = (heroUid: string) => !!room.value?.me.heroUids.includes(heroUid)
 
   // автосохранение — только для одиночной игры (сетевую хранит сервер)
   watch(game, (g) => {
@@ -250,7 +255,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   return {
-    game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, chat, streaming, connecting,
+    game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, isMine, chat, streaming, connecting,
     createRoom, joinRoom, rejoin, leaveRoom, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, setReady, turnGo, ownerOf,
     heroes, combat, location, worldNode, started,
     say, hero, cmd, attachNet, detachNet,
