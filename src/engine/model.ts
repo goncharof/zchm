@@ -76,10 +76,22 @@ export interface Buff {
   weapon?: { name: string; attacks: string; dexterityBonus?: number; attacksPerRound?: number; lifesteal?: boolean }
 }
 
+/** Спутник (неигровой персонаж, стр. 16 Инструкции): сражается за партию оговорённое число боёв */
+export interface Companion {
+  uid: string
+  monsterId: string
+  name: string
+  lives: number
+  maxLives: number
+  battlesLeft: number
+}
+
 /** Призванное существо или иллюзия на стороне героев */
 export interface AllyInstance {
   uid: string
   ownerUid: string
+  /** союзник — спутник партии (после боя его жизни и счётчик боёв сохраняются) */
+  companionUid?: string
   name: string
   defense: number
   /** формула урона ("1к18", "2к6+2") или 'none' для иллюзий */
@@ -185,6 +197,8 @@ export interface GameState {
   pendingRoad: number[]
   /** выбранный стартовый узел карты */
   startNodeId: string
+  /** спутники партии */
+  companions: Companion[]
   /** партия победила Чёрного мага */
   victory?: { day: number; heroUid: string; heroName: string }
   seed?: number

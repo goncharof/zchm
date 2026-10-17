@@ -4,12 +4,12 @@ import { computed, ref, watch } from 'vue'
 import type { Caster, WorldMap } from '@/types'
 import { gameData, idx, loadWorld } from '@/data'
 import type { CombatState, EquipSlot, GameState, Hero, InventoryKind, LogEntry } from '@/engine/model'
-import { SAVE_VERSION } from '@/engine/model'
+import { SAVE_VERSION, uid } from '@/engine/model'
 import { changeLives, createHero, gainXp, hasWard, heroLuck, isConscious, rest, type LevelUp } from '@/engine/character'
 import * as inv from '@/engine/inventory'
 import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
-import { closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
+import { makeAlly, closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
 import { plural } from '@/ui/format'
 import { REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
@@ -33,6 +33,7 @@ function blankGame(startNodeId = 'zolotoy-gorod'): GameState {
     artifactsFound: [],
     pendingRoad: [],
     startNodeId,
+    companions: [],
   }
 }
 
@@ -53,6 +54,7 @@ function migrate(g: GameState): GameState {
   g.pendingRoad ??= []
   g.artifactsFound ??= []
   g.startNodeId ??= g.worldNodeId ?? 'zolotoy-gorod'
+  g.companions ??= []
   if (g.combat) {
     g.combat.allies ??= []
     g.combat.extraActions ??= {}
@@ -283,6 +285,7 @@ export const useGameStore = defineStore('game', () => {
       const r = rest(h, days, REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY)
       if (r.days < days) log(`${h.name} может оплатить только ${r.days} сут. из ${days}.`)
     }
+    for (const c of game.value.companions) c.lives = Math.min(c.maxLives, c.lives + REST_LIVES_PER_DAY * days)
     game.value.day += days
     log(`Команда отдыхает в трактире: ${days} ${plural(days, 'сутки', 'суток', 'суток')} (2 монеты в сутки с каждого; +5 жизней и +5 маны в сутки). День ${game.value.day}.`)
   }
@@ -411,12 +414,38 @@ export const useGameStore = defineStore('game', () => {
     announceLevelUps(gainXp(h, XP_TRAP_FOUND, idx))
   }
 
+  // ---------- спутники ----------
+  function addCompanion(monsterId: string, battles = 3): void {
+    if (!game.value) return
+    const m = idx.monster(monsterId)
+    const sameKind = game.value.companions.filter((c) => c.monsterId === monsterId).length
+    const c = { uid: uid('comp'), monsterId, name: sameKind ? `${m.name} ${sameKind + 1}` : m.name, lives: m.lives ?? 10, maxLives: m.lives ?? 10, battlesLeft: Math.max(1, battles) }
+    game.value.companions.push(c)
+    log(`К партии присоединяется спутник: ${c.name} (${c.battlesLeft} ${plural(c.battlesLeft, 'бой', 'боя', 'боёв')}).`)
+  }
+  function dismissCompanion(companionUid: string): void {
+    if (!game.value) return
+    const c = game.value.companions.find((x) => x.uid === companionUid)
+    game.value.companions = game.value.companions.filter((x) => x.uid !== companionUid)
+    if (c) log(`${c.name} покидает партию.`)
+  }
+
   // ---------- бой ----------
   function startEncounter(specs: EncounterSpec[], returnTo?: string): void {
     if (!game.value) return
     const { state, log: entries } = startCombat(specs, idx, returnTo)
+    const owner = heroes.value.find((h) => !h.status.dead)?.uid ?? ''
+    for (const c of game.value.companions) {
+      const m = idx.monster(c.monsterId)
+      const table = Array.isArray(m.attacks) ? m.attacks.join('-') : '1-1-1-2-2-2'
+      const ally = makeAlly(owner, c.name, m.defense ?? 10, table, c.lives)
+      ally.maxLives = c.maxLives
+      ally.companionUid = c.uid
+      state.allies.push(ally)
+    }
     game.value.combat = state
     logAll(entries)
+    if (game.value.companions.length) log(`Вместе с героями сражаются: ${game.value.companions.map((c) => c.name).join(', ')}.`)
   }
   function attack(heroUid: string, slot: EquipSlot | 'unarmed' | 'spell', targetUid: string): void {
     const c = combat.value
@@ -456,6 +485,22 @@ export const useGameStore = defineStore('game', () => {
   }
   function endCombat(): void {
     if (!game.value || !game.value.combat) return
+    // спутники: сохранить жизни, засчитать бой
+    for (const a of game.value.combat.allies) {
+      const c = a.companionUid ? game.value.companions.find((x) => x.uid === a.companionUid) : null
+      if (!c) continue
+      if (a.dead || a.lives <= 0) {
+        game.value.companions = game.value.companions.filter((x) => x.uid !== c.uid)
+        log(`${c.name} пал в бою.`, 'death')
+        continue
+      }
+      c.lives = a.lives
+      c.battlesLeft -= 1
+      if (c.battlesLeft <= 0) {
+        game.value.companions = game.value.companions.filter((x) => x.uid !== c.uid)
+        log(`${c.name} выполнил уговор и уходит своей дорогой.`)
+      }
+    }
     logAll(finishCombat(game.value.combat, heroes.value, idx))
     game.value.combat = null
   }
@@ -481,6 +526,7 @@ export const useGameStore = defineStore('game', () => {
     useAntidote, useParalysisPotion, poisonWeapon, adjustLives, adjustMana, adjustMoney, giveXp,
     restAll, travelTo, enterLocation, leaveLocation, markVisited, dismissRoad,
     rollDie, luckCheck, findArtifact, giveScroll, trapFound, finalDuelAttack, drinkFountain,
+    addCompanion, dismissCompanion,
     startEncounter, attack, cast, flee, skip, toMelee, monstersAct, endCombat, abortCombat, addMonstersToCombat,
   }
 })

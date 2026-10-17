@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { gameData } from '@/data'
+import { gameData, idx } from '@/data'
 import { useGameStore } from '@/stores/game'
 import HeroSheet from '@/components/HeroSheet.vue'
 
@@ -43,6 +43,20 @@ function add() {
     </div>
     <p class="small muted" style="margin-top:.6rem"><b>{{ cls.name }}.</b> {{ cls.description }} <i>Оружие: {{ cls.weaponRule }}. Метательное: {{ cls.rangedRule }}.</i>
       Жизни на старте {{ cls.levels[0].lives }}<template v-if="cls.levels[0].mana">, мана {{ cls.levels[0].mana }}</template>; 1-й уровень с {{ cls.levels[1].xp }} очков опыта.</p>
+  </div>
+  <div v-if="store.game?.companions.length" class="card">
+    <h2>Спутники</h2>
+    <table class="list stack">
+      <tbody>
+        <tr v-for="c in store.game.companions" :key="c.uid">
+          <td data-label="Спутник"><b>{{ c.name }}</b> <span class="small muted">ур. {{ idx.monster(c.monsterId).level }} · защита {{ idx.monster(c.monsterId).defense }}</span></td>
+          <td data-label="Жизни">{{ c.lives }}/{{ c.maxLives }}</td>
+          <td data-label="Осталось боёв">{{ c.battlesLeft }}</td>
+          <td style="text-align:right"><button class="small" @click="store.dismissCompanion(c.uid)">Отпустить</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="small muted">Спутники сражаются на стороне партии оговорённое число боёв, их отыгрывает движок (стр. 16 Инструкции).</p>
   </div>
   <p v-if="!store.heroes.length" class="muted">Добавьте героев. У каждого 40 монет, характеристики на старте равны нулю.</p>
   <HeroSheet v-for="h in store.heroes" :key="h.uid" :hero="h" />

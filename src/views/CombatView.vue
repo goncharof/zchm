@@ -128,7 +128,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
           <div v-for="a in c.allies" :key="a.uid" class="card tight" :class="{ 'hero-down': a.dead }">
             <div class="row between"><b>{{ a.name }}</b><span class="small muted">защита {{ a.defense }} · атаки {{ a.attacks === 'none' ? 'нет' : a.attacks }}<template v-if="a.rounds > 0"> · {{ a.rounds }} раунд(ов)</template><template v-if="a.dead"> · исчез</template></span></div>
             <div class="bar" style="margin:.3rem 0"><i :style="{ width: pct(a.lives, a.maxLives) }" /></div>
-            <div class="small muted">жизни {{ Math.max(0, a.lives) }}/{{ a.maxLives }} · хозяин: {{ store.heroes.find(h => h.uid === a.ownerUid)?.name }}</div>
+            <div class="small muted">жизни {{ Math.max(0, a.lives) }}/{{ a.maxLives }} · {{ a.companionUid ? `спутник партии, осталось боёв: ${store.game?.companions.find(c => c.uid === a.companionUid)?.battlesLeft ?? '—'}` : `призвал: ${store.heroes.find(h => h.uid === a.ownerUid)?.name ?? '—'}` }}</div>
           </div>
         </template>
       </div>

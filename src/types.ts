@@ -197,6 +197,10 @@ export interface ParagraphHints {
   /** число монстров по тексту («5 пьяных орков»), если больше одного */
   monsterCounts?: Record<string, number>
   artifact?: boolean
+  /** в тексте есть таверна/трактир — можно отдохнуть */
+  tavern?: boolean
+  /** в тексте есть лавка или торговец */
+  shop?: boolean
   /** свитки: уровень и тип заклинания, если указан */
   scrolls?: { caster?: Caster; level?: number }[]
 }

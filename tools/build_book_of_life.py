@@ -263,6 +263,10 @@ def hints_for(text):
         h['monsterCounts'] = counts
     if re.search(r'артефакт', text, re.IGNORECASE):
         h['artifact'] = True
+    if re.search(r'\b(таверн|трактир)', text, re.IGNORECASE):
+        h['tavern'] = True
+    if re.search(r'\b(лавк|торгов(ец|ца|цу|цем)|оружейн\w* лавк)', text, re.IGNORECASE):
+        h['shop'] = True
     scrolls = []
     for mm in re.finditer(r'свит\w*(?:\s+с\s+заклинани\w+)?(?:\s+(мага|жреца))?(?:\s+(\d+)\s*уровня)?',
                           text, re.IGNORECASE):

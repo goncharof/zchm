@@ -119,4 +119,24 @@ describe('хранилище партии', () => {
     s.drinkFountain()
     expect(s.hero(w.uid).lives).toBe(w.maxLives)
   })
+
+  it('спутник сражается в бою и уходит после оговорённого числа боёв', () => {
+    const s = useGameStore()
+    s.newGame()
+    const w = s.addHero('Воин', 'warrior')
+    s.addCompanion('rytsar', 1)
+    expect(s.game!.companions).toHaveLength(1)
+    s.startEncounter([{ monsterId: 'kobold', count: 1 }])
+    expect(s.combat!.allies).toHaveLength(1)
+    expect(s.combat!.allies[0].companionUid).toBe(s.game!.companions[0].uid)
+    s.toMelee()
+    let guard = 0
+    while (s.combat && !s.combat.finished && guard++ < 100) {
+      if (s.combat.turn === 'heroes') s.skip(w.uid)
+      else s.monstersAct()
+    }
+    s.endCombat()
+    expect(s.game!.companions).toHaveLength(0)
+    expect(s.game!.log.some((e) => /выполнил уговор|пал в бою/.test(e.text))).toBe(true)
+  })
 })

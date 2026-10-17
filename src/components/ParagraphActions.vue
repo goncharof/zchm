@@ -12,6 +12,7 @@ const emit = defineEmits<{ fight: [specs: EncounterSpec[]] }>()
 const store = useGameStore()
 const counts = ref<Record<string, number>>({})
 const lastLuck = ref('')
+const battles = ref(3)
 const taken = ref<Set<string>>(new Set())
 
 const fightable = computed(() => (props.hints?.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special))
@@ -51,6 +52,15 @@ const has = computed(() => !!props.hints && Object.keys(props.hints).length > 0)
       <span class="row" style="gap:.2rem"><input type="number" min="0" max="30" v-model.number="counts[m]" style="width:3.4rem" class="small" /><button class="small danger" @click="fight([m])">⚔ {{ idx.monsterById.get(m)?.name }}</button></span>
     </template>
     <button v-if="fightable.length > 1" class="small danger" @click="fight(fightable)">⚔ Все вместе</button>
+    <details v-if="fightable.length" class="small" style="display:inline-block">
+      <summary class="muted" style="cursor:pointer">＋ спутник</summary>
+      <span class="row" style="gap:.25rem;margin-top:.25rem">
+        <label class="small">боёв <input type="number" min="1" max="20" v-model.number="battles" style="width:3.2rem" class="small" /></label>
+        <button v-for="m in fightable" :key="'cmp' + m" class="small" @click="store.addCompanion(m, battles)">{{ idx.monsterById.get(m)?.name }}</button>
+      </span>
+    </details>
+    <button v-if="hints?.tavern" class="small" @click="store.restAll(1)">Отдохнуть сутки (2 монеты)</button>
+    <router-link v-if="hints?.shop" class="btn small" to="/shop">В лавку</router-link>
     <template v-for="(c, i) in hints?.prices ?? []" :key="'p' + i"><button class="small" :disabled="taken.has('p' + i) || !heroUid || store.hero(heroUid).money < c" :title="heroUid && store.hero(heroUid).money < c ? 'Не хватает монет' : ''" @click="once('p' + i, (h) => store.adjustMoney(h, -c))">Заплатить {{ c }} монет</button></template>
     <template v-for="(c, i) in hints?.coins ?? []" :key="'c' + i"><button class="small" :disabled="taken.has('c' + i)" @click="once('c' + i, (h) => store.adjustMoney(h, c))">+{{ c }} монет</button></template>
     <template v-for="(b, i) in hints?.bottles ?? []" :key="'b' + i"><button class="small" :disabled="taken.has('b' + i)" @click="once('b' + i, (h) => store.giveItem(h, 'bottle', String(b), 1, false))">Взять бутылку ({{ b }})</button></template>
