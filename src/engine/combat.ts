@@ -699,9 +699,9 @@ export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex):
     return log
   }
   if (!Array.isArray(m.attacks)) return log
-  // дополнительная атака (яд, паралич, окаменение, оледенение)
-  if (m.extraAttacks?.length) {
-    const ex = m.extraAttacks[0]
+  // дополнительная атака (яд, паралич, окаменение, оледенение) вместо обычного удара; если их несколько —
+  // по очереди, срабатывает первая, чей бросок прошёл
+  for (const ex of m.extraAttacks ?? []) {
     const er = k18()
     if (er >= ex.threshold) {
       const rule = EXTRA_ATTACKS[ex.kind]
