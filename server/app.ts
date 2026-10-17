@@ -127,11 +127,21 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
     clearVotes(r, messageId)
     const msg = r.chatById(messageId)
     if (msg) ctx.updateChat(r, msg)
-    if (win) gm.choose(r, win.playerId, messageId, win.choiceId)
+    if (!win) return
+    // вариант мог стать недоступным (выбран без голосования, сообщение вытеснено) — это не повод ронять сервер
+    try { gm.choose(r, win.playerId, messageId, win.choiceId) } catch (e) {
+      if (!(e instanceof Error && e.name === 'GameError')) console.error('[голосование]', e)
+    }
   }
   /** Голосования, где уже проголосовали все активные игроки (например, после ухода игрока) */
   function checkVotes(r: Room): void {
     for (const id of Object.keys(r.votes)) if (voteComplete(r, id)) resolveVote(r, id)
+  }
+  /** Состав активных игроков изменился (герой взят или отпущен, игрок ушёл, герой погиб) — пересчитать готовность и голоса */
+  function recheck(r: Room): void {
+    checkReady(r)
+    if (votingOn(r)) checkVotes(r)
+    else for (const id of Object.keys(r.votes)) resolveVote(r, id)
   }
 
   io.on('connection', (socket) => {
@@ -149,6 +159,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       socket.emit('state', stateForClients(r.state))
       socket.emit('chat:history', r.chat.slice(-150))
       ctx.roomChanged(r)
+      recheck(r)
     }
 
     socket.on('room:create', async (raw, rawAck) => {
@@ -173,10 +184,12 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         limit(limiters.room.take(socket.id), 'Слишком часто: подождите немного')
         const req = parse(Schemas.join, raw)
         const r = await store.get(req.code)
+        // клиент мог отключиться, пока комната читалась с диска: иначе мёртвый сокет навсегда числится «в сети»
+        if (!socket.connected) return
         if (!r) throw new GameError('Комната не найдена')
         let p = req.token ? r.playerByToken(req.token) : undefined
         if (!p) {
-          if (r.players.size >= 8) throw new GameError('В комнате уже 8 игроков')
+          if ([...r.players.values()].filter((x) => x.sockets.size > 0).length >= 8) throw new GameError('В комнате уже 8 игроков')
           p = r.addPlayer(req.name, false)
           ctx.chat(r, { from: 'system', author: 'Игра', text: `${p.name} присоединяется к игре.` })
           store.touch(r)
@@ -193,7 +206,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!player.isHost) throw new GameError('Это может только хозяин комнаты')
         room.gm = mode
         // ведущий больше не отвечает сам — отложенные реплики и отметки «готов» не нужны
-        if (!autoGm(room)) { room.held = []; room.ready.clear() }
+        if (!autoGm(room)) { room.held = []; room.ready.clear(); for (const id of Object.keys(room.votes)) clearVotes(room, id) }
         ctx.chat(room, { from: 'system', author: 'Игра', text: `Режим ведущего: ${GM_TITLE[mode]}.` })
         ctx.roomChanged(room)
         store.touch(room)
@@ -239,6 +252,9 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!player.isHost) throw new GameError('Начать ход без готовности всех может только хозяин комнаты')
         limit(limiters.choose.take(socket.id), 'Слишком часто')
         if (!autoGm(room)) throw new GameError('В этом режиме ведущий не отвечает сам')
+        if (room.turnMode !== 'ready') throw new GameError('Ведущий и так отвечает сразу')
+        // каждый ход ИИ-ведущего тратит квоту модели — как реплика ведущему
+        limit(limiters.toGm.take(`${room.code}:${player.id}`), 'Ведущий не успевает: не больше 4 ходов в минуту')
         // хозяин торопит: открытые голосования решаются по текущим голосам
         const pending = Object.keys(room.votes)
         for (const id of pending) resolveVote(room, id)
@@ -276,6 +292,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         player.heroUids.push(heroUid)
         ctx.roomChanged(room)
         store.touch(room)
+        recheck(room)
         ack({ ok: true })
       } catch (e) { fail(ack, e) }
     })
@@ -288,6 +305,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         player.heroUids = player.heroUids.filter((u) => u !== heroUid)
         ctx.roomChanged(room)
         store.touch(room)
+        recheck(room)
         ack({ ok: true })
       } catch (e) { fail(ack, e) }
     })
@@ -320,6 +338,8 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
           // событие игры не ждёт готовности: отложенные реплики уходят вместе с ним
           if (ev) { if (r.turnMode === 'ready') flushTurn(r, ev); else gm.enqueue(r, { kind: 'event', event: ev }) }
         }
+        // гибель героя, новая партия, удалённый герой меняют состав активных игроков
+        if (r.turnMode === 'ready') recheck(r)
       } catch (e) { fail(ack, e) }
     })
 
@@ -354,33 +374,63 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         const req = parse(Schemas.choose, raw)
         if (!room || !player) throw new GameError('Вы не в комнате')
         limit(limiters.choose.take(socket.id), 'Слишком часто')
+        // старые кнопки сценарного ведущего не действуют, когда ведёт живой ведущий или никто
+        if (!autoGm(room)) throw new GameError('Сейчас ведёт не сценарный ведущий')
         if (votingOn(room)) {
           // режим «когда все готовы»: нажатие — голос, вариант срабатывает, когда проголосуют все
           ctx.updateChat(room, castVote(room, player.id, req.messageId, req.choiceId))
           if (voteComplete(room, req.messageId)) resolveVote(room, req.messageId)
         } else {
           gm.choose(room, player.id, req.messageId, req.choiceId)
+          // голоса, оставшиеся с режима голосования, по этому сообщению больше не нужны
+          if (room.votes[req.messageId]) { clearVotes(room, req.messageId); const m = room.chatById(req.messageId); if (m) ctx.updateChat(room, m) }
         }
         ack({ ok: true })
       } catch (e) { fail(ack, e) }
     })
 
     socket.on('disconnect', () => {
-      if (room && player) {
+      if (!room || !player) return
+      try {
         player.sockets.delete(socket.id)
         ctx.roomChanged(room)
         // ушёл тот, кого ждали, — остальные могут быть уже готовы
-        checkReady(room)
-        checkVotes(room)
-      }
+        recheck(room)
+      } catch (e) { console.error('[отключение]', e) }
+    })
+
+    // явный выход («Выйти»): герои освобождаются, игрок (кроме хозяина) удаляется — иначе остаётся «призрак» с героями
+    socket.on('room:leave', (rawAck) => {
+      const ack = safeAck(rawAck)
+      try {
+        if (!room || !player) { ack({ ok: true }); return }
+        const r = room, p = player
+        p.sockets.delete(socket.id)
+        void socket.leave(r.code)
+        if (p.sockets.size === 0) {
+          p.heroUids = []
+          if (!p.isHost) r.players.delete(p.id)
+          ctx.chat(r, { from: 'system', author: 'Игра', text: `${p.name} выходит из игры.` })
+        }
+        room = null; player = null
+        ctx.roomChanged(r)
+        store.touch(r)
+        recheck(r)
+        ack({ ok: true })
+      } catch (e) { fail(ack, e) }
     })
   })
+
+  // комнаты без игроков выгружаются из памяти через полчаса простоя (они на диске)
+  const evictTimer = setInterval(() => { void store.evictIdle(30 * 60_000).catch((e) => console.error('[комнаты]', e)) }, 5 * 60_000)
+  evictTimer.unref()
 
   await new Promise<void>((resolve) => http.listen(opts.port ?? 0, opts.host ?? '0.0.0.0', resolve))
   const port = (http.address() as AddressInfo).port
   return {
     url: `http://localhost:${port}`, port, http, io, store, gm,
     async close() {
+      clearInterval(evictTimer)
       await gm.idle()
       await store.flush()
       await new Promise<void>((resolve) => { io.close(() => resolve()) })

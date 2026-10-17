@@ -3,6 +3,8 @@ import { io, type Socket } from 'socket.io-client'
 import type { GameState } from '@/engine/model'
 import type { Ack, ChatMessage, ClientToServer, GmMode, Joined, RoomView, ServerToClient, TurnMode } from './protocol'
 
+const TIMEOUT_MS = 15_000
+
 const SESSION_KEY = 'zchm.net.session'
 
 export interface SavedSession { code: string; token: string; name: string; url?: string }
@@ -60,6 +62,11 @@ export class NetClient {
   onGmDelta(cb: (d: { id: string; text: string }) => void) { this.deltaCbs.push(cb) }
   onGmDone(cb: (d: { id: string }) => void) { this.doneCbs.push(cb) }
 
+  /** Ответ сервера с таймаутом: без связи запрос не висит вечно */
+  private async ask<T>(p: Promise<Ack<T>>): Promise<Ack<T>> {
+    try { return await p } catch { return { ok: false, error: 'Нет связи с сервером' } }
+  }
+
   private unwrap<T>(a: Ack<T>): T {
     if (!a.ok) {
       const e = new Error(a.error ?? 'Ошибка сервера')
@@ -70,31 +77,37 @@ export class NetClient {
   }
 
   async create(name: string, gm: GmMode, state?: GameState): Promise<Joined> {
-    const j = this.unwrap(await this.socket.emitWithAck('room:create', { name, gm, state })) as Joined
+    const j = this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:create', { name, gm, state }))) as Joined
     this.joined = { code: j.code, token: j.token, name }
     saveSession(this.joined)
     return j
   }
   async join(code: string, name: string, token?: string): Promise<Joined> {
-    const j = this.unwrap(await this.socket.emitWithAck('room:join', { code: code.trim().toUpperCase(), name, token })) as Joined
+    const j = this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:join', { code: code.trim().toUpperCase(), name, token }))) as Joined
     this.joined = { code: j.code, token: j.token, name }
     saveSession(this.joined)
     return j
   }
   async call(name: string, args: unknown[]): Promise<unknown> {
-    return this.unwrap(await this.socket.emitWithAck('cmd', { name, args }))
+    return this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('cmd', { name, args })))
   }
-  async setGm(gm: GmMode): Promise<void> { this.unwrap(await this.socket.emitWithAck('room:setGm', gm)) }
-  async loadState(state: GameState): Promise<void> { this.unwrap(await this.socket.emitWithAck('room:loadState', state)) }
-  async claimHero(heroUid: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('hero:claim', heroUid)) }
-  async releaseHero(heroUid: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('hero:release', heroUid)) }
-  async chat(text: string, toGm: boolean): Promise<boolean> { this.unwrap(await this.socket.emitWithAck('chat', { text, toGm })); return true }
-  async choose(messageId: string, choiceId: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('gm:choose', { messageId, choiceId })) }
-  async setTurnMode(mode: TurnMode): Promise<void> { this.unwrap(await this.socket.emitWithAck('room:turnMode', mode)) }
-  async setReady(ready: boolean): Promise<void> { this.unwrap(await this.socket.emitWithAck('turn:ready', ready)) }
-  async turnGo(): Promise<void> { this.unwrap(await this.socket.emitWithAck('turn:go')) }
+  async setGm(gm: GmMode): Promise<void> { this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:setGm', gm))) }
+  async loadState(state: GameState): Promise<void> { this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:loadState', state))) }
+  async claimHero(heroUid: string): Promise<void> { this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('hero:claim', heroUid))) }
+  async releaseHero(heroUid: string): Promise<void> { this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('hero:release', heroUid))) }
+  async chat(text: string, toGm: boolean): Promise<boolean> { this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('chat', { text, toGm }))); return true }
+  async choose(messageId: string, choiceId: string): Promise<void> { this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('gm:choose', { messageId, choiceId }))) }
+  async setTurnMode(mode: TurnMode): Promise<void> { this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:turnMode', mode))) }
+  async setReady(ready: boolean): Promise<void> { this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:ready', ready))) }
+  async turnGo(): Promise<void> { this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:go'))) }
 
-  /** Выйти из комнаты (забыть сохранённый вход) */
+  /** Выйти из комнаты: сервер освобождает героев (иначе за столом остаётся «призрак») */
+  async leave(): Promise<void> {
+    if (this.joined && this.socket.connected) await this.ask(this.socket.timeout(3000).emitWithAck('room:leave'))
+    this.close()
+  }
+
+  /** Отключиться (забыть сохранённый вход) */
   close(): void {
     this.joined = null
     saveSession(null)

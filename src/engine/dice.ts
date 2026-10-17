@@ -45,6 +45,8 @@ export function rollFormula(formula: string): DiceResult {
   if (!m) throw new Error(`Неизвестная формула кубиков: ${formula}`)
   const count = m[1] ? parseInt(m[1], 10) : 1
   const sides = parseInt(m[2], 10)
+  // формулу может прислать игрок: «999999999к6» не должен вешать сервер
+  if (count < 1 || count > 100 || sides < 1 || sides > 1000) throw new Error(`Слишком большая формула кубиков: ${formula}`)
   const mod = m[3] ? parseInt(m[3], 10) : 0
   const rolls: number[] = []
   for (let i = 0; i < count; i++) rolls.push(roll(sides))

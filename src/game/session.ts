@@ -327,7 +327,8 @@ export class GameSession {
     return r
   }
   rollDice(formula: string): { total: number; rolls: number[] } {
-    const r = rollFormula(formula)
+    let r
+    try { r = rollFormula(String(formula).slice(0, 40)) } catch (e) { throw new GameError((e as Error).message) }
     this.log(`Бросок: ${formula} = ${r.total}${r.rolls.length > 1 ? ` (${r.rolls.join(' + ')})` : ''}.`, 'luck')
     return { total: r.total, rolls: r.rolls }
   }
@@ -427,7 +428,21 @@ export class GameSession {
   }
 
   // ---------- бой ----------
+  /** Состав боя из команды: монстры из бестиария, разумное число (команду может прислать любой клиент) */
+  private specs(specs: EncounterSpec[]): EncounterSpec[] {
+    if (!Array.isArray(specs) || !specs.length || specs.length > 10) throw new GameError('Неверный состав боя')
+    let total = 0
+    for (const s of specs) {
+      if (!idx.monsterById.has(String(s?.monsterId))) throw new GameError(`Нет такого монстра: ${s?.monsterId}`)
+      const n = Number(s.count)
+      if (!Number.isInteger(n) || n < 1 || n > 50) throw new GameError('Неверное число монстров')
+      total += n
+    }
+    if (total > 60) throw new GameError('Слишком много монстров для одного боя')
+    return specs
+  }
   startEncounter(specs: EncounterSpec[], returnTo?: string): void {
+    specs = this.specs(specs)
     if (this.combat && !this.combat.finished) throw new GameError('Бой уже идёт')
     // прошлый бой окончен, но не закрыт: сначала подвести его итог (подобрать стрелы, засчитать бой спутникам, снять статусы)
     if (this.combat) this.endCombat()
@@ -547,7 +562,7 @@ export class GameSession {
   addMonstersToCombat(specs: EncounterSpec[]): void {
     const c = this.requireCombat()
     if (c.finished) throw new GameError('Бой уже окончен')
-    const { state } = startCombat(specs, idx)
+    const { state } = startCombat(this.specs(specs), idx)
     c.monsters.push(...state.monsters)
     this.log(`В бой вступают: ${state.monsters.map((m) => m.name).join(', ')}.`)
   }

@@ -1,6 +1,6 @@
 /** Комнаты сетевой игры: состояние, игроки, чат, сохранение на диск. */
 import { randomBytes, randomUUID } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import type { WorldMap } from '@/types'
@@ -133,6 +133,7 @@ export class Room {
       const dropped = this.chat.splice(0, this.chat.length - CHAT_CAP)
       const gone = new Set(dropped.map((x) => x.id))
       for (const [cid, rec] of Object.entries(this.choiceActions)) if (gone.has(rec.messageId)) delete this.choiceActions[cid]
+      for (const id of gone) delete this.votes[id]
     }
     return msg
   }
@@ -181,6 +182,8 @@ export class Room {
     r.turnMode = d.turnMode ?? 'instant'
     r.held = d.held ?? []
     r.votes = d.votes ?? {}
+    // отправившие отложенные реплики были готовы — после перезапуска сервера тоже
+    r.ready = new Set(r.held.map((h) => h.playerId))
     r.createdAt = d.createdAt
     r.updatedAt = d.updatedAt
     return r
@@ -191,6 +194,8 @@ export class Room {
 export class RoomStore {
   private rooms = new Map<string, Room>()
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
+  /** загрузки с диска в процессе: два игрока, входящие одновременно, получают один и тот же объект комнаты */
+  private loading = new Map<string, Promise<Room | undefined>>()
 
   constructor(private dir: string | null, private world: WorldMap | null) {}
 
@@ -208,10 +213,23 @@ export class RoomStore {
     const cached = this.rooms.get(c)
     if (cached) return cached
     if (!this.dir || !/^[A-Z0-9]{4,8}$/.test(c) || !existsSync(this.file(c))) return undefined
-    const data = JSON.parse(await readFile(this.file(c), 'utf8')) as RoomData
-    const room = Room.fromData(data, this.world)
-    this.rooms.set(c, room)
-    return room
+    const pending = this.loading.get(c)
+    if (pending) return pending
+    const load = (async () => {
+      try {
+        const data = JSON.parse(await readFile(this.file(c), 'utf8')) as RoomData
+        const room = this.rooms.get(c) ?? Room.fromData(data, this.world)
+        this.rooms.set(c, room)
+        return room
+      } catch (e) {
+        console.error(`[комнаты] не удалось прочитать ${c}:`, (e as Error).message)
+        return undefined
+      } finally {
+        this.loading.delete(c)
+      }
+    })()
+    this.loading.set(c, load)
+    return load
   }
 
   /** Отметить изменение и сохранить на диск с задержкой */
@@ -219,22 +237,43 @@ export class RoomStore {
     room.updatedAt = Date.now()
     if (!this.dir) return
     clearTimeout(this.timers.get(room.code))
-    this.timers.set(room.code, setTimeout(() => { void this.save(room) }, 500))
+    this.timers.set(room.code, setTimeout(() => {
+      this.timers.delete(room.code)
+      // ошибка записи (диск полон, нет прав) не должна ронять сервер
+      this.save(room).catch((e) => console.error(`[комнаты] не удалось сохранить ${room.code}:`, (e as Error).message))
+    }, 500))
   }
 
+  /** Запись через временный файл: обрыв посреди записи не портит сохранённую комнату */
   async save(room: Room): Promise<void> {
     if (!this.dir) return
     await mkdir(this.dir, { recursive: true })
-    await writeFile(this.file(room.code), JSON.stringify(room.toData()))
+    const file = this.file(room.code)
+    await writeFile(`${file}.tmp`, JSON.stringify(room.toData()))
+    await rename(`${file}.tmp`, file)
   }
 
   async flush(): Promise<void> {
     for (const [code, t] of this.timers) {
       clearTimeout(t)
       const r = this.rooms.get(code)
-      if (r) await this.save(r)
+      if (r) await this.save(r).catch((e) => console.error(`[комнаты] не удалось сохранить ${code}:`, (e as Error).message))
     }
     this.timers.clear()
+  }
+
+  /** Выгрузить из памяти комнаты, где давно никого нет (они сохранены на диске и загрузятся при входе) */
+  async evictIdle(maxIdleMs: number, now = Date.now()): Promise<number> {
+    if (!this.dir) return 0
+    let n = 0
+    for (const [code, r] of this.rooms) {
+      const online = [...r.players.values()].some((p) => p.sockets.size > 0)
+      if (online || r.gmBusy || this.timers.has(code) || now - r.updatedAt < maxIdleMs) continue
+      try { await this.save(r) } catch { continue }
+      this.rooms.delete(code)
+      n++
+    }
+    return n
   }
 
   private file(code: string): string {

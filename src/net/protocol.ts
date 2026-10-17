@@ -90,6 +90,7 @@ export interface ClientToServer {
   'room:turnMode': (mode: TurnMode, ack: (a: Ack) => void) => void
   'turn:ready': (ready: boolean, ack: (a: Ack) => void) => void
   'turn:go': (ack: (a: Ack) => void) => void
+  'room:leave': (ack: (a: Ack) => void) => void
   'room:loadState': (state: GameState, ack: (a: Ack) => void) => void
   'hero:claim': (heroUid: string, ack: (a: Ack) => void) => void
   'hero:release': (heroUid: string, ack: (a: Ack) => void) => void

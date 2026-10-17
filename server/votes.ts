@@ -36,7 +36,9 @@ export function refreshVotes(room: Room, msg: ChatMessage): void {
 /** Голосование по сообщению завершено: проголосовали все активные игроки */
 export function voteComplete(room: Room, messageId: string): boolean {
   const ballot = room.votes[messageId] ?? {}
-  return room.activePlayers().every((p) => ballot[p.id])
+  const active = room.activePlayers()
+  // никого за столом — не решаем за ушедших
+  return active.length > 0 && active.every((p) => ballot[p.id])
 }
 
 /** Победивший вариант и игрок, от чьего имени он выполняется (его герой действует) */

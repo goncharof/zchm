@@ -15,6 +15,10 @@ import { createGameServer } from './app'
 import { aiGmFactory } from './gm/ai'
 import { buildProvidersFromEnv } from './gm/providers'
 
+// последний рубеж: ошибка в одном обработчике не должна ронять все комнаты сразу (обработчики сами ловят ошибки)
+process.on('uncaughtException', (e) => console.error('[сервер] необработанная ошибка:', e))
+process.on('unhandledRejection', (e) => console.error('[сервер] необработанный отказ:', e))
+
 const root = process.cwd()
 const envFile = path.join(root, '.env.local')
 if (existsSync(envFile)) {

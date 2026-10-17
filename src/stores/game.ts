@@ -143,6 +143,8 @@ export const useGameStore = defineStore('game', () => {
     await netAction((c) => c.join(s.code, s.name, s.token), s.url)
   }
   function leaveRoom(): void {
+    const c = net.value
+    if (c) void c.leave().catch(() => {})
     detachNet()
   }
   const sendChat = (text: string, toGm: boolean) => netAction((c) => c.chat(text, toGm))
