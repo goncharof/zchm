@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { paragraphText } from '@/game/book'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { idx } from '@/data'
@@ -168,7 +169,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
             <p class="small muted" style="margin-top:.5rem">Выберите, что делает партия: исход ветки откроется по нажатию.</p>
           </template>
           <template v-else>
-            <p class="paragraph-text">{{ paragraph.text }}</p>
+            <p class="paragraph-text">{{ paragraphText(paragraph) }}</p>
             <ParagraphActions :hints="paragraph.hints" :hero-uid="heroUid" @fight="startFight" />
           </template>
 
