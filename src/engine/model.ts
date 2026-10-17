@@ -135,6 +135,8 @@ export interface MonsterInstance {
   courageChecked: boolean
   fled: boolean
   dead: boolean
+  /** тело уже поднято «Оживлением мертвеца» */
+  raised?: boolean
   /** раундов паралича/сна/оледенения */
   disabled?: number
   disabledKind?: 'sleep' | 'paralysis' | 'freeze'

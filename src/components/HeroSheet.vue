@@ -2,8 +2,8 @@
 import { computed, ref } from 'vue'
 import { idx } from '@/data'
 import type { EquipSlot, Hero, InventoryEntry } from '@/engine/model'
-import { heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, levelRow } from '@/engine/character'
-import { entryName, salePrice } from '@/engine/inventory'
+import { artifactSlot, heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, levelRow } from '@/engine/character'
+import { artifactGroup, entryName, salePrice } from '@/engine/inventory'
 import { useGameStore } from '@/stores/game'
 import { SLOT_NAMES, attacksStr, classArt, pct } from '@/ui/format'
 import SpellPicker from './SpellPicker.vue'
@@ -37,6 +37,15 @@ function detail(e: InventoryEntry): string {
   if (e.kind === 'item') return idx.item(e.ref).description
   if (e.kind === 'trophy') return 'трофей, только на продажу'
   return ''
+}
+/** Ядом смазывают оружие, кроме палиц (и палицы-артефакта) */
+function canPoison(e: InventoryEntry): boolean {
+  if (e.poisoned) return false
+  if (e.kind === 'weapon') return idx.weapon(e.ref).group !== 'mace' && idx.weapon(e.ref).group !== 'ammo'
+  if (e.kind !== 'artifact') return false
+  const a = idx.artifact(parseInt(e.ref, 10))
+  const slot = artifactSlot(a.n)
+  return (slot === 'melee' || slot === 'ranged') && artifactGroup(a) !== 'mace'
 }
 function isEquipped(e: InventoryEntry) { return Object.values(props.hero.equipment).includes(e.uid) }
 function canEquip(e: InventoryEntry) { return e.kind === 'weapon' ? idx.weapon(e.ref).group !== 'ammo' : e.kind === 'armor' || e.kind === 'artifact' }
@@ -111,13 +120,13 @@ const statusText = computed(() => {
             <button v-if="e.kind === 'bottle'" class="small" @click="act(() => store.drink(hero.uid, e.uid))">Выпить</button>
             <button v-if="e.kind === 'bottle' && !e.identified" class="small" @click="act(() => store.identifyBottle(hero.uid, e.uid))">Распознать</button>
             <button v-if="e.kind === 'scroll'" class="small" @click="act(() => store.copyScroll(hero.uid, e.uid))">В книгу</button>
-            <button v-if="(e.kind === 'weapon' || e.kind === 'artifact') && !e.poisoned && hero.inventory.some(x => x.kind === 'item' && x.ref === 'yad')" class="small" @click="act(() => store.poisonWeapon(hero.uid, e.uid))">Смазать ядом</button>
+            <button v-if="canPoison(e) && hero.inventory.some(x => x.kind === 'item' && x.ref === 'yad')" class="small" @click="act(() => store.poisonWeapon(hero.uid, e.uid))">Смазать ядом</button>
             <button v-if="shop && salePrice(e, idx) > 0" class="small" @click="act(() => store.sellItem(hero.uid, e.uid))">Продать за {{ salePrice(e, idx) }}</button>
             <select v-if="store.heroes.length > 1" class="small" v-model="transferTo" @change="act(() => { if (transferTo) store.transferItem(hero.uid, transferTo, e.uid); transferTo = '' })">
               <option value="">Передать…</option>
               <option v-for="h in store.heroes.filter(x => x.uid !== hero.uid)" :key="h.uid" :value="h.uid">{{ h.name }}</option>
             </select>
-            <button class="small" @click="store.dropItem(hero.uid, e.uid, e.qty)">✕</button>
+            <button v-if="e.kind !== 'artifact'" class="small" title="Выбросить" @click="store.dropItem(hero.uid, e.uid, e.qty)">✕</button>
           </td>
         </tr>
       </tbody>

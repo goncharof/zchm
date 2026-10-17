@@ -472,7 +472,7 @@ export function castSpell(input: CastInput): CastResult {
     }
     case 'summon': {
       if (needCombat()) return res
-      if (effect.kind === 'zombie' && !combat!.monsters.some((m) => m.dead)) return fail('Нужен мертвец: сначала одолейте кого-нибудь')
+      if (effect.kind === 'zombie' && !combat!.monsters.some((m) => m.dead && !m.raised)) return fail('Нужен мертвец: сначала одолейте кого-нибудь')
       spend()
       const ally = buildSummon(effect, hero, idx, entries, combat!, targetHero())
       if (ally) combat!.allies.push(ally)
@@ -600,12 +600,14 @@ function buildSummon(effect: Extract<SpellEffect, { type: 'summon' }>, hero: Her
       return a
     }
     case 'zombie': {
-      const corpse = combat.monsters.find((m) => m.dead)!
+      // каждое тело поднимается один раз
+      const corpse = combat.monsters.find((m) => m.dead && !m.raised)!
       const z = idx.monsterById.get('zombi')
       const table = Array.isArray(z?.attacks) ? z!.attacks.join('-') : '1-1-2-2-3-3'
       const a = makeAlly(hero.uid, `Зомби (${corpse.name})`, z?.defense ?? 10, table, z?.lives ?? 10)
       a.unstable = 'zombie'
       a.monsterId = 'zombi'
+      corpse.raised = true
       corpse.name = `${corpse.name} (поднят)`
       log(entries, `${corpse.name.replace(' (поднят)', '')} поднимается зомби и служит ${hero.name}. После каждого хода он может выйти из-под контроля (1 на к6).`)
       return a

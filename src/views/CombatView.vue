@@ -103,7 +103,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
 <template>
   <div v-if="!c" class="card">
     <p>Бой не идёт.</p>
-    <button @click="picker = true">Начать произвольный бой</button>
+    <button v-if="store.isGm && !store.aiGm" @click="picker = true">Начать произвольный бой</button>
     <MonsterPicker v-if="picker" @close="picker = false" @start="(s) => { picker = false; store.startEncounter(s) }" />
   </div>
   <template v-else>
@@ -125,7 +125,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
         <button v-else-if="store.isGm && !store.aiGm" class="small danger" @click="store.abortCombat()">Прервать</button>
       </div>
     </div>
-    <MonsterPicker v-if="picker" @close="picker = false" @start="(s) => { picker = false; store.addMonstersToCombat(s) }" />
+    <MonsterPicker v-if="picker && !c.finished" @close="picker = false" @start="(s) => { picker = false; store.addMonstersToCombat(s) }" />
 
     <div v-if="c.finished === 'victory' && c.loot?.length" class="card tight">
       <h3>Трофеи</h3>

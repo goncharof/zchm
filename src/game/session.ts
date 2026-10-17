@@ -159,16 +159,24 @@ export class GameSession {
   }
 
   // ---------- лавка и вещи ----------
+  /** Количество из команды: целое от 1 (команды приходят и по сети — отрицательное число не должно давать денег) */
+  private qty(n: unknown, max = 999): number {
+    const v = Number(n)
+    if (!Number.isInteger(v) || v < 1 || v > max) throw new GameError('Неверное количество')
+    return v
+  }
   buyItem(heroUid: string, kind: 'weapon' | 'armor' | 'item', ref: string, qty = 1): void {
     const h = this.hero(heroUid)
-    const e = inv.buy(h, kind, ref, idx, qty)
+    const e = inv.buy(h, kind, ref, idx, this.qty(qty, 99))
     this.log(`${h.name} покупает: ${inv.entryName(e, idx)}${qty > 1 ? ` ×${qty}` : ''}.`)
   }
   sellItem(heroUid: string, entryUid: string, qty = 1): void {
     const h = this.hero(heroUid)
     const e = h.inventory.find((x) => x.uid === entryUid)
-    const name = e ? inv.entryName(e, idx) : ''
-    const gain = inv.sell(h, entryUid, idx, qty)
+    if (!e) throw new GameError('Предмета нет в инвентаре')
+    if (e.kind === 'artifact') throw new GameError('Артефакты не продаются')
+    const name = inv.entryName(e, idx)
+    const gain = inv.sell(h, entryUid, idx, this.qty(qty, e.qty))
     this.log(`${h.name} продаёт ${name} за ${gain} монет.`)
   }
   equipItem(heroUid: string, entryUid: string, slot?: EquipSlot): void {
@@ -179,20 +187,27 @@ export class GameSession {
   }
   giveItem(heroUid: string, kind: InventoryKind, ref: string, qty = 1, identified?: boolean): void {
     const h = this.hero(heroUid)
-    const e = inv.addToInventory(h, kind, ref, qty, identified === undefined ? {} : { identified })
+    const e = inv.addToInventory(h, kind, ref, this.qty(qty), identified === undefined ? {} : { identified })
     this.log(`${h.name} получает: ${inv.entryName(e, idx)}${qty > 1 ? ` ×${qty}` : ''}.`)
   }
   dropItem(heroUid: string, entryUid: string, qty = 1): void {
-    inv.removeFromInventory(this.hero(heroUid), entryUid, qty)
+    const h = this.hero(heroUid)
+    const e = h.inventory.find((x) => x.uid === entryUid)
+    if (!e) return
+    // Инструкция: артефакты «вы не можете их потерять»
+    if (e.kind === 'artifact') throw new GameError('Артефакт нельзя выбросить')
+    inv.removeFromInventory(h, entryUid, this.qty(qty, e.qty))
   }
   transferItem(fromUid: string, toUid: string, entryUid: string): void {
     const from = this.hero(fromUid)
     const to = this.hero(toUid)
     const e = from.inventory.find((x) => x.uid === entryUid)
-    if (!e) return
-    inv.removeFromInventory(from, entryUid, e.qty)
-    to.inventory.push({ ...e })
-    this.log(`${from.name} передаёт ${inv.entryName(e, idx)} — ${to.name}.`)
+    if (!e || from.uid === to.uid) return
+    // запомнить вещь до снятия: removeFromInventory уменьшает qty у того же объекта
+    const { kind, ref, qty, identified, poisoned } = e
+    inv.removeFromInventory(from, entryUid, qty)
+    const moved = inv.addToInventory(to, kind, ref, qty, { ...(identified !== undefined ? { identified } : {}), ...(poisoned ? { poisoned } : {}) })
+    this.log(`${from.name} передаёт ${inv.entryName(moved, idx)}${qty > 1 ? ` ×${qty}` : ''} — ${to.name}.`)
   }
   drink(heroUid: string, entryUid: string): void {
     const h = this.hero(heroUid)
@@ -414,6 +429,8 @@ export class GameSession {
   // ---------- бой ----------
   startEncounter(specs: EncounterSpec[], returnTo?: string): void {
     if (this.combat && !this.combat.finished) throw new GameError('Бой уже идёт')
+    // прошлый бой окончен, но не закрыт: сначала подвести его итог (подобрать стрелы, засчитать бой спутникам, снять статусы)
+    if (this.combat) this.endCombat()
     const { state, log: entries } = startCombat(specs, idx, returnTo)
     const owner = this.heroes.find((h) => !h.status.dead)?.uid ?? ''
     for (const c of this.state.companions) {
@@ -432,12 +449,24 @@ export class GameSession {
     if (!this.combat) throw new GameError('Бой не идёт')
     return this.combat
   }
+  /** Ход героя в бою: только в ход героев, один раз за раунд (доп. действие не попадает в acted) и пока он на поле.
+   *  Команды приходят по сети: двойной щелчок или устаревший экран не должны давать второе действие. */
+  private requireHeroTurn(h: Hero): CombatState {
+    const c = this.requireCombat()
+    if (c.finished) throw new GameError('Бой уже окончен')
+    if (c.turn !== 'heroes') throw new GameError('Сейчас ход монстров')
+    if (c.escaped.includes(h.uid)) throw new GameError(`${h.name} уже покинул поле боя`)
+    if (c.acted.includes(h.uid)) throw new GameError(`${h.name} уже сходил в этом раунде`)
+    return c
+  }
   attack(heroUid: string, slot: EquipSlot | 'unarmed' | 'spell', targetUid: string): void {
-    const out = heroAttack(this.requireCombat(), this.hero(heroUid), this.heroes, slot, targetUid, idx)
+    const h = this.hero(heroUid)
+    const out = heroAttack(this.requireHeroTurn(h), h, this.heroes, slot, targetUid, idx)
     this.logAll(out.log)
     this.announceLevelUps(out.levelUps)
   }
   cast(heroUid: string, spellId: string, opts: { targetUid?: string; targetHeroUid?: string; targetEntryUid?: string; param?: number } = {}): CastResult {
+    if (this.combat && !this.combat.finished) this.requireHeroTurn(this.hero(heroUid))
     const res = castSpell({ hero: this.hero(heroUid), spell: idx.spell(spellId), idx, heroes: this.heroes, combat: this.combat, ...opts })
     this.logAll(res.log)
     this.announceLevelUps(res.levelUps)
@@ -450,13 +479,18 @@ export class GameSession {
     return res
   }
   flee(heroUid: string): void {
-    this.logAll(heroFlee(this.requireCombat(), this.hero(heroUid), this.heroes, idx))
+    const h = this.hero(heroUid)
+    this.logAll(heroFlee(this.requireHeroTurn(h), h, this.heroes, idx))
   }
   skip(heroUid: string): void {
-    this.logAll(heroSkip(this.requireCombat(), this.hero(heroUid), this.heroes, idx))
+    const h = this.hero(heroUid)
+    this.logAll(heroSkip(this.requireHeroTurn(h), h, this.heroes, idx))
   }
   toMelee(): void {
-    this.log(closeToMelee(this.requireCombat(), this.heroes, idx).text)
+    const c = this.requireCombat()
+    // повторное нажатие (двое игроков сразу) не перебрасывает инициативу и не начинает раунд заново
+    if (c.finished || c.phase !== 'ranged' || c.turn !== 'heroes') return
+    this.log(closeToMelee(c, this.heroes, idx).text)
   }
   monstersAct(): void {
     const c = this.requireCombat()
@@ -474,6 +508,7 @@ export class GameSession {
   }
   endCombat(): void {
     const combat = this.requireCombat()
+    if (!combat.finished) throw new GameError('Бой ещё идёт')
     // спутники: сохранить жизни, засчитать бой
     for (const a of combat.allies) {
       const c = a.companionUid ? this.state.companions.find((x) => x.uid === a.companionUid) : null
@@ -511,6 +546,7 @@ export class GameSession {
   }
   addMonstersToCombat(specs: EncounterSpec[]): void {
     const c = this.requireCombat()
+    if (c.finished) throw new GameError('Бой уже окончен')
     const { state } = startCombat(specs, idx)
     c.monsters.push(...state.monsters)
     this.log(`В бой вступают: ${state.monsters.map((m) => m.name).join(', ')}.`)

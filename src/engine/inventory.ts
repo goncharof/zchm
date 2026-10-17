@@ -247,6 +247,12 @@ export function poisonWeapon(hero: Hero, weaponUid: string, idx: DataIndex): voi
   const w = entryByUid(hero, weaponUid)
   if (!w || (w.kind !== 'weapon' && w.kind !== 'artifact')) throw new Error('Это не оружие')
   if (w.kind === 'weapon' && idx.weapon(w.ref).group === 'mace') throw new Error('Палицы ядом не смазывают')
+  if (w.kind === 'artifact') {
+    const a = idx.artifact(parseInt(w.ref, 10))
+    const slot = artifactSlot(a.n)
+    if (slot !== 'melee' && slot !== 'ranged') throw new Error('Это не оружие')
+    if (artifactGroup(a) === 'mace') throw new Error('Палицы ядом не смазывают')
+  }
   removeFromInventory(hero, poison.uid, 1)
   w.poisoned = true
 }

@@ -35,7 +35,7 @@ export const MONSTER_LOOT: Record<string, { kind: LootKind; ref: string }[]> = {
   berserker: [W('mech-korotkiy'), W('mech-korotkiy')], // «два коротких меча»
   gnoll: [W('kinzhal-serebryanyy')], // «Любимое оружие — серебряный кинжал»
   gurr: [W('kinzhal')], // «Пользуются простыми кинжалами»
-  dvarf: [W('boevoy-topor')], // «Любимым оружием дварфов является тяжелый боевой топор»
+  dvarf: [W('boevoy-topor-dvuruchnyy')], // «тяжелый боевой топор» — двуручный (так он назван в запрете для воров, Инструкция)
   kentavr: [W('korotkiy-luk')], // «Вооружен коротким луком»
   kobold: [W('mech-korotkiy')], // «Оружием кобольдов являются короткие мечи»
   lyudoed: [W('palitsa')], // «Обычно оружием людоедов является палица»
