@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useGameStore } from '@/stores/game'
+import { onVoicesChanged, russianVoices, saveSpeechPrefs, speak, speaking, speechPrefs, speechSupported, stopSpeaking } from '@/ui/speech'
 
 /** Стол: рассказ ведущего, реплики игроков, сообщения игры */
 const props = withDefaults(defineProps<{ height?: string }>(), { height: '60vh' })
@@ -16,6 +17,17 @@ watch(() => [store.chat.length, JSON.stringify(store.streaming).length], async (
   await nextTick()
   if (box.value) box.value.scrollTop = box.value.scrollHeight
 }, { immediate: true })
+
+// озвучка: голоса приходят асинхронно
+const canSpeak = speechSupported()
+const voices = ref(russianVoices())
+const offVoices = onVoicesChanged(() => { voices.value = russianVoices() })
+onBeforeUnmount(offVoices)
+function toggleSpeech() {
+  saveSpeechPrefs()
+  if (speechPrefs.value.on) speak('Озвучка ведущего включена.') // первый звук по нажатию — иначе iOS не разрешит
+  else stopSpeaking()
+}
 
 async function send() {
   const t = text.value.trim()
@@ -50,5 +62,19 @@ async function send() {
       <button class="primary" @click="send">Отправить</button>
     </div>
     <label v-if="ai" class="row small" style="gap:.3rem;margin-top:.3rem"><input type="checkbox" v-model="toGm" /> ведущему (иначе — только игрокам, ведущий не услышит)</label>
+    <div v-if="canSpeak" class="row small" style="gap:.5rem;margin-top:.3rem">
+      <label class="row" style="gap:.3rem"><input type="checkbox" v-model="speechPrefs.on" @change="toggleSpeech" /> озвучивать ведущего</label>
+      <template v-if="speechPrefs.on">
+        <select v-if="voices.length > 1" v-model="speechPrefs.voice" class="small" title="Голос" @change="saveSpeechPrefs">
+          <option :value="undefined">голос по умолчанию</option>
+          <option v-for="v in voices" :key="v.name" :value="v.name">{{ v.name }}</option>
+        </select>
+        <select v-model.number="speechPrefs.rate" class="small" title="Скорость" @change="saveSpeechPrefs">
+          <option :value="0.85">медленно</option><option :value="1">обычно</option><option :value="1.2">быстрее</option><option :value="1.4">быстро</option>
+        </select>
+        <button v-if="speaking" class="small" @click="stopSpeaking">Стоп</button>
+        <span v-if="!voices.length" class="muted">в системе не найден русский голос, браузер прочтёт как сможет</span>
+      </template>
+    </div>
   </div>
 </template>

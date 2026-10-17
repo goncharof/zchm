@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import DiceTray from '@/components/DiceTray.vue'
 import { useGameStore } from '@/stores/game'
 import { idx } from '@/data'
+import { speak, speechPrefs, spokenIds } from '@/ui/speech'
 
 const store = useGameStore()
 const heroes = computed(() => store.heroes)
@@ -13,6 +14,18 @@ const route = useRoute()
 onMounted(() => { void store.rejoin() })
 void route
 const locationLink = computed(() => (store.location ? `/location/${store.location.id}` : null))
+
+// озвучка новых реплик ведущего на любом экране; история чата (вход в комнату) не читается
+let seenList: unknown = null
+watch(() => [store.chat, store.chat.length] as const, ([list]) => {
+  const history = list !== seenList
+  seenList = list
+  for (const m of list) {
+    if (spokenIds.has(m.id)) continue
+    spokenIds.add(m.id)
+    if (!history && m.from === 'gm' && speechPrefs.value.on) speak(m.text)
+  }
+}, { immediate: true })
 </script>
 
 <template>
