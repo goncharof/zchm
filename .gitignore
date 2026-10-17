@@ -9,4 +9,4 @@ source/pdf/*.jpg
 tools/qa/out/
 tools/qa/out-prod/
 server-dist/
-data/
+/data/
