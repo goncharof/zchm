@@ -199,11 +199,30 @@ def _add_opt(blocks, values, text):
         blocks.append({'roll': [{'values': values, 'text': text}]})
 
 
+ELSE_HEAD = re.compile(r'^Иначе\s*[—–,:]?\s*')
+
+
+def _ends_with_luck(seg):
+    """Последнее предложение сегмента — проверка удачи: тогда «Иначе …» — её исход, а не новая ветка."""
+    texts = [b['text'] for b in seg['blocks'] if 'text' in b]
+    if not texts:
+        return bool(re.search(r'удач', seg.get('label', ''), re.IGNORECASE))
+    last = split_sentences(texts[-1])[-1] if split_sentences(texts[-1]) else texts[-1]
+    return bool(re.search(r'удач', last, re.IGNORECASE))
+
+
 def segment(text, hints_for=None):
     """Возвращает список сегментов или None, если в параграфе нет ни веток, ни бросков."""
     segs = [{'kind': 'scene', 'blocks': []}]
     has_branch = has_roll = False
     for u in units(text):
+        if u[0] == 'sent' and ELSE_HEAD.match(u[1]) and segs[-1]['kind'] == 'branch' and not _ends_with_luck(segs[-1]):
+            # «Если говорите 4 — нападает. Иначе — пропускает»: «иначе» — соседняя ветка, а не продолжение
+            rest = ELSE_HEAD.sub('', u[1]).strip()
+            seg = {'kind': 'branch', 'label': 'Иначе', 'blocks': []}
+            _add_text(seg['blocks'], _cap(rest))
+            segs.append(seg)
+            continue
         if u[0] == 'sent' and is_head(u[1]):
             label, outcome = split_head(u[1])
             seg = {'kind': 'branch', 'label': label, 'blocks': []}
