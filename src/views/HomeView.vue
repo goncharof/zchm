@@ -8,6 +8,8 @@ import OnlinePanel from '@/components/OnlinePanel.vue'
 
 const store = useGameStore()
 const base = import.meta.env.BASE_URL
+// абсолютный адрес: url() в CSS-переменной считается от файла стилей (assets/), а не от страницы
+const bannerUrl = new URL(`${base}img/brand/banner.jpg`, document.baseURI).href
 const scrollToOnline = () => document.getElementById('online')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 const router = useRouter()
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -63,7 +65,7 @@ async function newGame() {
 </script>
 
 <template>
-  <section class="hero-cover" :style="{ '--banner': `url(${base}img/brand/banner.jpg)` }">
+  <section class="hero-cover" :style="{ '--banner': `url(${bannerUrl})` }">
     <img class="cover" :src="`${base}img/brand/cover.jpg`" alt="Обложка коробки «Заклятье Чёрного мага», 1997" width="860" height="1315" />
     <div>
       <img class="logo" :src="`${base}img/brand/logo.png`" alt="Заклятье Чёрного мага" width="1100" height="191" />
