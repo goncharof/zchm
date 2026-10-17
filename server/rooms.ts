@@ -53,15 +53,17 @@ export interface ScriptState {
   n: number | null
   /** параграф, из которого начат бой: после боя предлагаются его ветки победы или поражения */
   fight?: { loc: string; n: number }
+  /** одноразовые действия, которые уже сделаны (награды, броски по списку): повторный вход их не повторяет */
+  taken?: string[]
 }
 
 /** Действие за кнопкой-вариантом сценарного ведущего (сериализуемое) */
-export type ScriptAction =
+export type ScriptAction = (
   | { t: 'branch'; loc: string; n: number; seg: number }
   | { t: 'roll'; loc: string; n: number; seg: number; block: number }
   | { t: 'luck'; target: number; loc?: string; n?: number; seg?: number }
   | { t: 'penalty'; heroUid: string; kind: 'death' | 'lives' | 'half'; amount?: number }
-  | { t: 'fight'; specs: { monsterId: string; count: number }[] }
+  | { t: 'fight'; specs: { monsterId: string; count: number }[]; loc?: string; n?: number }
   | { t: 'coins'; amount: number }
   | { t: 'pay'; amount: number }
   | { t: 'bottle'; n: number }
@@ -69,6 +71,10 @@ export type ScriptAction =
   | { t: 'scroll'; caster?: 'mage' | 'priest'; level?: number }
   | { t: 'rest' }
   | { t: 'next' }
+) & {
+  /** ключ одноразового действия (награда, бросок по списку): второй раз не выполняется, даже при повторном входе */
+  once?: string
+}
 
 export interface ChoiceRecord {
   messageId: string

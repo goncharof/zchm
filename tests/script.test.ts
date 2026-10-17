@@ -139,4 +139,21 @@ describe('сценарный ведущий', () => {
     await until(() => lastGm(g.chat).text.includes('Что дальше по книге'))
     expect(lastGm(g.chat).choices!.map((c) => c.label)).toEqual(['▸ Побеждаете', 'Идти дальше'])
   })
+
+  it('награду из помещения можно забрать один раз, даже если войти в него снова', async () => {
+    const g = await setup()
+    await g.c.call('enterLocation', ['zolotoy-gorod'])
+    await until(() => g.chat.some((m) => m.from === 'gm' && /Назовите номер/.test(m.text)))
+    await g.c.chat('Помещение 32', true)
+    await until(() => lastGm(g.chat).text.includes('помещение 32'))
+    const first = lastGm(g.chat)
+    const take = first.choices!.find((c) => c.label === 'Взять артефакт')!
+    await g.c.choose(first.id, take.id)
+    await until(() => lastGm(g.chat).text.includes('находит артефакт'))
+    const found = g.state.artifactsFound.length
+    await g.c.chat('Помещение 32', true)
+    await until(() => lastGm(g.chat).text.includes('вы здесь уже были'))
+    expect(lastGm(g.chat).choices!.some((c) => c.label === 'Взять артефакт')).toBe(false)
+    expect(g.state.artifactsFound).toHaveLength(found)
+  })
 })
