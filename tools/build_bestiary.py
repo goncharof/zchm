@@ -26,12 +26,19 @@ SCALE = 1.6
 
 def parse_value(key, raw):
     raw = raw.strip().rstrip('.')
-    if raw in ('нет', '—', '-'):
+    if raw in ('нет', '—', '-') and key != 'атаки':
         return None
     if key == 'атаки':
         if raw == 'смерть':
             return 'death'
+        if raw == 'магия':
+            return 'magic'   # бьёт только заклинаниями
+        if raw == 'нет':
+            return 'none'
         nums = [int(x) for x in re.findall(r'\d+', raw)]
+        if len(nums) == 3:
+            # в книге «1-2-3»: трактуем как 1-1-2-2-3-3 (ХАУСРУЛ)
+            return [nums[0], nums[0], nums[1], nums[1], nums[2], nums[2]]
         return nums if len(nums) == 6 else raw
     m = re.match(r'^\d+$', raw)
     return int(raw) if m else raw

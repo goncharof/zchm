@@ -1,7 +1,7 @@
 /** Персонаж: создание, производные характеристики, опыт и уровни, жизни. */
-import type { CharacterClass, LevelRow, Weapon, Hand } from '@/types'
+import type { CharacterClass, LevelRow, Weapon, Hand, WardKind } from '@/types'
 import type { DataIndex } from './data'
-import type { Hero, InventoryEntry, EquipSlot } from './model'
+import type { Buff, Hero, InventoryEntry, EquipSlot } from './model'
 import { uid } from './model'
 import { BASE_DEFENSE, DEAD_AT, MAX_LEVEL, START_MONEY, UNCONSCIOUS_AT } from './rules'
 
@@ -116,17 +116,35 @@ export function heroLuck(hero: Hero, idx: DataIndex): number {
 }
 
 export interface HandWeapon {
-  slot: EquipSlot
-  entry: InventoryEntry
+  /** слот экипировки или 'spell' для магического оружия из заклинания */
+  slot: EquipSlot | 'spell'
+  entry?: InventoryEntry
   name: string
-  attacks: number[]
+  /** таблица атак по к6 (обычное оружие) */
+  attacks?: number[]
+  /** формула урона (магическое оружие: «1к6+4», «1к18») */
+  formula?: string
   ranged: boolean
   hand?: Hand
   accuracyBonus: number
+  dexterityBonus?: number
+  /** число атак за одно действие (Железные руки — 2) */
+  attacksPerRound?: number
+  /** отнятые жизни восстанавливают здоровье атакующего (Меч Тьмы) */
+  lifesteal?: boolean
   /** особые свойства артефактов */
   alwaysHits?: boolean
   doubleDamage?: boolean
   poisoned?: boolean
+}
+
+export function attacksLabel(w: HandWeapon): string {
+  return w.attacks ? w.attacks.join('-') : (w.formula ?? '')
+}
+
+/** Активная защитная аура нужного вида */
+export function hasWard(hero: Hero, kind: WardKind): Buff | undefined {
+  return hero.buffs.find((b) => b.stat === 'ward' && b.ward === kind)
 }
 
 /** Оружие в руках и метательное оружие с таблицами атак */
@@ -149,6 +167,11 @@ export function heroWeapons(hero: Hero, idx: DataIndex): HandWeapon[] {
         doubleDamage: /раздваива/.test(special),
         poisoned: e.poisoned,
       })
+    }
+  }
+  for (const b of hero.buffs) {
+    if (b.stat === 'weapon' && b.weapon) {
+      out.push({ slot: 'spell', name: b.weapon.name, formula: b.weapon.attacks, ranged: false, accuracyBonus: 0, dexterityBonus: b.weapon.dexterityBonus, attacksPerRound: b.weapon.attacksPerRound, lifesteal: b.weapon.lifesteal })
     }
   }
   return out

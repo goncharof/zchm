@@ -5,11 +5,11 @@ import type { Caster, WorldMap } from '@/types'
 import { gameData, idx, loadWorld } from '@/data'
 import type { CombatState, EquipSlot, GameState, Hero, InventoryKind, LogEntry } from '@/engine/model'
 import { SAVE_VERSION } from '@/engine/model'
-import { changeLives, createHero, gainXp, heroLuck, isConscious, rest, type LevelUp } from '@/engine/character'
+import { changeLives, createHero, gainXp, hasWard, heroLuck, isConscious, rest, type LevelUp } from '@/engine/character'
 import * as inv from '@/engine/inventory'
 import { k18, roll } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
-import { closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
+import { closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
 import { REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
 
@@ -41,12 +41,28 @@ function readSave(): GameState | null {
     if (!raw) return null
     const g = JSON.parse(raw) as GameState
     if (g.version !== SAVE_VERSION) return null
-    g.pendingRoad ??= []
-    g.artifactsFound ??= []
-    return g
+    return migrate(g)
   } catch {
     return null
   }
+}
+
+/** Дозаполняет поля, появившиеся в более новых версиях состояния */
+function migrate(g: GameState): GameState {
+  g.pendingRoad ??= []
+  g.artifactsFound ??= []
+  g.startNodeId ??= g.worldNodeId ?? 'zolotoy-gorod'
+  if (g.combat) {
+    g.combat.allies ??= []
+    g.combat.extraActions ??= {}
+    g.combat.escaped ??= []
+  }
+  for (const h of g.heroes) {
+    h.buffs ??= []
+    h.status ??= {}
+    h.pendingSpellPicks ??= 0
+  }
+  return g
 }
 
 export const useGameStore = defineStore('game', () => {
@@ -124,8 +140,7 @@ export const useGameStore = defineStore('game', () => {
   function importSave(text: string): void {
     const g = JSON.parse(text) as GameState
     if (!g || g.version !== SAVE_VERSION || !Array.isArray(g.heroes)) throw new Error('Это не сохранение игры')
-    g.pendingRoad ??= []
-    game.value = g
+    game.value = migrate(g)
   }
   function toggleGm(): void {
     if (game.value) game.value.gmMode = !game.value.gmMode
@@ -282,6 +297,12 @@ export const useGameStore = defineStore('game', () => {
   // ---------- действия по параграфу ----------
   function luckCheck(heroUid: string, target: number): { ok: boolean; roll: number; luck: number } {
     const h = hero(heroUid)
+    const blessing = hasWard(h, 'luck')
+    if (blessing) {
+      h.buffs = h.buffs.filter((b) => b !== blessing)
+      log(`${h.name}: боги даруют удачу — проверка ${target} пройдена без броска.`, 'luck')
+      return { ok: true, roll: 18, luck: heroLuck(h, idx) }
+    }
     const r = k18()
     const luck = heroLuck(h, idx)
     const ok = r + luck >= target
@@ -324,37 +345,37 @@ export const useGameStore = defineStore('game', () => {
     game.value.combat = state
     logAll(entries)
   }
-  function attack(heroUid: string, slot: EquipSlot | 'unarmed', targetUid: string): void {
+  function attack(heroUid: string, slot: EquipSlot | 'unarmed' | 'spell', targetUid: string): void {
     const c = combat.value
     if (!c) return
     const out = heroAttack(c, hero(heroUid), heroes.value, slot, targetUid, idx)
     logAll(out.log)
     announceLevelUps(out.levelUps)
   }
-  function cast(heroUid: string, spellId: string, opts: { targetUid?: string; targetHeroUid?: string; param?: number } = {}): CastResult {
+  function cast(heroUid: string, spellId: string, opts: { targetUid?: string; targetHeroUid?: string; targetEntryUid?: string; param?: number } = {}): CastResult {
     const res = castSpell({ hero: hero(heroUid), spell: idx.spell(spellId), idx, heroes: heroes.value, combat: combat.value, ...opts })
     logAll(res.log)
     announceLevelUps(res.levelUps)
-    if (res.ok && combat.value && !combat.value.finished) {
+    if (res.ok && combat.value && !combat.value.finished && combat.value.turn === 'heroes') {
       const h = hero(heroUid)
       if (!combat.value.acted.includes(h.uid)) {
         // применение заклинания — действие за раунд
-        logAll(heroSkip(combat.value, h, heroes.value).filter((e) => !/пропускает/.test(e.text)))
+        logAll(markActed(combat.value, h, heroes.value, idx))
       }
     }
     return res
   }
   function flee(heroUid: string): void {
     if (!combat.value) return
-    logAll(heroFlee(combat.value, hero(heroUid), heroes.value))
+    logAll(heroFlee(combat.value, hero(heroUid), heroes.value, idx))
   }
   function skip(heroUid: string): void {
     if (!combat.value) return
-    logAll(heroSkip(combat.value, hero(heroUid), heroes.value))
+    logAll(heroSkip(combat.value, hero(heroUid), heroes.value, idx))
   }
   function toMelee(): void {
     if (!combat.value) return
-    log(closeToMelee(combat.value).text)
+    log(closeToMelee(combat.value, heroes.value, idx).text)
   }
   function monstersAct(): void {
     if (!combat.value) return

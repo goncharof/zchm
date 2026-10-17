@@ -1,7 +1,7 @@
 /**
  * Модель состояния партии. Всё сериализуемо в JSON (сохранения в localStorage / файл).
  */
-import type { ClassId, ExtraAttackKind } from '@/types'
+import type { ClassId, ExtraAttackKind, WardKind } from '@/types'
 
 export type InventoryKind = 'weapon' | 'armor' | 'item' | 'artifact' | 'bottle' | 'scroll'
 
@@ -29,6 +29,8 @@ export interface HeroStatus {
   poison?: number
   unconscious?: boolean
   dead?: boolean
+  /** заклинание «Инициатива»: в ближайшем бою герои атакуют первыми */
+  initiative?: boolean
 }
 
 export interface Hero {
@@ -60,12 +62,35 @@ export interface Hero {
 
 export interface Buff {
   source: string
-  stat: 'strength' | 'dexterity' | 'accuracy' | 'luck' | 'defense' | 'attacks'
+  stat: 'strength' | 'dexterity' | 'accuracy' | 'luck' | 'defense' | 'attacks' | 'ward' | 'weapon'
   amount: number
   /** amount — множитель (x2), а не прибавка */
   multiplier?: boolean
   /** раундов осталось; -1 = до конца боя */
   rounds: number
+  /** для stat = 'ward' */
+  ward?: WardKind
+  /** заряд (антимагия: суммарные уровни заклинаний) */
+  charge?: number
+  /** для stat = 'weapon': временное магическое оружие */
+  weapon?: { name: string; attacks: string; dexterityBonus?: number; attacksPerRound?: number; lifesteal?: boolean }
+}
+
+/** Призванное существо или иллюзия на стороне героев */
+export interface AllyInstance {
+  uid: string
+  ownerUid: string
+  name: string
+  defense: number
+  /** формула урона ("1к18", "2к6+2") или 'none' для иллюзий */
+  attacks: string
+  lives: number
+  maxLives: number
+  /** раундов осталось; -1 = до конца боя */
+  rounds: number
+  decoy?: boolean
+  dead?: boolean
+  attackMultiplier: number
 }
 
 export interface MonsterInstance {
@@ -76,7 +101,7 @@ export interface MonsterInstance {
   lives: number
   maxLives: number
   defense: number
-  attacks: number[] | 'death'
+  attacks: number[] | 'death' | 'magic' | 'none'
   courage: number | null
   points: number
   extraAttacks?: { kind: ExtraAttackKind; threshold: number }[]
@@ -88,6 +113,7 @@ export interface MonsterInstance {
   dead: boolean
   /** раундов паралича/сна/оледенения */
   disabled?: number
+  disabledKind?: 'sleep' | 'paralysis' | 'freeze'
   petrified?: boolean
   /** временные модификаторы от заклинаний */
   defenseMod: number
@@ -95,6 +121,14 @@ export interface MonsterInstance {
   attackMultiplier: number
   /** раундов отравления оружием (по 1к6 за раунд) */
   poison?: number
+  /** удержан «Рукой»: защита −2, атаки вдвое до конца боя */
+  held?: boolean
+  /** раундов удушья: −1к3 за раунд */
+  choke?: number
+  /** не может выкинуть удачу от заклинаний */
+  noSave?: boolean
+  /** атаки −2 от устрашения и т.п. учитываются в attackMod */
+  sleeping?: boolean
 }
 
 export interface LogEntry {
@@ -109,8 +143,12 @@ export interface CombatState {
   phase: 'ranged' | 'melee'
   turn: 'heroes' | 'monsters'
   monsters: MonsterInstance[]
+  /** призванные существа и иллюзии */
+  allies: AllyInstance[]
   /** uid героев, уже сходивших в этом раунде */
   acted: string[]
+  /** дополнительные действия героев в этом раунде (воин 12 ур., «Замедление времени») */
+  extraActions: Record<string, number>
   /** uid героев, сбежавших с поля боя */
   escaped: string[]
   initiative?: { heroes: number; monsters: number }

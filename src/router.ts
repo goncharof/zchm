@@ -11,6 +11,7 @@ export const router = createRouter({
     { path: '/combat', component: () => import('./views/CombatView.vue') },
     { path: '/bestiary', component: () => import('./views/BestiaryView.vue') },
     { path: '/spells', component: () => import('./views/SpellsView.vue') },
+    { path: '/lore', component: () => import('./views/LoreView.vue') },
     { path: '/about', component: () => import('./views/AboutView.vue') },
   ],
   scrollBehavior: () => ({ top: 0 }),

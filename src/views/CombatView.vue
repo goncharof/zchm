@@ -1,32 +1,30 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { idx } from '@/data'
 import type { Hero } from '@/engine/model'
-import { heroDefense, heroWeapons, isActive } from '@/engine/character'
-import { canCast, resolveCost } from '@/engine/spells'
+import { attacksLabel, heroDefense, heroWeapons, isActive } from '@/engine/character'
+import { toHit } from '@/engine/combat'
 import { fleeTarget } from '@/engine/rules'
+import { wardName } from '@/engine/spells'
 import { useGameStore } from '@/stores/game'
 import { pct } from '@/ui/format'
 import LogPanel from '@/components/LogPanel.vue'
 import MonsterPicker from '@/components/MonsterPicker.vue'
+import SpellCaster from '@/components/SpellCaster.vue'
 
 const store = useGameStore()
 const router = useRouter()
+const base = import.meta.env.BASE_URL
 const c = computed(() => store.combat)
 const alive = computed(() => c.value?.monsters.filter((m) => !m.dead && !m.fled) ?? [])
 const target = ref<string>('')
 const picker = ref(false)
-const base = import.meta.env.BASE_URL
-const spellForm = reactive<Record<string, { spellId: string; targetHeroUid: string; param: number }>>({})
+const EXTRA: Record<string, string> = { petrify: 'окаменение', freeze: 'оледенение', paralysis: 'паралич', poison: 'яд' }
 
-function form(h: Hero) {
-  return (spellForm[h.uid] ??= { spellId: '', targetHeroUid: h.uid, param: 1 })
-}
-function tgt(): string {
-  if (!alive.value.find((m) => m.uid === target.value)) target.value = alive.value[0]?.uid ?? ''
-  return target.value
-}
+watch(alive, (list) => { if (!list.find((m) => m.uid === target.value)) target.value = list[0]?.uid ?? '' }, { immediate: true })
+const targetMonster = computed(() => alive.value.find((m) => m.uid === target.value) ?? null)
+
 function canAct(h: Hero) {
   return !!c.value && c.value.turn === 'heroes' && !c.value.finished && !c.value.acted.includes(h.uid) && !c.value.escaped.includes(h.uid) && isActive(h)
 }
@@ -37,31 +35,15 @@ function heroState(h: Hero) {
   if (h.status.unconscious) return 'без сознания'
   if (h.status.petrified) return 'окаменел'
   if (h.status.paralysis) return `паралич (${h.status.paralysis})`
-  if (h.status.freeze) return `оледенение (${h.status.freeze})`
+  if (h.status.freeze) return `обездвижен (${h.status.freeze})`
   if (c.value.acted.includes(h.uid)) return 'сходил'
   return ''
 }
-function spells(h: Hero) {
-  return c.value?.finished ? [] : h.spellbook.map((id) => idx.spell(id))
-}
-function spellNeedsMonster(id: string) {
-  const e = idx.spell(id).effect
-  return (e.type === 'damage' && e.targets === 'one') || (e.type === 'debuff' && e.scope === 'one')
-}
-function spellNeedsHero(id: string) {
-  const e = idx.spell(id).effect
-  return e.type === 'heal' || e.type === 'restore-all' || (e.type === 'buff' && e.scope === 'ally')
-}
-function spellNeedsParam(id: string) {
-  const s = idx.spell(id)
-  return s.effect.type === 'heal' || /стрел|3 ман/.test(s.costFormula ?? '')
-}
-function cast(h: Hero) {
-  const f = form(h)
-  if (!f.spellId) return
-  const why = canCast(h, idx.spell(f.spellId), idx, f.param)
-  if (why) { store.say(why); return }
-  store.cast(h.uid, f.spellId, { targetUid: spellNeedsMonster(f.spellId) ? tgt() : undefined, targetHeroUid: spellNeedsHero(f.spellId) ? f.targetHeroUid : undefined, param: f.param })
+function needRoll(h: Hero, slot: string) {
+  if (!targetMonster.value) return ''
+  const w = slot === 'unarmed' ? null : heroWeapons(h, idx).find((x) => x.slot === slot) ?? null
+  const n = toHit(h, w, targetMonster.value, idx)
+  return n <= 1 ? 'попадает всегда' : `нужно ${n}+`
 }
 function finish() {
   const back = c.value?.returnTo
@@ -70,6 +52,15 @@ function finish() {
 }
 function fleeNeed() {
   return fleeTarget(Math.max(1, ...alive.value.map((m) => m.level)))
+}
+function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
+  const out: string[] = []
+  if (m.dead) out.push('убит'); else if (m.fled) out.push('выбыл')
+  if (m.petrified) out.push('окаменел')
+  if (m.disabled) out.push(`${m.disabledKind === 'sleep' ? 'спит' : m.disabledKind === 'paralysis' ? 'парализован' : 'вмёрз'} (${m.disabled})`)
+  if (m.held) out.push('удержан'); if (m.choke) out.push(`задыхается (${m.choke})`); if (m.poison) out.push(`отравлен (${m.poison})`)
+  if (m.attackMod) out.push(`атаки ${m.attackMod > 0 ? '+' : ''}${m.attackMod}`); if (m.attackMultiplier !== 1) out.push(`атаки ×${m.attackMultiplier}`)
+  return out.join(', ')
 }
 </script>
 
@@ -100,51 +91,50 @@ function fleeNeed() {
 
     <div class="grid wide" style="grid-template-columns: 1fr 1fr">
       <div>
-        <h3>Противники</h3>
-        <div v-for="m in c.monsters" :key="m.uid" class="card tight" :class="{ 'hero-down': m.dead || m.fled }">
+        <h3>Противники <span class="small muted">— щёлкните, чтобы выбрать цель</span></h3>
+        <div v-for="m in c.monsters" :key="m.uid" class="card tight" :class="{ 'hero-down': m.dead || m.fled }"
+          :style="m.uid === target ? 'outline: 2px solid var(--accent)' : 'cursor:pointer'" @click="!m.dead && !m.fled && (target = m.uid)">
           <div class="monster-card">
             <img :src="base + idx.monster(m.monsterId).image" :alt="m.name" loading="lazy" />
             <div>
-              <div class="row between"><b>{{ m.name }}</b><span class="small muted">ур. {{ m.level }} · защита {{ m.defense + m.defenseMod }}<template v-if="m.dead"> · убит</template><template v-else-if="m.fled"> · сбежал</template></span></div>
+              <div class="row between"><b>{{ m.name }}<span v-if="m.uid === target" class="badge accent" style="margin-left:.4rem">цель</span></b><span class="small muted">ур. {{ m.level }} · защита {{ m.defense + m.defenseMod }}</span></div>
               <div class="bar" style="margin:.3rem 0" :class="{ danger: m.lives * 2 <= m.maxLives }"><i :style="{ width: pct(m.lives, m.maxLives) }" /></div>
-              <div class="small muted">жизни {{ Math.max(0, m.lives) }}/{{ m.maxLives }} · атаки {{ Array.isArray(m.attacks) ? m.attacks.join('-') : m.attacks }}<template v-if="m.courage !== null"> · храбрость {{ m.courage }}</template>
-                <template v-if="m.extraAttacks?.length"> · {{ m.extraAttacks.map(e => ({ petrify: 'окаменение', freeze: 'оледенение', paralysis: 'паралич', poison: 'яд' })[e.kind] + ' ' + e.threshold).join(', ') }}</template>
+              <div class="small muted">жизни {{ Math.max(0, m.lives) }}/{{ m.maxLives }} · атаки {{ Array.isArray(m.attacks) ? m.attacks.join('-') : m.attacks === 'death' ? 'смерть' : m.attacks === 'magic' ? 'магия' : 'нет' }}<template v-if="m.courage !== null"> · храбрость {{ m.courage }}</template><template v-if="m.mana !== undefined"> · мана {{ m.mana }}</template>
+                <template v-if="m.extraAttacks?.length"> · {{ m.extraAttacks.map(e => EXTRA[e.kind] + ' ' + e.threshold).join(', ') }}</template>
                 <template v-if="m.spells?.length"> · заклинания: {{ m.spells.join(', ') }}</template>
-                <template v-if="m.poison"> · отравлен ({{ m.poison }})</template><template v-if="m.disabled"> · обездвижен ({{ m.disabled }})</template>
               </div>
-              <label v-if="!m.dead && !m.fled" class="row small" style="gap:.3rem;margin-top:.3rem"><input type="radio" name="target" :value="m.uid" v-model="target" /> цель</label>
+              <div v-if="monsterState(m)" class="small" style="color:#d7c56a">{{ monsterState(m) }}</div>
             </div>
           </div>
         </div>
+        <template v-if="c.allies.length">
+          <h3>Союзники</h3>
+          <div v-for="a in c.allies" :key="a.uid" class="card tight" :class="{ 'hero-down': a.dead }">
+            <div class="row between"><b>{{ a.name }}</b><span class="small muted">защита {{ a.defense }} · атаки {{ a.attacks === 'none' ? 'нет' : a.attacks }}<template v-if="a.rounds > 0"> · {{ a.rounds }} раунд(ов)</template><template v-if="a.dead"> · исчез</template></span></div>
+            <div class="bar" style="margin:.3rem 0"><i :style="{ width: pct(a.lives, a.maxLives) }" /></div>
+            <div class="small muted">жизни {{ Math.max(0, a.lives) }}/{{ a.maxLives }} · хозяин: {{ store.heroes.find(h => h.uid === a.ownerUid)?.name }}</div>
+          </div>
+        </template>
       </div>
       <div>
         <h3>Герои</h3>
-        <div v-for="h in store.heroes" :key="h.uid" class="card tight" :class="{ 'hero-down': !isActive(h) || c.escaped.includes(h.uid) }">
-          <div class="row between"><b>{{ h.name }}</b><span class="small muted">{{ idx.cls(h.classId).name }} {{ h.level }} · защита {{ heroDefense(h, idx) }} <span v-if="heroState(h)">· {{ heroState(h) }}</span></span></div>
+        <div v-for="h in store.heroes" :key="h.uid" class="card tight" :class="{ 'hero-down': !isActive(h) || c.escaped.includes(h.uid) }" :style="canAct(h) ? 'border-color: var(--accent)' : ''">
+          <div class="row between"><b>{{ h.name }}</b><span class="small muted">{{ idx.cls(h.classId).name }} {{ h.level }} · защита {{ heroDefense(h, idx) }} <span v-if="heroState(h)">· {{ heroState(h) }}</span><span v-if="(c.extraActions[h.uid] ?? 0) > 0"> · +{{ c.extraActions[h.uid] }} действие</span></span></div>
           <div class="row" style="gap:1rem;margin:.3rem 0">
             <div style="flex:1;min-width:120px"><div class="bar" :class="{ danger: h.lives * 3 <= h.maxLives }"><i :style="{ width: pct(h.lives, h.maxLives) }" /></div><div class="small muted">♥ {{ h.lives }}/{{ h.maxLives }}</div></div>
             <div v-if="h.maxMana" style="flex:1;min-width:120px"><div class="bar mana"><i :style="{ width: pct(h.mana, h.maxMana) }" /></div><div class="small muted">✦ {{ h.mana }}/{{ h.maxMana }}</div></div>
           </div>
+          <div v-if="h.buffs.length" class="row small" style="margin-bottom:.3rem"><span v-for="(b, i) in h.buffs" :key="i" class="badge accent" :title="b.stat === 'ward' && b.ward ? wardName(b.ward) : ''">{{ b.source }}<template v-if="b.rounds > 0"> ({{ b.rounds }})</template></span></div>
           <div v-if="canAct(h)" class="row">
-            <button v-for="w in heroWeapons(h, idx)" :key="w.slot" class="small primary" :disabled="!alive.length" @click="store.attack(h.uid, w.slot, tgt())">{{ w.ranged ? '🏹' : '⚔' }} {{ w.name }} ({{ w.attacks.join('-') }})</button>
-            <button v-if="!heroWeapons(h, idx).some(w => !w.ranged)" class="small" :disabled="!alive.length || c.phase === 'ranged'" @click="store.attack(h.uid, 'unarmed', tgt())">Голыми руками</button>
+            <button v-for="w in heroWeapons(h, idx)" :key="w.slot + w.name" class="small primary" :disabled="!targetMonster" :title="needRoll(h, w.slot)" @click="store.attack(h.uid, w.slot, target)">{{ w.ranged ? '🏹' : '⚔' }} {{ w.name }} ({{ attacksLabel(w) }}) <span class="muted">{{ needRoll(h, w.slot) }}</span></button>
+            <button v-if="!heroWeapons(h, idx).some(w => !w.ranged)" class="small" :disabled="!targetMonster || c.phase === 'ranged'" :title="needRoll(h, 'unarmed')" @click="store.attack(h.uid, 'unarmed', target)">Голыми руками <span class="muted">{{ needRoll(h, 'unarmed') }}</span></button>
             <button class="small" @click="store.flee(h.uid)" :title="`Нужно выкинуть ${fleeNeed()}+`">Бежать ({{ fleeNeed() }}+)</button>
             <button class="small" @click="store.skip(h.uid)">Пропустить</button>
           </div>
-          <div v-if="canAct(h) && h.spellbook.length" class="row" style="margin-top:.35rem">
-            <select v-model="form(h).spellId" class="small">
-              <option value="">Заклинание…</option>
-              <option v-for="s in spells(h)" :key="s.id" :value="s.id">{{ s.name }} ({{ resolveCost(s, h, form(h).param) }} маны)</option>
-            </select>
-            <select v-if="form(h).spellId && spellNeedsHero(form(h).spellId)" v-model="form(h).targetHeroUid" class="small">
-              <option v-for="x in store.heroes" :key="x.uid" :value="x.uid">{{ x.name }}</option>
-            </select>
-            <input v-if="form(h).spellId && spellNeedsParam(form(h).spellId)" type="number" min="1" :max="h.mana" v-model.number="form(h).param" class="small" style="width:4rem" title="маны / стрел" />
-            <button class="small" :disabled="!form(h).spellId" @click="cast(h)">Применить</button>
-          </div>
+          <div v-if="canAct(h) && h.spellbook.length" style="margin-top:.35rem"><SpellCaster :hero="h" :in-combat="true" :target-uid="target" /></div>
           <div v-if="!canAct(h) && isActive(h) && !c.escaped.includes(h.uid) && c.turn === 'heroes' && !c.finished" class="small muted">ждёт следующего раунда</div>
         </div>
-        <p class="small muted">Выбранная цель отмечена переключателем у монстра. Попадание: к18 + ловкость (меткость для метательного) ≥ защита цели.</p>
+        <p class="small muted">Попадание: к18 + ловкость (меткость для метательного) ≥ защита цели. Урон: таблица атак по к6 + сила.</p>
       </div>
     </div>
     <h3>Журнал</h3>

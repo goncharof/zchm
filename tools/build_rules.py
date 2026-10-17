@@ -661,6 +661,82 @@ rules = {
     'levelCap': 12,
 }
 
+
+# ---------------------------------------------------------------------------
+# Структурированные эффекты для заклинаний, которые движок умеет отыгрывать сам.
+# Ключ — id заклинания (caster-slug). Всё, чего здесь нет, остаётся как задано выше.
+# Трактовки помечены ХАУСРУЛ в docs/DECISIONS.md.
+# ---------------------------------------------------------------------------
+def control(kind, targets='one', maxLevel=None, duration=None):
+    d = {'type': 'control', 'kind': kind, 'targets': targets}
+    if maxLevel is not None: d['maxLevel'] = maxLevel
+    if duration: d['duration'] = duration
+    return d
+
+def weapon(name, attacks, duration='1 бой', **kw):
+    return {'type': 'weapon', 'name': name, 'attacks': attacks, 'duration': duration, **kw}
+
+def ward(kind, scope='self', duration='1 бой'):
+    return {'type': 'ward', 'kind': kind, 'scope': scope, 'duration': duration}
+
+EFFECT_OVERRIDES = {
+    # --- маг ---
+    'mage-zasypanie': control('sleep', 'one', maxLevel=2, duration='1 раунд за уровень'),
+    'mage-initsiativa': {'type': 'initiative'},
+    'mage-slaboe-soprotivlenie': control('nosave', 'one'),
+    'mage-kamennyy-kulak': weapon('Каменный кулак', '1к6+2'),
+    'mage-hrabrost': control('return', 'one'),
+    'mage-alhimiya': {'type': 'create-bottle'},
+    'mage-ruka': control('hold', 'one'),
+    'mage-nevidimost': ward('invisible', 'ally', '1 раунд за 1 уровень мага'),
+    'mage-zheleznye-ruki': weapon('Железные руки', '2к6', attacksPerRound=2),
+    'mage-ognennaya-ruka': weapon('Огненная рука', '2к6+2'),
+    'mage-identifikatsiya-predmetov': {'type': 'identify'},
+    'mage-ocharovyvanie': control('charm', 'one', maxLevel=2),
+    'mage-zamedlenie-vremeni': {'type': 'extra-action'},
+    'mage-pautina': control('web', 'all', maxLevel=3),
+    'mage-paralich': control('paralysis', 'one'),
+    'mage-okamenenie': control('petrify', 'one', maxLevel=5),
+    'mage-oledenenie': control('freeze', 'one', maxLevel=5),
+    'mage-uluchshenie-magicheskogo-sozdaniya': {'type': 'empower'},
+    'mage-ognennaya-yascheritsa': {'type': 'summon', 'name': 'Огненная ящерица', 'defense': 10, 'attacks': '3к6', 'lives': '2*L', 'kind': 'creature'},
+    'mage-vozdushnyy-schit': ward('antimagic', 'party', '1 бой'),
+    'mage-prizrachnaya-pantera': {'type': 'summon', 'name': 'Призрачная пантера', 'defense': 13, 'attacks': '1к18', 'lives': '10', 'kind': 'creature'},
+    'mage-beskonechnaya-mana': ward('infinite-mana', 'ally', '1к6 раундов'),
+    'mage-sozdanie-elementalov': {'type': 'summon', 'name': 'Элементал', 'kind': 'elemental'},
+    'mage-vyzov-demona': {'type': 'summon', 'name': 'Демон', 'kind': 'demon'},
+    'mage-udushe': control('choke', 'all', maxLevel=8, duration='1 раунд за 2 уровня мага'),
+    'mage-prizrachnyy-drakon': {'type': 'summon', 'name': 'Призрачный дракон', 'defense': 15, 'attacks': '1к6+3', 'lives': '10+L', 'kind': 'creature'},
+    'mage-mech-tmy': weapon('Меч Тьмы', '1к6+2', dexterityBonus=2, lifesteal=True),
+    'mage-molniya-bogov': {'type': 'damage', 'dice': '3k18', 'targets': 'one', 'slayBelow': 8},
+    'mage-haos': control('slay', 'all', maxLevel=8),
+    # --- жрец ---
+    'priest-hrustalnyy-schit': ward('crystal', 'self', '1 раунд за уровень жреца'),
+    'priest-otvorot-mertvetsov': ward('undead', 'ally', '1 бой'),
+    'priest-vozdushnaya-stena': ward('air-wall', 'ally', '1 бой'),
+    'priest-identifikatsiya-predmetov': {'type': 'identify'},
+    'priest-sozdanie-illyuzii': {'type': 'summon', 'name': 'Иллюзорный двойник', 'kind': 'decoy', 'lives': '1', 'attacks': 'none'},
+    'priest-ustrashenie': control('fear', 'one'),
+    'priest-udacha': ward('luck', 'ally', '1 бой'),
+    'priest-ognennyy-schit': ward('antimagic', 'ally', '1 раунд за 2 уровня жреца'),
+    'priest-vampirizm': {'type': 'drain-mana', 'ratio': 3},
+    'priest-ognennyy-mech': weapon('Огненный меч', '1к6+4', dexterityBonus=2),
+    'priest-zamedlenie-vremeni': {'type': 'extra-action'},
+    'priest-vosstanovlenie-many': {'type': 'restore-mana', 'ratio': 3},
+    'priest-unichtozhenie-mertvetsov': control('slay-undead', 'one'),
+    'priest-sozdanie-illyuzornogo-suschestva': {'type': 'summon', 'name': 'Иллюзорное существо', 'kind': 'decoy', 'lives': '1', 'attacks': 'none'},
+    'priest-eliksir': {'type': 'cure'},
+    'priest-mech-sveta': weapon('Меч света', '1к18', dexterityBonus=3),
+    'priest-neuyazvimost': ward('invulnerable', 'ally', '3 раунда'),
+    'priest-ozhivlenie-personazha': {'type': 'resurrect'},
+}
+_unknown = [k for k in EFFECT_OVERRIDES if k not in {s['id'] for s in spells}]
+if _unknown:
+    raise SystemExit(f'EFFECT_OVERRIDES: нет таких заклинаний: {_unknown}')
+for _s in spells:
+    if _s['id'] in EFFECT_OVERRIDES:
+        _s['effect'] = EFFECT_OVERRIDES[_s['id']]
+
 dump('classes.json', classes)
 dump('weapons.json', weapons)
 dump('armor.json', armor)

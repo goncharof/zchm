@@ -7,6 +7,7 @@ import { entryName, entryPrice } from '@/engine/inventory'
 import { useGameStore } from '@/stores/game'
 import { SLOT_NAMES, attacksStr, pct } from '@/ui/format'
 import SpellPicker from './SpellPicker.vue'
+import SpellCaster from './SpellCaster.vue'
 
 const props = defineProps<{ hero: Hero; shop?: boolean }>()
 const store = useGameStore()
@@ -66,6 +67,7 @@ const statusText = computed(() => {
       <div><b>Монеты</b> {{ hero.money }}</div>
     </div>
 
+    <div v-if="hero.buffs.length" class="row small" style="margin-top:.4rem"><span class="muted">Эффекты:</span><span v-for="(b, i) in hero.buffs" :key="i" class="badge accent">{{ b.source }}</span></div>
     <div v-if="hero.pendingSpellPicks > 0" class="row" style="margin-top:.6rem">
       <button class="primary" @click="showPicker = true">Выбрать новое заклинание ({{ hero.pendingSpellPicks }})</button>
     </div>
@@ -107,6 +109,7 @@ const statusText = computed(() => {
 
     <template v-if="cls.caster">
       <h3 style="margin-top:.9rem">Книга заклинаний</h3>
+      <div v-if="!store.combat" style="margin-bottom:.5rem"><SpellCaster :hero="hero" :in-combat="false" /></div>
       <table class="list">
         <tbody>
           <tr v-for="id in hero.spellbook" :key="id">

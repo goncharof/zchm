@@ -15,6 +15,7 @@
     "data:book": "tools/.venv/bin/python -I tools/build_book_of_life.py",
     "data:world": "tools/.venv/bin/python -I tools/build_world.py",
     "data:rules": "tools/.venv/bin/python -I tools/build_rules.py",
+    "data:lore": "tools/.venv/bin/python -I tools/build_lore.py",
     "data:text": "tools/.venv/bin/python -I tools/extract_text.py source/pdf source/text"
   },
   "dependencies": {

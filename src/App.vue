@@ -21,6 +21,7 @@ const locationLink = computed(() => (store.location ? `/location/${store.locatio
         <router-link to="/shop">Лавка</router-link>
         <router-link to="/bestiary">Бестиарий</router-link>
         <router-link to="/spells">Заклинания</router-link>
+        <router-link to="/lore">Предыстория</router-link>
         <router-link to="/about">Об игре</router-link>
       </nav>
       <div class="party-strip" v-if="heroes.length">

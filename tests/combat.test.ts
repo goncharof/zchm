@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { idx } from '@/data'
-import { createHero, gainXp } from '@/engine/character'
+import { createHero, gainXp, hasWard, heroWeapons } from '@/engine/character'
 import { buy, equip } from '@/engine/inventory'
 import { seededRng, setRng } from '@/engine/dice'
 import { closeToMelee, heroAttack, heroFlee, monstersTurn, startCombat, finishCombat } from '@/engine/combat'
 import { castSpell, resolveCost } from '@/engine/spells'
+import { addToInventory } from '@/engine/inventory'
 
 describe('бой', () => {
   beforeEach(() => setRng(seededRng(2026)))
@@ -17,7 +18,7 @@ describe('бой', () => {
     const { state } = startCombat([{ monsterId: 'ork', count: 2 }], idx)
     expect(state.monsters).toHaveLength(2)
     expect(state.phase).toBe('ranged')
-    closeToMelee(state)
+    closeToMelee(state, heroes, idx)
     expect(state.phase).toBe('melee')
     let guard = 0
     while (!state.finished && guard++ < 200) {
@@ -53,10 +54,10 @@ describe('бой', () => {
   it('бегство: при успехе герой покидает бой', () => {
     const w = createHero('Воин', 'warrior', idx)
     const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
-    closeToMelee(state)
+    closeToMelee(state, [w], idx)
     let escaped = false
     for (let i = 0; i < 50 && !escaped; i++) {
-      heroFlee(state, w, [w])
+      heroFlee(state, w, [w], idx)
       escaped = state.escaped.includes(w.uid)
       if (!escaped && !state.finished) { state.turn = 'heroes'; state.acted = [] }
     }
@@ -105,5 +106,117 @@ describe('бой', () => {
     const { state } = startCombat([{ monsterId: 'ork', count: 3 }], idx)
     const res = castSpell({ hero: p, spell: idx.spell('priest-svet'), idx, heroes: [p], combat: state })
     expect(res.escaped).toBe(true); expect(state.finished).toBe('fled'); expect(res.xp).toBe(50)
+  })
+
+  it('контроль: засыпание усыпляет орка, по спящему попадают автоматически', () => {
+    const m = createHero('Маг', 'mage', idx)
+    gainXp(m, 1000, idx); m.mana = m.maxMana
+    m.spellbook.push('mage-zasypanie')
+    const w = createHero('Воин', 'warrior', idx); w.money = 500
+    equip(w, buy(w, 'weapon', 'mech-korotkiy', idx).uid, idx)
+    const heroes = [m, w]
+    const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
+    const t = state.monsters[0]
+    t.noSave = true
+    const res = castSpell({ hero: m, spell: idx.spell('mage-zasypanie'), idx, heroes, combat: state, targetUid: t.uid })
+    expect(res.ok).toBe(true)
+    expect(t.disabled).toBe(2); expect(t.disabledKind).toBe('sleep')
+    closeToMelee(state, heroes, idx)
+    const out = heroAttack(state, w, heroes, 'rightHand', t.uid, idx)
+    expect(out.hit).toBe(true)
+  })
+
+  it('призыв: пантера сражается на стороне героев и бьёт в ход монстров', () => {
+    const m = createHero('Маг', 'mage', idx)
+    gainXp(m, 15000, idx); m.mana = m.maxMana
+    m.spellbook.push('mage-prizrachnaya-pantera')
+    const { state } = startCombat([{ monsterId: 'kobold', count: 1 }], idx)
+    const res = castSpell({ hero: m, spell: idx.spell('mage-prizrachnaya-pantera'), idx, heroes: [m], combat: state })
+    expect(res.ok).toBe(true); expect(res.xp).toBe(300)
+    expect(state.allies).toHaveLength(1); expect(state.allies[0].attacks).toBe('1к18')
+    closeToMelee(state, [m], idx)
+    state.turn = 'monsters'
+    let guard = 0
+    while (!state.finished && guard++ < 50) { monstersTurn(state, [m], idx); state.turn = 'monsters' }
+    expect(state.finished).toBeDefined()
+  })
+
+  it('магическое оружие: огненный меч жреца бьёт по формуле 1к6+4 с ловкостью +2', () => {
+    const p = createHero('Жрец', 'priest', idx)
+    gainXp(p, 20000, idx); p.mana = p.maxMana
+    p.spellbook.push('priest-ognennyy-mech')
+    const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
+    closeToMelee(state, [p], idx)
+    const res = castSpell({ hero: p, spell: idx.spell('priest-ognennyy-mech'), idx, heroes: [p], combat: state })
+    expect(res.ok).toBe(true)
+    const weapons = heroWeapons(p, idx)
+    expect(weapons.find((w) => w.slot === 'spell')?.formula).toBe('1к6+4')
+    const out = heroAttack(state, p, [p], 'spell', state.monsters[0].uid, idx)
+    expect(out.log.length).toBeGreaterThan(0)
+    if (out.hit) expect(out.damage).toBeGreaterThanOrEqual(5)
+  })
+
+  it('неуязвимость: атаки монстров не вредят', () => {
+    const p = createHero('Жрец', 'priest', idx)
+    gainXp(p, 60000, idx); p.mana = p.maxMana
+    p.spellbook.push('priest-neuyazvimost')
+    const { state } = startCombat([{ monsterId: 'ork', count: 3 }], idx)
+    closeToMelee(state, [p], idx)
+    castSpell({ hero: p, spell: idx.spell('priest-neuyazvimost'), idx, heroes: [p], combat: state })
+    expect(hasWard(p, 'invulnerable')).toBeDefined()
+    const before = p.lives
+    state.turn = 'monsters'
+    monstersTurn(state, [p], idx)
+    expect(p.lives).toBe(before)
+  })
+
+  it('воин 12 уровня действует дважды за раунд', () => {
+    const w = createHero('Воин', 'warrior', idx); w.money = 500
+    gainXp(w, 60000, idx)
+    equip(w, buy(w, 'weapon', 'mech-korotkiy', idx).uid, idx)
+    const { state } = startCombat([{ monsterId: 'chernyy-drakon', count: 1 }], idx)
+    closeToMelee(state, [w], idx)
+    expect(state.extraActions[w.uid]).toBe(1)
+    heroAttack(state, w, [w], 'rightHand', state.monsters[0].uid, idx)
+    expect(state.turn).toBe('heroes'); expect(state.acted).not.toContain(w.uid)
+    heroAttack(state, w, [w], 'rightHand', state.monsters[0].uid, idx)
+    expect(state.turn).toBe('monsters')
+  })
+
+  it('оживление персонажа возвращает мёртвого героя', () => {
+    const p = createHero('Жрец', 'priest', idx)
+    gainXp(p, 60000, idx); p.mana = p.maxMana
+    p.spellbook.push('priest-ozhivlenie-personazha')
+    const w = createHero('Воин', 'warrior', idx)
+    w.lives = -10; w.status.dead = true; w.status.unconscious = true
+    const res = castSpell({ hero: p, spell: idx.spell('priest-ozhivlenie-personazha'), idx, heroes: [p, w], targetHeroUid: w.uid })
+    expect(res.ok).toBe(true); expect(w.status.dead).toBeFalsy(); expect(w.lives).toBe(w.maxLives); expect(res.xp).toBe(550)
+  })
+
+  it('опознание предмета: бутылка становится известной (кроме 1/6 ошибки)', () => {
+    const m = createHero('Маг', 'mage', idx)
+    gainXp(m, 4000, idx); m.mana = m.maxMana
+    m.spellbook.push('mage-identifikatsiya-predmetov')
+    const w = createHero('Воин', 'warrior', idx)
+    const b = addToInventory(w, 'bottle', '5', 1, { identified: false })
+    const res = castSpell({ hero: m, spell: idx.spell('mage-identifikatsiya-predmetov'), idx, heroes: [m, w], targetEntryUid: b.uid })
+    expect(res.ok).toBe(true); expect(res.manaSpent).toBe(2)
+    expect(res.log.some((e) => /Опознание бутылки/.test(e.text))).toBe(true)
+  })
+
+  it('магия монстров: ведьма с маной колдует по героям', () => {
+    const w = createHero('Воин', 'warrior', idx)
+    const { state } = startCombat([{ monsterId: 'vedma', count: 1 }], idx)
+    closeToMelee(state, [w], idx)
+    state.turn = 'monsters'
+    let casts = 0
+    for (let i = 0; i < 30 && !state.finished; i++) {
+      const log = monstersTurn(state, [w], idx)
+      if (log.some((e) => /произносит/.test(e.text))) casts++
+      state.turn = 'monsters'
+      w.lives = w.maxLives; w.status = {}
+    }
+    expect(casts).toBeGreaterThan(0)
+    expect(state.monsters[0].mana!).toBeLessThan(14)
   })
 })

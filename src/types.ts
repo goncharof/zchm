@@ -89,14 +89,51 @@ export interface Artifact {
   description: string
 }
 
+export type ControlKind =
+  | 'sleep'        // спит N раундов, беззащитен
+  | 'paralysis'    // 1к6 раундов, −1к3 жизней за раунд
+  | 'petrify'      // до конца боя, −1к6 за раунд
+  | 'freeze'       // −1к18 жизней и 1к6 раундов без действий
+  | 'web'          // теряет половину жизней
+  | 'fear'         // слабые бегут, у сильных атаки −2
+  | 'hold'         // удержан: защита −2, атаки вдвое
+  | 'choke'        // защита −4, атаки вдвое, −1к3 за раунд
+  | 'charm'        // переходит на сторону героев
+  | 'slay'         // гибнет, если уровень не выше maxLevel
+  | 'slay-undead'  // мертвец обращается в прах
+  | 'nosave'       // не может выкинуть удачу от заклинаний
+  | 'return'       // сбежавший монстр возвращается в бой
+
+export type WardKind =
+  | 'invulnerable' // атаки не вредят
+  | 'invisible'    // монстры не атакуют
+  | 'crystal'      // монстры до 2 уровня не могут атаковать
+  | 'antimagic'    // блокирует заклинания монстров (charge — суммарные уровни)
+  | 'air-wall'     // защита от метательного оружия
+  | 'undead'       // мертвецы не замечают
+  | 'luck'         // следующий бросок удачи успешен
+  | 'infinite-mana'// мана не убывает
+
 export type SpellEffect =
-  | { type: 'damage'; dice: string; perLevel?: boolean; max?: number; targets: 'one' | 'all' | 'many' }
+  | { type: 'damage'; dice: string; perLevel?: boolean; max?: number; targets: 'one' | 'all' | 'many'; slayBelow?: number }
   | { type: 'heal'; perMana: number }
   | { type: 'restore-all' }
   | { type: 'buff'; stat: 'strength' | 'dexterity' | 'accuracy' | 'luck' | 'defense' | 'attacks'; amount: number | string; scope: 'self' | 'ally' | 'party'; duration: string }
   | { type: 'debuff'; stat: 'defense' | 'attacks' | 'strength'; amount: number | string; scope: 'one' | 'all'; duration: string }
   | { type: 'escape' }
-  | { type: 'summon'; name: string; defense?: number; attacks?: string; lives?: string }
+  | { type: 'summon'; name: string; defense?: number; attacks?: string; lives?: string; kind?: 'creature' | 'decoy' | 'elemental' | 'demon' | 'copy' }
+  | { type: 'control'; kind: ControlKind; targets: 'one' | 'all'; maxLevel?: number; duration?: string }
+  | { type: 'weapon'; name: string; attacks: string; dexterityBonus?: number; attacksPerRound?: number; lifesteal?: boolean; duration: string }
+  | { type: 'ward'; kind: WardKind; scope: 'self' | 'ally' | 'party'; duration: string }
+  | { type: 'initiative' }
+  | { type: 'extra-action' }
+  | { type: 'create-bottle' }
+  | { type: 'identify' }
+  | { type: 'drain-mana'; ratio: number }
+  | { type: 'restore-mana'; ratio: number }
+  | { type: 'cure' }
+  | { type: 'resurrect' }
+  | { type: 'empower' }
   | { type: 'manual' }
 
 export interface Spell {
@@ -123,7 +160,8 @@ export interface Monster {
   name: string
   page: number
   level?: number
-  attacks?: number[] | 'death' | string
+  /** шесть чисел по к6; 'death' — смертельная атака; 'magic' — бьёт только магией; 'none' — не атакует */
+  attacks?: number[] | 'death' | 'magic' | 'none'
   defense?: number
   courage?: number
   mana?: number

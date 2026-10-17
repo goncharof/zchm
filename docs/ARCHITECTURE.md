@@ -23,7 +23,8 @@ source/pdf  ──(tools/*.py)──►  src/data/*.json + public/img/**
 | classes.json | Инструкция, стр. 6–14 | 5 классов, таблицы 13 уровней, правила по оружию |
 | weapons / armor / items.json | стр. 20–23 | лавка |
 | artifacts.json | стр. 23–25 | 18 артефактов по к18 |
-| spells.json | стр. 26–40 | 91 заклинание; `effect` структурирован для урона/лечения/бафов/бегства/призывов, остальное `manual` |
+| spells.json | стр. 26–40 | 91 заклинание; `effect` структурирован (damage, heal, buff, debuff, control, ward, weapon, summon, identify, cure, resurrect…), 18 остаются `manual`. Переопределения — `EFFECT_OVERRIDES` в `tools/build_rules.py` |
+| lore.json | Книга Сумерек | 7 глав предыстории, проза и стихи |
 | rules.json | разное | константы (дублируются типобезопасно в `src/engine/rules.ts`) |
 
 `src/data/index.ts` собирает `GameData` и `DataIndex` (Map-индексы по id). Карта мира грузится лениво.
@@ -33,8 +34,8 @@ source/pdf  ──(tools/*.py)──►  src/data/*.json + public/img/**
 - `model.ts` — сериализуемое состояние: `GameState`, `Hero`, `InventoryEntry`, `CombatState`, `MonsterInstance`, `LogEntry`.
 - `character.ts` — создание героя, производные характеристики (защита/сила/ловкость/меткость/удача с учётом снаряжения, артефактов и баффов), опыт и уровни (`gainXp`), жизни с порогами 0/−10, отдых.
 - `inventory.ts` — покупка/продажа, экипировка с ограничениями класса и рук (л/п/д), бутылки, свитки, яд, противоядия.
-- `combat.ts` — бой: `startCombat` → фаза дистанции → `closeToMelee` (инициатива) → ходы героев (`heroAttack`, `heroFlee`, `heroSkip`) → `monstersTurn` (статусы, храбрость, атаки, доп. атаки) → новый раунд; `finishCombat`.
-- `spells.ts` — `resolveCost`, `canCast`, `castSpell` (эффекты по `SpellEffect`, опыт по формулам).
+- `combat.ts` — бой: `startCombat` → фаза дистанции → `closeToMelee` (инициатива) → ходы героев (`heroAttack`, `heroFlee`, `heroSkip`, доп. действия) → `monstersTurn` (ход союзников, статусы монстров, храбрость, магия монстров `monsterCast`, атаки с учётом аур, доп. атаки) → новый раунд; `finishCombat`.
+- `spells.ts` — `resolveCost`, `canCast`, `castSpell` (все типы `SpellEffect`: урон, контроль монстров, ауры-варды, магическое оружие, призывы в `CombatState.allies`, опознание, лечение, воскрешение; опыт по формулам), хелперы `needsMonsterTarget/needsHeroTarget/needsEntryTarget/needsParam` для интерфейса.
 - `world.ts` — кратчайший путь (Дейкстра по дням), случайные встречи, список локаций с лавкой/трактиром.
 
 Движок мутирует переданные объекты (герои, состояние боя) и возвращает записи журнала. Он не знает о Vue и localStorage.
@@ -51,7 +52,9 @@ source/pdf  ──(tools/*.py)──►  src/data/*.json + public/img/**
 | `/map` | MapView | карта с узлами, маршрут и дни, вход в локацию, встречи в пути |
 | `/location/:id` | LocationView | план, сетка параграфов, текст, кнопки действий из подсказок, произвольный бой |
 | `/combat` | CombatView | раунды, цели, атаки оружием, заклинания, бегство, ход монстров, журнал |
-| `/bestiary`, `/spells`, `/about` | справочники | |
+| `/bestiary`, `/spells`, `/lore`, `/about` | справочники и предыстория | |
+
+Компонент `SpellCaster` — единая форма применения заклинаний (в бою и вне боя), `HeroSheet` — лист персонажа.
 
 ## Поток игры
 1. Партия → лавка (40 монет) → карта.
