@@ -88,6 +88,12 @@ export class OpenAiCompatProvider implements LlmProvider {
       hist.length = mark
       throw new ProviderError(`${this.label}: пустой ответ`, 30_000)
     }
+    // хранимая история тоже ограничена (в запрос и так уходит только окно последних сообщений)
+    const keep = Math.max(200, (this.cfg.historyLimit ?? 40) * 4)
+    if (hist.length > keep) {
+      const kept = windowHistory(hist, keep)
+      hist.splice(0, hist.length - kept.length)
+    }
     return text.trim()
   }
 

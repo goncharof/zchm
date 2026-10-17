@@ -12,7 +12,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { BetaMessageStreamParams } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import { randomUUID } from 'node:crypto'
 import type { Room } from '../rooms'
-import { buildSystemPrompt, snapshot } from './prompt'
+import { buildSystemPrompt, recap, snapshot } from './prompt'
 import { ScriptedGm } from './script'
 import { GM_TOOLS, executeGmTool } from './tools'
 import { ProviderError, type GmContext, type GmDriver, type GmEvent, type GmFactory, type GmInput, type LlmProvider } from './types'
@@ -34,6 +34,8 @@ export interface AnthropicOptions {
   effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   maxSteps?: number
   logUsage?: boolean
+  /** предел размера истории (символов JSON); больше — новый разговор с кратким содержанием */
+  maxHistoryChars?: number
 }
 
 export function aiConfigured(): boolean {
@@ -66,9 +68,18 @@ export class AnthropicProvider implements LlmProvider {
   }
 
   async turn(room: Room, input: { userText: string; snapshot: string }, io: { delta(text: string): void; stateChanged(): void }): Promise<string> {
-    const history = (room.gmHistories[this.id] ??= []) as Msg[]
+    let history = (room.gmHistories[this.id] ??= []) as Msg[]
+    let prefix = ''
+    const limit = this.opts.maxHistoryChars ?? Number(process.env.GM_HISTORY_CHARS ?? 300_000)
+    if (history.length && JSON.stringify(history).length > limit) {
+      // длинная партия: новый разговор с кратким содержанием (один промах кэша вместо растущего контекста)
+      const prev = history
+      history = room.gmHistories[this.id] = []
+      prefix = `${recap(room)}\n\n`
+      console.log(`[ведущий Claude ${room.code}] история ${JSON.stringify(prev).length} символов — новый разговор с кратким содержанием`)
+    }
     const mark = history.length
-    history.push({ role: 'user', content: [{ type: 'text', text: input.userText }] })
+    history.push({ role: 'user', content: [{ type: 'text', text: prefix + input.userText }] })
     // системное сообщение посреди разговора: не трогает кэшированный префикс и не подделывается игроками
     history.push({ role: 'system', content: input.snapshot })
     let text = ''
@@ -247,8 +258,8 @@ function formatInputs(events: GmEvent[], texts: { author: string; text: string }
 }
 
 /** Ведущий с заданной цепочкой провайдеров; client — имитация Claude для тестов */
-export function aiGmFactory(opts: { providers?: LlmProvider[]; client?: ModelClient; logUsage?: boolean; cooldownScale?: number } = {}): GmFactory {
-  const providers = opts.providers ?? (opts.client ? [new AnthropicProvider({ client: opts.client, logUsage: opts.logUsage })] : [])
+export function aiGmFactory(opts: { providers?: LlmProvider[]; client?: ModelClient; logUsage?: boolean; cooldownScale?: number; anthropic?: AnthropicOptions } = {}): GmFactory {
+  const providers = opts.providers ?? (opts.client ? [new AnthropicProvider({ client: opts.client, logUsage: opts.logUsage, ...opts.anthropic })] : [])
   return (ctx: GmContext) => new GmDirector(ctx, { providers, cooldownScale: opts.cooldownScale })
 }
 

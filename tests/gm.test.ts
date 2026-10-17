@@ -50,9 +50,9 @@ async function until(fn: () => boolean, ms = 3000) {
   while (!fn()) { if (Date.now() - t > ms) throw new Error('timeout'); await wait() }
 }
 
-async function setup(replies: Reply[]) {
+async function setup(replies: Reply[], maxHistoryChars?: number) {
   const model = fakeModel(replies)
-  const s = await createGameServer({ port: 0, staticDir: null, world: world as unknown as WorldMap, gm: aiGmFactory({ client: model.client, logUsage: false, cooldownScale: 0 }) })
+  const s = await createGameServer({ port: 0, staticDir: null, world: world as unknown as WorldMap, gm: aiGmFactory({ client: model.client, logUsage: false, cooldownScale: 0, anthropic: { maxHistoryChars } }) })
   servers.push(s)
   const c = new NetClient(s.url)
   clients.push(c)
@@ -125,5 +125,20 @@ describe('ИИ-ведущий', () => {
     // модель получила сводку того, что ход вёл сценарный ведущий
     const req = g.model.calls.at(-1) as { messages: { role: string; content: { text?: string }[] }[] }
     expect(JSON.stringify(req.messages[0])).toContain('сценарий')
+  })
+
+  it('длинная партия: история заменяется кратким содержанием прошлых сцен', async () => {
+    const g = await setup([{ text: 'Первая сцена у ворот.' }, { text: 'Вторая сцена в таверне.' }, { text: 'Третья сцена.' }], 200)
+    await g.c.chat('Осматриваемся у ворот', true)
+    await g.s.gm.idle()
+    await g.c.chat('Идём в таверну', true)
+    await g.s.gm.idle()
+    await g.c.chat('Что дальше?', true)
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.text === 'Третья сцена.'))
+    const last = g.model.calls.at(-1) as { messages: { role: string; content: { text?: string }[] }[] }
+    expect(last.messages[0].content[0].text).toContain('Краткое содержание прошлой игры')
+    expect(last.messages[0].content[0].text).toContain('Вторая сцена в таверне.')
+    expect(last.messages.length).toBeLessThanOrEqual(2)
   })
 })

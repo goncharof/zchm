@@ -45,6 +45,26 @@ ${locations}
 («doroga» — глава «Дорога»: случайные встречи в пути.)`
 }
 
+/** Пройденные локации и помещения: «Золотой город: 1, 2, 5; Дорога: 12» */
+export function visitedSummary(room: Room): string {
+  return Object.entries(room.state.visited)
+    .filter(([, ns]) => ns.length)
+    .map(([id, ns]) => `${idx.locationById.get(id)?.name ?? id}: ${[...ns].sort((a, b) => a - b).join(', ')}`)
+    .join('; ')
+}
+
+/** Краткое содержание прошлой игры — для нового разговора, когда старый стал слишком длинным */
+export function recap(room: Room, maxMessages = 12): string {
+  const s = room.state
+  const lines = [`[Краткое содержание прошлой игры: разговор начат заново, чтобы не разрастался. Продолжай с того же места.]`]
+  lines.push(`Идёт день ${s.day}. Найдено артефактов: ${s.artifactsFound.length}.${s.victory ? ' Чёрный маг уже повержен.' : ''}`)
+  const visited = visitedSummary(room)
+  if (visited) lines.push(`Пройдено: ${visited}.`)
+  const scenes = room.chat.filter((m) => m.from === 'gm' || m.from === 'player').slice(-maxMessages)
+  if (scenes.length) lines.push('Последние сцены:', ...scenes.map((m) => `— ${m.author}: ${m.text.slice(0, 400)}`))
+  return lines.join('\n')
+}
+
 /** Снимок состояния партии для системного сообщения перед ходом ведущего */
 export function snapshot(room: Room): string {
   const s = room.state
@@ -53,6 +73,8 @@ export function snapshot(room: Room): string {
   const lines: string[] = [`Состояние партии. День ${s.day}. Место на карте: ${node?.name ?? '—'}.`]
   if (loc) lines.push(`Партия в локации «${loc.name}» (id ${loc.id}). Пройденные параграфы: ${(s.visited[loc.id] ?? []).join(', ') || 'нет'}.`)
   else lines.push('Партия вне локации (на карте мира или в пути).')
+  const visited = visitedSummary(room)
+  if (visited) lines.push(`Пройдено за игру: ${visited}.`)
   if (s.pendingRoad.length) lines.push(`Неразыгранные встречи в пути (глава doroga): ${s.pendingRoad.map((n) => `§ ${n}`).join(', ')}.`)
   lines.push('Герои:')
   for (const h of s.heroes) {
