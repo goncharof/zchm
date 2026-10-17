@@ -34,7 +34,12 @@ source/pdf  ──(tools/*.py)──►  src/data/*.json + public/img/**
 - `model.ts` — сериализуемое состояние: `GameState`, `Hero`, `InventoryEntry`, `CombatState`, `MonsterInstance`, `LogEntry`.
 - `character.ts` — создание героя, производные характеристики (защита/сила/ловкость/меткость/удача с учётом снаряжения, артефактов и баффов), опыт и уровни (`gainXp`), жизни с порогами 0/−10, отдых.
 - `inventory.ts` — покупка/продажа, экипировка с ограничениями класса и рук (л/п/д), бутылки, свитки, яд, противоядия.
-- `combat.ts` — бой: `startCombat` → фаза дистанции → `closeToMelee` (инициатива) → ходы героев (`heroAttack`, `heroFlee`, `heroSkip`, доп. действия) → `monstersTurn` (ход союзников, статусы монстров, храбрость, магия монстров `monsterCast`, атаки с учётом аур, доп. атаки) → новый раунд; `finishCombat`.
+- `combat.ts` — бой: `startCombat` (головы гидры отдельными противниками) → фаза дистанции → `closeToMelee`
+  (инициатива, доп. действия воина 12 ур.) → ходы героев (`heroAttack` с расходом стрел и метанием,
+  `heroFlee`, `heroSkip`; `markActed` / `advanceIfDone` двигают раунд, `endHeroesTurn` — запасной выход) →
+  `monstersTurn` (`alliesTurn` с выходом из-под контроля `loseControl`, урон со временем с опытом `dotXp`,
+  храбрость, `monsterCast` с учётом защит и отражения, `monsterAttack` с особыми атаками, отрастание голов
+  `regrowHeads`) → новый раунд; `finishCombat` (подбор брошенного) и `cleanupAfterCombat`.
 - `spells.ts` — `resolveCost`, `canCast`, `castSpell` (все типы `SpellEffect`: урон, контроль монстров, ауры-варды, магическое оружие, призывы в `CombatState.allies`, опознание, лечение, воскрешение; опыт по формулам), хелперы `needsMonsterTarget/needsHeroTarget/needsEntryTarget/needsParam` для интерфейса.
 - `world.ts` — кратчайший путь (Дейкстра по дням), случайные встречи, список локаций с лавкой/трактиром.
 
