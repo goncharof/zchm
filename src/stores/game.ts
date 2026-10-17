@@ -5,7 +5,7 @@ import type { Caster, WorldMap } from '@/types'
 import { gameData, idx, loadWorld } from '@/data'
 import type { CombatState, EquipSlot, GameState, Hero, InventoryKind, LogEntry } from '@/engine/model'
 import { SAVE_VERSION, uid } from '@/engine/model'
-import { changeLives, createHero, gainXp, hasWard, heroLuck, isConscious, rest, type LevelUp } from '@/engine/character'
+import { changeLives, consumePrayer, createHero, gainXp, hasWard, heroLuck, isConscious, rest, type LevelUp } from '@/engine/character'
 import * as inv from '@/engine/inventory'
 import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
@@ -359,7 +359,8 @@ export const useGameStore = defineStore('game', () => {
       log(`${h.name}: боги даруют удачу — проверка ${target} пройдена без броска.`, 'luck')
       return { ok: true, roll: 18, luck: heroLuck(h, idx) }
     }
-    const r = k18()
+    const prayer = consumePrayer(h)
+    const r = k18() + prayer
     const luck = heroLuck(h, idx)
     const ok = r + luck >= target
     log(`${h.name} бросает удачу ${target}: к18 = ${r}${luck ? ` + ${luck}` : ''} — ${ok ? 'удача!' : 'неудача'}.`, 'luck')

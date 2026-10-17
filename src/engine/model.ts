@@ -96,6 +96,10 @@ export interface AllyInstance {
   ownerUid: string
   /** союзник — спутник партии (после боя его жизни и счётчик боёв сохраняются) */
   companionUid?: string
+  /** может выйти из-под контроля (1 на к6 каждый ход): зомби или очарованный монстр */
+  unstable?: 'zombie' | 'charm'
+  /** из какого монстра бестиария (для выхода из-под контроля) */
+  monsterId?: string
   name: string
   defense: number
   /** формула урона ("1к18", "2к6+2") или 'none' для иллюзий */
@@ -147,6 +151,8 @@ export interface MonsterInstance {
   noSave?: boolean
   /** атаки −2 от устрашения и т.п. учитываются в attackMod */
   sleeping?: boolean
+  /** «Несчастье»: бросает кубики дважды и берёт меньшее */
+  cursed?: boolean
   /** кто наложил урон со временем — ему идёт опыт за отнятые жизни */
   dotBy?: Partial<Record<'poison' | 'choke' | 'petrify' | 'paralysis', string>>
 }

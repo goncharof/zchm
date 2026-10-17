@@ -729,6 +729,13 @@ EFFECT_OVERRIDES = {
     'priest-mech-sveta': weapon('Меч света', '1к18', dexterityBonus=3),
     'priest-neuyazvimost': ward('invulnerable', 'ally', '3 раунда'),
     'priest-ozhivlenie-personazha': {'type': 'resurrect'},
+    'priest-molitva': ward('prayer', 'ally', '1 бой'),
+    'mage-neschaste': control('curse', 'one'),
+    'mage-dvoynik': {'type': 'summon', 'name': 'Двойник', 'kind': 'copy'},
+    'mage-otrazhenie-magii': ward('reflect', 'self', '1 бой'),
+    'mage-udvoenie-zhidkosti': {'type': 'duplicate-bottle'},
+    'mage-ozhivlenie-mertvetsa': {'type': 'summon', 'name': 'Зомби', 'kind': 'zombie'},
+    'mage-vozdushnaya-stena': ward('air-wall', 'ally', '1 бой'),
 }
 _unknown = [k for k in EFFECT_OVERRIDES if k not in {s['id'] for s in spells}]
 if _unknown:

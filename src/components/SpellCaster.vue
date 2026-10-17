@@ -11,7 +11,12 @@ const store = useGameStore()
 const form = reactive({ spellId: '', targetHeroUid: props.hero.uid, targetEntryUid: '', param: 1 })
 const spells = computed(() => props.hero.spellbook.map((id) => idx.spell(id)).filter((s) => props.inCombat || usableOutOfCombat(s)))
 const spell = computed(() => (form.spellId ? idx.spell(form.spellId) : null))
-const entries = computed(() => store.heroes.flatMap((h) => h.inventory.filter((e) => (e.kind === 'bottle' && !e.identified) || e.kind === 'scroll' || e.kind === 'artifact').map((e) => ({ uid: e.uid, label: `${h.name}: ${entryName(e, idx)}` }))))
+const entries = computed(() => {
+  const dup = spell.value?.effect.type === 'duplicate-bottle'
+  return store.heroes.flatMap((h) => h.inventory
+    .filter((e) => (dup ? e.kind === 'bottle' : (e.kind === 'bottle' && !e.identified) || e.kind === 'scroll' || e.kind === 'artifact'))
+    .map((e) => ({ uid: e.uid, label: `${h.name}: ${entryName(e, idx)}` })))
+})
 const problem = computed(() => (spell.value ? canCast(props.hero, spell.value, idx, form.param) : null))
 
 function cast() {

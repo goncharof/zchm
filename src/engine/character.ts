@@ -166,6 +166,14 @@ export function attacksLabel(w: HandWeapon): string {
   return w.attacks ? w.attacks.join('-') : (w.formula ?? '')
 }
 
+/** «Молитва»: +3 к ближайшему броску кубика героя (атака, бегство, удача); снимается при использовании */
+export function consumePrayer(hero: Hero): number {
+  const b = hero.buffs.find((x) => x.stat === 'ward' && x.ward === 'prayer')
+  if (!b) return 0
+  hero.buffs = hero.buffs.filter((x) => x !== b)
+  return 3
+}
+
 /** Активная защитная аура нужного вида */
 export function hasWard(hero: Hero, kind: WardKind): Buff | undefined {
   return hero.buffs.find((b) => b.stat === 'ward' && b.ward === kind)

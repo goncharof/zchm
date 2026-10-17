@@ -103,6 +103,7 @@ export type ControlKind =
   | 'slay-undead'  // мертвец обращается в прах
   | 'nosave'       // не может выкинуть удачу от заклинаний
   | 'return'       // сбежавший монстр возвращается в бой
+  | 'curse'        // «Несчастье»: монстр бросает кубики дважды и берёт меньшее
 
 export type WardKind =
   | 'invulnerable' // атаки не вредят
@@ -114,6 +115,8 @@ export type WardKind =
   | 'undead'       // мертвецы не замечают
   | 'luck'         // следующий бросок удачи успешен
   | 'infinite-mana'// мана не убывает
+  | 'prayer'       // «Молитва»: +3 к следующему броску кубика
+  | 'reflect'      // «Отражение магии»: следующее заклинание монстра (уровня не выше мага) бьёт по нему самому
 
 export type SpellEffect =
   | { type: 'damage'; dice: string; perLevel?: boolean; max?: number; targets: 'one' | 'all' | 'many'; slayBelow?: number }
@@ -122,7 +125,8 @@ export type SpellEffect =
   | { type: 'buff'; stat: 'strength' | 'dexterity' | 'accuracy' | 'luck' | 'defense' | 'attacks'; amount: number | string; scope: 'self' | 'ally' | 'party'; duration: string }
   | { type: 'debuff'; stat: 'defense' | 'attacks' | 'strength'; amount: number | string; scope: 'one' | 'all'; duration: string }
   | { type: 'escape' }
-  | { type: 'summon'; name: string; defense?: number; attacks?: string; lives?: string; kind?: 'creature' | 'decoy' | 'elemental' | 'demon' | 'copy' }
+  | { type: 'summon'; name: string; defense?: number; attacks?: string; lives?: string; kind?: 'creature' | 'decoy' | 'elemental' | 'demon' | 'copy' | 'zombie' }
+  | { type: 'duplicate-bottle' }
   | { type: 'control'; kind: ControlKind; targets: 'one' | 'all'; maxLevel?: number; duration?: string }
   | { type: 'weapon'; name: string; attacks: string; dexterityBonus?: number; attacksPerRound?: number; lifesteal?: boolean; duration: string }
   | { type: 'ward'; kind: WardKind; scope: 'self' | 'ally' | 'party'; duration: string }

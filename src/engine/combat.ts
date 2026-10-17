@@ -3,7 +3,7 @@ import type { Monster, Spell } from '@/types'
 import type { DataIndex } from './data'
 import type { AllyInstance, Buff, CombatState, EquipSlot, Hero, LogEntry, MonsterInstance } from './model'
 import { uid } from './model'
-import { changeLives, gainXp, hasWard, heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, isActive, isConscious, levelRow, UNARMED, type HandWeapon, type LevelUp } from './character'
+import { changeLives, consumePrayer, gainXp, hasWard, heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, isActive, isConscious, levelRow, UNARMED, type HandWeapon, type LevelUp } from './character'
 import { k18, k6, roll, rollAttackTable, rollFormula } from './dice'
 import { EXTRA_ATTACKS, fleeTarget } from './rules'
 import { rollSpellDamage } from './spells'
@@ -208,7 +208,9 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
     return out
   }
   const name = w?.name ?? 'голые руки'
-  const bonus = ranged ? heroAccuracy(hero, idx) + (w?.accuracyBonus ?? 0) : heroDexterity(hero) + (w?.dexterityBonus ?? 0)
+  const prayer = consumePrayer(hero)
+  if (prayer) out.log.push(entry(`${hero.name}: молитва услышана, +${prayer} к броску.`, 'spell'))
+  const bonus = (ranged ? heroAccuracy(hero, idx) + (w?.accuracyBonus ?? 0) : heroDexterity(hero) + (w?.dexterityBonus ?? 0)) + prayer
   const need = target.defense + target.defenseMod
   const helpless = (target.disabled ?? 0) > 0 || target.petrified
   const swings = w?.attacksPerRound ?? 1
@@ -292,7 +294,7 @@ export function addRecover(state: CombatState, heroUid: string, ref: string, n: 
 export function heroFlee(state: CombatState, hero: Hero, heroes: Hero[], idx: DataIndex): LogEntry[] {
   const maxLevel = Math.max(1, ...aliveMonsters(state).map((m) => m.level))
   const need = fleeTarget(maxLevel)
-  const r = k18()
+  const r = k18() + consumePrayer(hero)
   const log: LogEntry[] = []
   if (r >= need) {
     state.escaped.push(hero.uid)
@@ -386,10 +388,14 @@ function dotXp(state: CombatState, heroes: Hero[], m: MonsterInstance, kind: key
 }
 
 /** Ход союзников (призванные существа): каждый атакует случайного монстра */
-export function alliesTurn(state: CombatState): LogEntry[] {
+export function alliesTurn(state: CombatState, idx?: DataIndex): LogEntry[] {
   const log: LogEntry[] = []
   for (const a of aliveAllies(state)) {
     if (a.decoy || a.attacks === 'none') continue
+    if (a.unstable && k6() === 1) {
+      log.push(...loseControl(state, a, idx))
+      if (a.dead) continue
+    }
     const targets = aliveMonsters(state)
     if (!targets.length) break
     const t = targets[roll(targets.length) - 1]
@@ -409,11 +415,40 @@ export function alliesTurn(state: CombatState): LogEntry[] {
   return log
 }
 
+/**
+ * Выход из-под контроля (стр. 35): зомби — к3: 1 уходит, 2 нападает, 3 рассыпается в прах;
+ * очарованный монстр — к6: 1–3 убегает, 4–6 нападает.
+ */
+export function loseControl(state: CombatState, a: AllyInstance, idx?: DataIndex): LogEntry[] {
+  const log: LogEntry[] = []
+  const turnHostile = () => {
+    a.dead = true
+    const base = a.monsterId && idx ? idx.monsterById.get(a.monsterId) : undefined
+    if (!base) return
+    const inst = makeMonsterInstance(base, 0)
+    inst.name = a.name.replace(/\s*\(.*\)$/, '')
+    inst.lives = Math.max(1, a.lives)
+    inst.points = 0
+    state.monsters.push(inst)
+  }
+  if (a.unstable === 'zombie') {
+    const r = roll(3)
+    if (r === 1) { a.dead = true; log.push(entry(`${a.name} выходит из-под контроля и уходит прочь.`, 'flee')) }
+    else if (r === 2) { turnHostile(); log.push(entry(`${a.name} выходит из-под контроля и нападает на героев!`, 'death')) }
+    else { a.dead = true; log.push(entry(`${a.name} рассыпается в прах.`)) }
+  } else if (a.unstable === 'charm') {
+    const r = k6()
+    if (r <= 3) { a.dead = true; log.push(entry(`${a.name} сбрасывает чары и убегает.`, 'flee')) }
+    else { turnHostile(); log.push(entry(`${a.name} сбрасывает чары и снова нападает!`, 'death')) }
+  }
+  return log
+}
+
 /** Ход монстров: союзники героев, статусы, храбрость, магия, атаки. Затем новый раунд. */
 export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex): LogEntry[] {
   const log: LogEntry[] = []
   if (state.finished) return log
-  log.push(...alliesTurn(state))
+  log.push(...alliesTurn(state, idx))
   checkEnd(state, heroes)
   if (state.finished) return log
   for (const m of aliveMonsters(state)) {
@@ -457,7 +492,7 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
     // храбрость: при потере половины жизней один раз бросает к18 ≥ храбрость — бежит
     if (m.courage !== null && !m.courageChecked && m.lives * 2 <= m.maxLives) {
       m.courageChecked = true
-      const r = k18()
+      const r = monsterRoll(m)
       if (r >= m.courage) {
         m.fled = true
         log.push(entry(`${m.name} проверяет храбрость: ${r} ≥ ${m.courage} — обращается в бегство!`, 'flee'))
@@ -540,6 +575,25 @@ export function monsterCast(state: CombatState, m: MonsterInstance, heroes: Hero
   const effect = spell.effect
   const targets = effect.type === 'damage' && effect.targets !== 'one' ? candidates : [candidates[roll(candidates.length) - 1]]
   for (const target of targets) {
+    // Отражение магии: заклинание уровня не выше мага возвращается к монстру
+    const mirror = hasWard(target, 'reflect')
+    if (mirror && spell.level <= mirror.amount) {
+      target.buffs = target.buffs.filter((b) => b !== mirror)
+      log.push(entry(`${target.name} отражает «${spell.name}» — заклинание бьёт по ${m.name}.`, 'spell'))
+      if (effect.type === 'damage') {
+        const dmg = rollSpellDamage(effect, m.level, m.lives)
+        const d = damageMonster(m, dmg.total)
+        log.push(entry(`${m.name} теряет ${d.dealt} жизней (${dmg.detail}).${d.killed ? ` ${m.name} повержен!` : ''}`, d.killed ? 'death' : 'damage'))
+        const xp = awardXp(state, target, d.dealt, m, idx)
+        if (xp.xp) log.push(entry(`${target.name} получает ${xp.xp} очков опыта.`, 'xp'))
+      } else if (effect.type === 'control') {
+        if (effect.kind === 'petrify') m.petrified = true
+        else { m.disabled = k6(); m.disabledKind = effect.kind === 'paralysis' ? 'paralysis' : effect.kind === 'sleep' ? 'sleep' : 'freeze' }
+        log.push(entry(`${m.name} попадает под собственное заклинание.`, 'spell'))
+      }
+      if (m.dead) break
+      continue
+    }
     // Огненный щит защищает того, на кого наложен
     const fire = hasWard(target, 'antimagic')
     if (fire) {
@@ -558,7 +612,7 @@ export function monsterCast(state: CombatState, m: MonsterInstance, heroes: Hero
       continue
     }
     if (spell.luck) {
-      const r = k18()
+      const r = k18() + consumePrayer(target)
       const luck = heroLuck(target, idx)
       if (r + luck >= spell.luck) {
         log.push(entry(`${target.name} бросает удачу от заклинания: ${r}${luck ? ` + ${luck}` : ''} ≥ ${spell.luck} — увернулся.`, 'luck'))
@@ -604,10 +658,15 @@ export function monsterAttackAlly(m: MonsterInstance, a: AllyInstance): LogEntry
   return [entry(`${m.name} атакует ${a.name}: к18 = ${r} ≥ ${a.defense} — ${dmg} жизней.${a.dead ? ` ${a.name} уничтожен.` : ` Осталось ${a.lives}.`}`, a.dead ? 'death' : 'damage')]
 }
 
+/** Бросок монстра: при «Несчастье» — дважды, берётся меньшее */
+function monsterRoll(m: MonsterInstance): number {
+  return m.cursed ? Math.min(k18(), k18()) : k18()
+}
+
 export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex): LogEntry[] {
   const log: LogEntry[] = []
   const def = heroDefense(target, idx)
-  const r = k18()
+  const r = monsterRoll(m)
   if (r < def) {
     log.push(entry(`${m.name} атакует ${target.name}: к18 = ${r} против защиты ${def} — промах.`, 'miss'))
     return log
@@ -626,7 +685,7 @@ export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex):
       return log
     }
     const need = monster.luckSave.threshold
-    const lr = k18()
+    const lr = k18() + consumePrayer(target)
     const luck = heroLuck(target, idx)
     if (lr + luck >= need) {
       log.push(entry(`${m.name} поражает ${target.name} (${monster?.luckSave?.against ?? 'смертельная атака'})! Бросок удачи ${lr}+${luck} ≥ ${need} — ${target.name} уцелел.`, 'luck'))
@@ -649,7 +708,7 @@ export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex):
         log.push(entry(`${m.name} применяет «${rule.name}», но ${shield.source} отражает её.`, 'spell'))
         return log
       }
-      const lr = k18()
+      const lr = k18() + consumePrayer(target)
       const luck = heroLuck(target, idx)
       if (lr + luck >= rule.luck) {
         log.push(entry(`${m.name} применяет «${rule.name}» (к18 = ${er} ≥ ${ex.threshold}), но ${target.name} бросает удачу ${lr}+${luck} ≥ ${rule.luck} и избегает её.`, 'luck'))
@@ -660,7 +719,8 @@ export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex):
       return log
     }
   }
-  const a = rollAttackTable(m.attacks)
+  let a = rollAttackTable(m.attacks)
+  if (m.cursed) { const b = rollAttackTable(m.attacks); if (b.damage < a.damage) a = b }
   const dmg = Math.max(0, Math.floor((a.damage + m.attackMod) * m.attackMultiplier))
   const delta = changeLives(target, -dmg)
   log.push(entry(`${m.name} атакует ${target.name}: к18 = ${r} ≥ ${def} — попадание, к6 = ${a.roll} → ${-delta} жизней. У ${target.name} ${target.lives}/${target.maxLives}.`, 'damage'))

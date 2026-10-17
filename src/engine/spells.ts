@@ -2,7 +2,7 @@
 import type { Spell, SpellEffect } from '@/types'
 import type { DataIndex } from './data'
 import type { AllyInstance, CombatState, Hero, InventoryEntry, LogEntry, MonsterInstance } from './model'
-import { changeLives, gainXp, hasWard, heroDefense, isConscious, type LevelUp } from './character'
+import { changeLives, gainXp, hasWard, heroDefense, heroStrength, heroWeapons, isConscious, type LevelUp } from './character'
 import { k18, k6, roll, rollFormula } from './dice'
 import { addToInventory } from './inventory'
 import { BOTTLES } from './rules'
@@ -51,7 +51,7 @@ export function resolveCost(spell: Spell, hero: Hero, param?: number): number {
 /** Заклинания, которые имеют смысл вне боя */
 export function usableOutOfCombat(spell: Spell): boolean {
   const t = spell.effect.type
-  return ['heal', 'restore-all', 'cure', 'resurrect', 'identify', 'create-bottle', 'restore-mana', 'initiative', 'manual', 'buff', 'ward'].includes(t)
+  return ['heal', 'restore-all', 'cure', 'resurrect', 'identify', 'create-bottle', 'duplicate-bottle', 'restore-mana', 'initiative', 'manual', 'buff', 'ward'].includes(t)
 }
 
 export function needsMonsterTarget(spell: Spell): boolean {
@@ -61,11 +61,11 @@ export function needsMonsterTarget(spell: Spell): boolean {
 
 export function needsHeroTarget(spell: Spell): boolean {
   const e = spell.effect
-  return e.type === 'heal' || e.type === 'restore-all' || (e.type === 'buff' && e.scope === 'ally') || (e.type === 'ward' && e.scope === 'ally') || ['cure', 'resurrect', 'restore-mana', 'initiative', 'extra-action'].includes(e.type)
+  return (e.type === 'summon' && e.kind === 'copy') || e.type === 'heal' || e.type === 'restore-all' || (e.type === 'buff' && e.scope === 'ally') || (e.type === 'ward' && e.scope === 'ally') || ['cure', 'resurrect', 'restore-mana', 'initiative', 'extra-action'].includes(e.type)
 }
 
 export function needsEntryTarget(spell: Spell): boolean {
-  return spell.effect.type === 'identify'
+  return spell.effect.type === 'identify' || spell.effect.type === 'duplicate-bottle'
 }
 
 export function needsParam(spell: Spell): boolean {
@@ -170,7 +170,7 @@ function log(entries: LogEntry[], text: string, kind: LogEntry['kind'] = 'spell'
 function monsterSaves(m: MonsterInstance, spell: Spell, entries: LogEntry[]): boolean {
   if (!spell.luck) return false
   if (m.noSave) { log(entries, `${m.name} не может сопротивляться заклинанию.`, 'luck'); return false }
-  const r = k18()
+  const r = m.cursed ? Math.min(k18(), k18()) : k18()
   const ok = r >= spell.luck
   log(entries, `${m.name} бросает удачу от заклинания: ${r} ${ok ? '≥' : '<'} ${spell.luck} — ${ok ? 'увернулся' : 'не увернулся'}.`, 'luck')
   return ok
@@ -233,7 +233,7 @@ export function castSpell(input: CastInput): CastResult {
           if (t.dead) break
           let half = false
           if (spell.luck && !t.noSave) {
-            const r = k18()
+            const r = t.cursed ? Math.min(k18(), k18()) : k18()
             if (r >= spell.luck) {
               if (/magicheskiy-shar/.test(spell.id)) half = true
               else { log(entries, `${t.name} бросает удачу от заклинания: ${r} ≥ ${spell.luck} — увернулся.`, 'luck'); continue }
@@ -361,7 +361,7 @@ export function castSpell(input: CastInput): CastResult {
       const poolId = charge !== undefined ? `pool_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}` : undefined
       for (const t of targets) {
         t.buffs = t.buffs.filter((b) => !(b.stat === 'ward' && b.ward === effect.kind))
-        t.buffs.push({ source: spell.name, stat: 'ward', ward: effect.kind, amount: 0, rounds, charge, poolId })
+        t.buffs.push({ source: spell.name, stat: 'ward', ward: effect.kind, amount: effect.kind === 'reflect' ? hero.level : 0, rounds, charge, poolId })
         if (effect.kind === 'infinite-mana') t.mana = t.maxMana
       }
       log(entries, `${targets.map((t) => t.name).join(', ')}: ${wardName(effect.kind)}${charge !== undefined ? ` (поглотит ${charge} уровней заклинаний на всех)` : ''}${rounds > 0 ? ` на ${rounds} раунд(ов)` : ''}.`)
@@ -410,6 +410,15 @@ export function castSpell(input: CastInput): CastResult {
       } else if (e.kind === 'artifact') {
         log(entries, `${idx.artifact(parseInt(e.ref, 10)).name}: ${idx.artifact(parseInt(e.ref, 10)).description}`)
       } else log(entries, 'Назначение этого предмета и так очевидно.')
+      break
+    }
+    case 'duplicate-bottle': {
+      if (!input.targetEntryUid) return fail('Выберите бутылку')
+      const found = findEntry(heroes, input.targetEntryUid)
+      if (!found || found.entry.kind !== 'bottle') return fail('Удваивать можно только бутылки')
+      spend()
+      addToInventory(found.owner, 'bottle', found.entry.ref, 1, { identified: found.entry.identified })
+      log(entries, `Бутылка у ${found.owner.name} удваивается вместе с содержимым.`)
       break
     }
     case 'drain-mana': {
@@ -463,8 +472,9 @@ export function castSpell(input: CastInput): CastResult {
     }
     case 'summon': {
       if (needCombat()) return res
+      if (effect.kind === 'zombie' && !combat!.monsters.some((m) => m.dead)) return fail('Нужен мертвец: сначала одолейте кого-нибудь')
       spend()
-      const ally = buildSummon(effect, hero, idx, entries, combat!)
+      const ally = buildSummon(effect, hero, idx, entries, combat!, targetHero())
       if (ally) combat!.allies.push(ally)
       break
     }
@@ -548,7 +558,10 @@ function applyControl(kind: Extract<SpellEffect, { type: 'control' }>['kind'], t
     case 'charm': {
       t.fled = true
       const table = Array.isArray(t.attacks) ? t.attacks.join('-') : '1-1-1-2-2-2'
-      combat.allies.push(makeAlly(hero.uid, `${t.name} (очарован)`, t.defense, table, Math.max(1, t.lives)))
+      const ally = makeAlly(hero.uid, `${t.name} (очарован)`, t.defense, table, Math.max(1, t.lives))
+      ally.unstable = 'charm'
+      ally.monsterId = t.monsterId
+      combat.allies.push(ally)
       log(entries, `${t.name} загипнотизирован и переходит на сторону ${hero.name}.`)
       break
     }
@@ -559,6 +572,10 @@ function applyControl(kind: Extract<SpellEffect, { type: 'control' }>['kind'], t
       log(entries, `${t.name} ${kind === 'slay-undead' ? 'обращается в прах' : 'уничтожен силами Хаоса'}.`, 'death')
       break
     }
+    case 'curse':
+      t.cursed = true
+      log(entries, `${t.name} проклят неудачей: теперь бросает кубики дважды и берёт меньшее.`)
+      break
     case 'nosave':
       t.noSave = true
       log(entries, `${t.name} больше не может выкидывать удачу от заклинаний.`)
@@ -569,9 +586,30 @@ function applyControl(kind: Extract<SpellEffect, { type: 'control' }>['kind'], t
   void spell
 }
 
-function buildSummon(effect: Extract<SpellEffect, { type: 'summon' }>, hero: Hero, idx: DataIndex, entries: LogEntry[], combat: CombatState): AllyInstance | null {
+function buildSummon(effect: Extract<SpellEffect, { type: 'summon' }>, hero: Hero, idx: DataIndex, entries: LogEntry[], combat: CombatState, target: Hero): AllyInstance | null {
   const lvl = L(hero)
   switch (effect.kind) {
+    case 'copy': {
+      // «Двойник»: точная копия персонажа — его защита, лучшее оружие ближнего боя с силой, его жизни
+      const weapons = heroWeapons(target, idx).filter((w) => !w.ranged && w.attacks)
+      const best = weapons.sort((a, b) => (b.attacks ?? []).reduce((x, y) => x + y, 0) - (a.attacks ?? []).reduce((x, y) => x + y, 0))[0]
+      const str = heroStrength(target, idx)
+      const table = (best?.attacks ?? [1, 1, 1, 2, 2, 2]).map((v) => v + str).join('-')
+      const a = makeAlly(hero.uid, `Двойник: ${target.name}`, heroDefense(target, idx), table, Math.max(1, target.maxLives))
+      log(entries, `Появляется двойник ${target.name}: защита ${a.defense}, атаки ${table}, жизни ${a.lives}.`)
+      return a
+    }
+    case 'zombie': {
+      const corpse = combat.monsters.find((m) => m.dead)!
+      const z = idx.monsterById.get('zombi')
+      const table = Array.isArray(z?.attacks) ? z!.attacks.join('-') : '1-1-2-2-3-3'
+      const a = makeAlly(hero.uid, `Зомби (${corpse.name})`, z?.defense ?? 10, table, z?.lives ?? 10)
+      a.unstable = 'zombie'
+      a.monsterId = 'zombi'
+      corpse.name = `${corpse.name} (поднят)`
+      log(entries, `${corpse.name.replace(' (поднят)', '')} поднимается зомби и служит ${hero.name}. После каждого хода он может выйти из-под контроля (1 на к6).`)
+      return a
+    }
     case 'decoy': {
       const rounds = Math.max(1, Math.ceil(lvl / 2))
       const a = makeAlly(hero.uid, effect.name, heroDefense(hero, idx), 'none', 1, rounds, true)
@@ -622,6 +660,7 @@ export function wardName(kind: string): string {
     invulnerable: 'неуязвимость', invisible: 'невидимость', crystal: 'хрустальный щит (монстры до 2 уровня не могут атаковать)',
     antimagic: 'защита от заклинаний', 'spell-shield': 'воздушный щит от заклинаний и особых атак', 'air-wall': 'защита от метательного оружия', undead: 'мертвецы не замечают',
     luck: 'следующий бросок удачи удастся', 'infinite-mana': 'мана не убывает',
+    prayer: 'молитва: +3 к следующему броску', reflect: 'отражение магии',
   } as Record<string, string>)[kind] ?? kind
 }
 

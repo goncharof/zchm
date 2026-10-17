@@ -5,7 +5,7 @@ import { idx } from '@/data'
 import { createHero, gainXp, hasWard } from '@/engine/character'
 import { addToInventory, buy, equip } from '@/engine/inventory'
 import { seededRng, setRng } from '@/engine/dice'
-import { applyExtraAttack, closeToMelee, endHeroesTurn, makeMonsterInstance, markActed, monsterAttack, monsterCast, monstersTurn, startCombat, tickHeroStatus } from '@/engine/combat'
+import { applyExtraAttack, closeToMelee, endHeroesTurn, loseControl, makeMonsterInstance, markActed, monsterAttack, monsterCast, monstersTurn, startCombat, tickHeroStatus } from '@/engine/combat'
 import { castSpell } from '@/engine/spells'
 import type { LogEntry } from '@/engine/model'
 
@@ -171,5 +171,75 @@ describe('регрессии ревью движка', () => {
     m8.mana = 11
     castSpell({ hero: m8, spell: idx.spell('mage-beskonechnaya-mana'), idx, heroes: [m8], combat: state, targetHeroUid: m8.uid })
     expect(m8.mana).toBe(m8.maxMana)
+  })
+
+  it('Молитва: +3 к следующему броску героя, затем снимается', () => {
+    const p = caster('priest', 7000, 'priest-molitva')
+    castSpell({ hero: p, spell: idx.spell('priest-molitva'), idx, heroes: [p], targetHeroUid: p.uid })
+    expect(hasWard(p, 'prayer')).toBeDefined()
+    const s = useGameStore(); s.newGame(); s.game!.heroes.push(p)
+    s.luckCheck(p.uid, 5)
+    expect(hasWard(p, 'prayer')).toBeUndefined()
+  })
+
+  it('Двойник копирует защиту и жизни героя и сражается за партию', () => {
+    const m = caster('mage', 40000, 'mage-dvoynik')
+    const w = createHero('Воин', 'warrior', idx); w.money = 500
+    equip(w, buy(w, 'weapon', 'mech-dlinnyy', idx).uid, idx)
+    equip(w, buy(w, 'armor', 'laty', idx).uid, idx)
+    const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
+    castSpell({ hero: m, spell: idx.spell('mage-dvoynik'), idx, heroes: [m, w], combat: state, targetHeroUid: w.uid })
+    expect(state.allies).toHaveLength(1)
+    expect(state.allies[0].defense).toBe(15); expect(state.allies[0].lives).toBe(w.maxLives)
+    expect(state.allies[0].attacks).toBe('3-4-5-6-7-8')
+  })
+
+  it('Отражение магии возвращает заклинание монстру', () => {
+    const m = caster('mage', 40000, 'mage-otrazhenie-magii')
+    const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
+    castSpell({ hero: m, spell: idx.spell('mage-otrazhenie-magii'), idx, heroes: [m], combat: state })
+    const foe = makeMonsterInstance(idx.monster('troll'), 0)
+    foe.attacks = 'magic'; foe.mana = 100; foe.spells = ['огненное копье']
+    state.monsters.push(foe)
+    const before = foe.lives
+    const log = monsterCast(state, foe, [m], idx)!
+    expect(log.some((e) => /отражает/.test(e.text))).toBe(true)
+    expect(m.lives).toBe(m.maxLives)
+    expect(foe.lives).toBeLessThan(before)
+    expect(hasWard(m, 'reflect')).toBeUndefined()
+  })
+
+  it('Удвоение жидкости и Несчастье', () => {
+    const m = caster('mage', 2000, 'mage-udvoenie-zhidkosti')
+    const b = addToInventory(m, 'bottle', '6', 1, { identified: true })
+    castSpell({ hero: m, spell: idx.spell('mage-udvoenie-zhidkosti'), idx, heroes: [m], targetEntryUid: b.uid })
+    expect(m.inventory.find((e) => e.kind === 'bottle')?.qty).toBe(2)
+    const m8 = caster('mage', 20000, 'mage-neschaste')
+    const { state } = startCombat([{ monsterId: 'troll', count: 1 }], idx)
+    state.monsters[0].noSave = true
+    castSpell({ hero: m8, spell: idx.spell('mage-neschaste'), idx, heroes: [m8], combat: state, targetUid: state.monsters[0].uid })
+    expect(state.monsters[0].cursed).toBe(true)
+    state.turn = 'monsters'
+    expect(() => monstersTurn(state, [m8], idx)).not.toThrow()
+  })
+
+  it('Оживление мертвеца: нужен труп, зомби может выйти из-под контроля', () => {
+    const m = caster('mage', 4000, 'mage-ozhivlenie-mertvetsa')
+    const { state } = startCombat([{ monsterId: 'ork', count: 2 }], idx)
+    const no = castSpell({ hero: m, spell: idx.spell('mage-ozhivlenie-mertvetsa'), idx, heroes: [m], combat: state })
+    expect(no.ok).toBe(false); expect(m.mana).toBe(m.maxMana)
+    state.monsters[0].dead = true; state.monsters[0].lives = 0
+    const yes = castSpell({ hero: m, spell: idx.spell('mage-ozhivlenie-mertvetsa'), idx, heroes: [m], combat: state })
+    expect(yes.ok).toBe(true); expect(state.allies[0].unstable).toBe('zombie')
+    const outcomes = new Set<string>()
+    for (let i = 0; i < 40; i++) {
+      const st = startCombat([{ monsterId: 'ork', count: 1 }], idx).state
+      const z = { ...state.allies[0], dead: false }
+      st.allies.push(z)
+      const log = loseControl(st, z, idx)
+      outcomes.add(log[0].text.includes('уходит') ? 'ушёл' : log[0].text.includes('нападает') ? 'напал' : 'прах')
+      if (log[0].text.includes('нападает')) expect(st.monsters.some((x) => /Зомби/.test(x.name))).toBe(true)
+    }
+    expect(outcomes.size).toBe(3)
   })
 })
