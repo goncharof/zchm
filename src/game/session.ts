@@ -376,6 +376,10 @@ export class GameSession {
    */
   finalDuelAttack(heroUid: string): boolean {
     const h = this.hero(heroUid)
+    // схватка — только в зале Чёрного мага (Замок, § 13), живым героем и пока маг не повержен
+    if (this.state.victory) throw new GameError('Чёрный маг уже повержен')
+    if (this.state.locationId !== 'zamok-chernogo-maga' || !(this.state.visited['zamok-chernogo-maga'] ?? []).includes(13)) throw new GameError('Чёрный маг ждёт в своём замке, в зале с фонтаном (§ 13)')
+    if (h.status.dead || h.status.unconscious) throw new GameError(`${h.name} не может сражаться`)
     const r = this.luckCheck(heroUid, 15)
     if (r.ok) {
       this.log(`${h.name} поражает Чёрного мага! Маг исчезает — на его месте кучка пепла, корона и артефакт. Долина Тмамрак не войдёт в наш мир.`, 'xp')
@@ -399,6 +403,9 @@ export class GameSession {
     return false
   }
   drinkFountain(): void {
+    // фонтаны книги: зал Чёрного мага (Замок, § 13) и фонтан Белого мага (Крепость короля назгулов, § 22)
+    const at = (loc: string, n: number) => this.state.locationId === loc && (this.state.visited[loc] ?? []).includes(n)
+    if (!at('zamok-chernogo-maga', 13) && !at('krepost-korolya-nazgulov', 22)) throw new GameError('Здесь нет фонтана')
     for (const h of this.heroes) {
       if (h.status.dead) continue
       changeLives(h, h.maxLives - h.lives)

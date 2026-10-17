@@ -6,6 +6,9 @@ import { gainXp } from '@/engine/character'
 import { addToInventory } from '@/engine/inventory'
 import { seededRng, setRng } from '@/engine/dice'
 import { GameSession, blankGame } from '@/game/session'
+import { findMonster } from '../server/gm/tools'
+import { windowHistory } from '../server/gm/openai'
+import { roomNumber } from '../server/gm/script'
 
 function party() {
   setRng(seededRng(11))
@@ -92,5 +95,35 @@ describe('второе ревью', () => {
     expect(() => s.sellItem(a.uid, art.uid, 1)).toThrow(/Артефакт/)
     addToInventory(a, 'item', 'yad')
     expect(() => s.poisonWeapon(a.uid, art.uid)).toThrow(/Палицы/)
+  })
+
+  it('ведущий: монстр по имени в падеже и числе, неоднозначность — ошибка, а не чужой монстр', () => {
+    expect(findMonster('гномы')?.id).toBe('gnom')
+    expect(findMonster('рыцарей смерти')?.id).toBe('rytsar-smerti')
+    expect(findMonster('Гнолл')?.id).toBe('gnoll')
+    expect(() => findMonster('драконы')).toThrow(/Уточните/)
+  })
+
+  it('ведущий: окно истории всегда содержит реплику игрока текущего хода', () => {
+    const hist = [{ role: 'user', content: 'ход' }, ...Array.from({ length: 14 }, (_, i) => (i % 2 ? { role: 'tool', tool_call_id: `c${i}`, content: 'r' } : { role: 'assistant', content: null, tool_calls: [] }))] as Parameters<typeof windowHistory>[0]
+    expect(windowHistory(hist, 12)[0]).toEqual({ role: 'user', content: 'ход' })
+  })
+
+  it('сценарный ведущий: номер помещения — только явный, а не любая цифра', () => {
+    expect(roomNumber('Помещение 5')).toBe(5)
+    expect(roomNumber('Идём в помещение 12')).toBe(12)
+    expect(roomNumber('29')).toBe(29)
+    expect(roomNumber('идём в 7')).toBe(7)
+    expect(roomNumber('даю ему 5 монет')).toBeNull()
+    expect(roomNumber('у нас 3 героя')).toBeNull()
+  })
+
+  it('финал и фонтан — только на своих местах', () => {
+    const { s, a } = party()
+    expect(() => s.finalDuelAttack(a.uid)).toThrow(/замке/)
+    expect(() => s.drinkFountain()).toThrow(/фонтана/)
+    s.state.locationId = 'krepost-korolya-nazgulov'
+    s.state.visited['krepost-korolya-nazgulov'] = [22]
+    expect(() => s.drinkFountain()).not.toThrow()
   })
 })

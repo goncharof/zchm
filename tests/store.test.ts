@@ -106,6 +106,11 @@ describe('хранилище партии', () => {
     const s = useGameStore()
     s.newGame()
     const w = (await s.addHero('Воин', 'warrior'))!
+    // вне зала Чёрного мага схватки нет
+    expect(await s.finalDuelAttack(w.uid)).toBeUndefined()
+    expect(s.notice).toMatch(/замке/)
+    s.game!.locationId = 'zamok-chernogo-maga'
+    s.game!.visited['zamok-chernogo-maga'] = [13]
     let won = false
     for (let i = 0; i < 200 && !won; i++) {
       w.lives = w.maxLives; w.status = {}
@@ -117,6 +122,10 @@ describe('хранилище партии', () => {
     expect(s.hero(w.uid).inventory.some((e) => e.kind === 'artifact')).toBe(true)
     s.drinkFountain()
     expect(s.hero(w.uid).lives).toBe(w.maxLives)
+    // второй победы (и второй короны) не бывает
+    const money = s.hero(w.uid).money
+    await s.finalDuelAttack(w.uid)
+    expect(s.hero(w.uid).money).toBe(money)
   })
 
   it('спутник сражается в бою и уходит после оговорённого числа боёв', async () => {

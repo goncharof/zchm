@@ -111,16 +111,35 @@ export interface ToolOutcome {
   endsTurn?: boolean
 }
 
-/** Монстр по id или имени (бесплатные модели получают ужатый промпт без списка id) */
+/** Основа русского слова без окончания: «гномы» → «гном», «рыцари» → «рыцар», «смерти» → «смерт» */
+function stemRu(w: string): string {
+  const x = w.toLowerCase().replace(/ё/g, 'е')
+  const m = x.match(/^(.{3,}?)(ами|ями|ого|его|ому|ему|ыми|ими|ой|ей|ий|ый|ая|яя|ое|ее|ые|ие|ов|ев|ам|ям|ах|ях|ом|ем|а|я|у|ю|е|ы|и|о|ь)$/)
+  return m ? m[1] : x
+}
+const stems = (s: string) => s.split(/[\s-]+/).filter(Boolean).map(stemRu)
+
+/** Монстр по id или имени, в том числе в падеже и числе из текста («гномы», «рыцарей смерти»).
+ *  Бесплатные модели получают ужатый промпт без списка id. Совпадение — по основам всех слов имени
+ *  (а не по началу строки: иначе «гномы» становились гноллом, «драконы» — драконидом). */
 export function findMonster(ref: string) {
-  const s = ref.trim().toLowerCase().replace(/ё/g, 'е')
   const byId = idx.monsterById.get(ref.trim())
   if (byId) return byId
+  const norm = (x: string) => x.toLowerCase().replace(/ё/g, 'е').trim()
   const all = [...idx.monsterById.values()]
-  const norm = (x: string) => x.toLowerCase().replace(/ё/g, 'е')
-  return all.find((m) => norm(m.name) === s)
-    ?? all.find((m) => s.startsWith(norm(m.name).slice(0, Math.max(3, norm(m.name).length - 2))))
-    ?? all.find((m) => norm(m.name).startsWith(s.slice(0, Math.max(3, s.length - 2))))
+  const exact = all.find((m) => norm(m.name) === norm(ref))
+  if (exact) return exact
+  const want = stems(ref)
+  const hits = all.filter((m) => {
+    const name = stems(m.name)
+    return name.length === want.length && name.every((s, i) => s === want[i])
+  })
+  if (hits.length === 1) return hits[0]
+  if (hits.length > 1) throw new GameError(`Неоднозначно «${ref}»: ${hits.map((m) => `${m.id} (${m.name})`).join(', ')}`)
+  // одно слово запроса — среди многословных имён («драконы» → белый, красный… дракон): пусть модель уточнит
+  const partial = want.length === 1 ? all.filter((m) => stems(m.name).includes(want[0])) : []
+  if (partial.length) throw new GameError(`Уточните монстра «${ref}»: ${partial.map((m) => `${m.id} (${m.name})`).join(', ')}`)
+  return undefined
 }
 
 function findHero(room: Room, ref: string): Hero {
