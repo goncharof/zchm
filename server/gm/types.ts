@@ -5,6 +5,8 @@ import type { Room } from '../rooms'
 /** Событие игры, о котором стоит рассказать */
 export interface GmEvent {
   type: 'travel' | 'enter' | 'combatEnd' | 'rest'
+  /** исход боя (для combatEnd) */
+  outcome?: 'victory' | 'fled' | 'defeat'
   text: string
   /** встречи в пути (номера параграфов главы «Дорога») */
   encounters?: number[]

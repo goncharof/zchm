@@ -40,13 +40,16 @@ export interface RoomData {
 export interface ScriptState {
   locationId: string | null
   n: number | null
+  /** параграф, из которого начат бой: после боя предлагаются его ветки победы или поражения */
+  fight?: { loc: string; n: number }
 }
 
 /** Действие за кнопкой-вариантом сценарного ведущего (сериализуемое) */
 export type ScriptAction =
   | { t: 'branch'; loc: string; n: number; seg: number }
   | { t: 'roll'; loc: string; n: number; seg: number; block: number }
-  | { t: 'luck'; target: number }
+  | { t: 'luck'; target: number; loc?: string; n?: number; seg?: number }
+  | { t: 'penalty'; heroUid: string; kind: 'death' | 'lives' | 'half'; amount?: number }
   | { t: 'fight'; specs: { monsterId: string; count: number }[] }
   | { t: 'coins'; amount: number }
   | { t: 'pay'; amount: number }

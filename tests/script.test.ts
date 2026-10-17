@@ -7,6 +7,8 @@ import { NetClient } from '@/net/client'
 import type { ChatMessage } from '@/net/protocol'
 import { seededRng, setRng } from '@/engine/dice'
 import { createGameServer, type GameServer } from '../server/app'
+import { luckPenalty } from '../server/gm/script'
+import { checkEnd } from '@/engine/combat'
 
 let servers: GameServer[] = []
 let clients: NetClient[] = []
@@ -32,9 +34,9 @@ async function setup() {
   c.onState((x) => { state = x })
   c.onChat((m) => chat.push(m))
   c.onChatUpdate((m) => { const i = chat.findIndex((x) => x.id === m.id); if (i >= 0) chat[i] = m })
-  await c.create('Иван', 'script')
+  const j = await c.create('Иван', 'script')
   await c.call('quickStart', [])
-  return { s, c, chat, get state() { return state! } }
+  return { s, c, j, chat, get state() { return state! } }
 }
 const lastGm = (chat: ChatMessage[]) => [...chat].reverse().find((m) => m.from === 'gm')!
 
@@ -89,5 +91,52 @@ describe('сценарный ведущий', () => {
     await g.c.choose(scene.id, pay.id)
     await until(() => /не хватает монет/i.test(lastGm(g.chat).text))
     expect(g.chat.find((m) => m.id === scene.id)!.used ?? []).not.toContain(pay.id)
+  })
+
+  it('последствие провала берётся из текста книги', () => {
+    expect(luckPenalty('пускает молнию (удача — 6, иначе смерть)', 6)).toMatchObject({ kind: 'death' })
+    expect(luckPenalty('2 берсеркера. Удача — 14, иначе — -2 жизни', 14)).toMatchObject({ kind: 'lives', amount: 2, text: '−2 жизни' })
+    expect(luckPenalty('Впереди водопад. Удача — 12, иначе — 1 жизнь', 12)).toMatchObject({ kind: 'lives', amount: 1, text: '−1 жизнь' })
+    expect(luckPenalty('Удача — 12, иначе половина жизней исчезает', 12)).toMatchObject({ kind: 'half' })
+    expect(luckPenalty('вас охватывает паралич (удача — 13, жизни не отнимаются)', 13)).toBeNull()
+    expect(luckPenalty('Удача — 14, иначе — -2 жизни', 4)).toBeNull()
+  })
+
+  it('провал проверки удачи: кнопка последствия из текста отнимает жизни у проверявшего героя', async () => {
+    const g = await setup()
+    await g.c.call('enterLocation', ['krepost-posledney-nadezhdy'])
+    await until(() => g.chat.some((m) => m.from === 'gm' && /Назовите номер/.test(m.text)))
+    await g.c.chat('29', true)
+    await until(() => lastGm(g.chat).text.includes('помещение 29'))
+    const scene = lastGm(g.chat)
+    setRng(() => 0) // к18 = 1 — провал
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label.includes('удачи 14'))!.id)
+    await until(() => lastGm(g.chat).text.includes('испытывает удачу'))
+    const res = lastGm(g.chat)
+    expect(res.text).toContain('По книге: иначе — −2 жизни')
+    const hero = g.state.heroes.find((h) => res.text.startsWith(h.name))!
+    const before = hero.lives
+    await g.c.choose(res.id, res.choices!.find((c) => c.label === 'Принять последствия: −2 жизни')!.id)
+    await until(() => g.state.heroes.find((h) => h.uid === hero.uid)!.lives === before - 2)
+  })
+
+  it('после боя из параграфа предлагается ветка победы', async () => {
+    const g = await setup()
+    await g.c.call('enterLocation', ['krepost-posledney-nadezhdy'])
+    await until(() => g.chat.some((m) => m.from === 'gm' && /Назовите номер/.test(m.text)))
+    await g.c.chat('40', true)
+    await until(() => lastGm(g.chat).text.includes('помещение 40'))
+    const scene = lastGm(g.chat)
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '▸ Соглашаетесь')!.id)
+    await until(() => lastGm(g.chat).text.includes('Сражаетесь с рыцарем'))
+    const branch = lastGm(g.chat)
+    await g.c.choose(branch.id, branch.choices!.find((c) => c.label.startsWith('⚔ Бой: Рыцарь'))!.id)
+    await until(() => !!g.state.combat)
+    const room = (await g.s.store.get(g.j.code))!
+    for (const m of room.state.combat!.monsters) m.dead = true
+    checkEnd(room.state.combat!, room.state.heroes)
+    await g.c.call('endCombat', [])
+    await until(() => lastGm(g.chat).text.includes('Что дальше по книге'))
+    expect(lastGm(g.chat).choices!.map((c) => c.label)).toEqual(['▸ Побеждаете', 'Идти дальше'])
   })
 })

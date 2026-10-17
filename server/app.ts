@@ -56,7 +56,8 @@ function gmEventFor(name: CommandName, room: Room, before: GameState): GmEvent |
     const last = log.find((e) => /Победа!|Команда отступила|Поражение/.test(e.text))
     const start = log.findIndex((e) => e.text.startsWith('Бой начинается'))
     const loot = log.slice(0, start < 0 ? 30 : start).filter((e) => /забирает трофей|подбирает:/.test(e.text)).reverse()
-    return { type: 'combatEnd', text: [`Бой окончен. ${last?.text ?? ''}`.trim(), ...loot.map((e) => e.text)].join(' ') }
+    const outcome = last?.text.startsWith('Победа!') ? 'victory' : last?.text.startsWith('Команда отступила') ? 'fled' : 'defeat'
+    return { type: 'combatEnd', outcome, text: [`Бой окончен. ${last?.text ?? ''}`.trim(), ...loot.map((e) => e.text)].join(' ') }
   }
   if (name === 'restAll') return { type: 'rest', text: `Партия отдыхает в трактире. День ${s.day}.` }
   return null
