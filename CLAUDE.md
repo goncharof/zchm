@@ -27,6 +27,7 @@ pnpm data:bestiary  # source/pdf → src/data/bestiary.json + public/img/bestiar
 pnpm data:book      # → src/data/locations.json + public/img/locations/*.jpg
 pnpm data:world     # → src/data/world.json + public/img/map/world.jpg
 pnpm data:rules     # → src/data/{classes,weapons,armor,items,artifacts,spells,rules}.json
+pnpm data:lore      # → src/data/lore.json (Книга Сумерек)
 ```
 
 ## Структура

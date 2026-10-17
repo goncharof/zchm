@@ -15,7 +15,7 @@ onMounted(async () => {
 <template>
   <h1>Книга Сумерек <span class="badge">предыстория мира Тмамрак</span></h1>
   <p class="small muted">Художественный текст Олега Тарасова из коробки игры: хроники эпохи Сумерек и истории крепостей и городов, куда отправится партия.</p>
-  <div class="grid wide" style="grid-template-columns: 260px 1fr">
+  <div class="cols side">
     <div class="card tight">
       <div v-for="c in chapters" :key="c.id" style="margin:.15rem 0">
         <a href="#" :style="{ fontWeight: current?.id === c.id ? 700 : 400 }" @click.prevent="current = c">{{ c.title }}</a>

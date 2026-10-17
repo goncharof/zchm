@@ -65,6 +65,7 @@ function bottle(n: number) { const h = need(); if (h) store.giveItem(h, 'bottle'
 function artifact() { const h = need(); if (h) store.findArtifact(h) }
 function scroll(s: { caster?: 'mage' | 'priest'; level?: number }) { const h = need(); if (h) store.giveScroll(h, s.caster, s.level) }
 function trap() { const h = need(); if (h) store.trapFound(h) }
+function lives(n: number) { const h = need(); if (h) store.adjustLives(h, n) }
 function done() { if (current.value) store.markVisited(props.id, current.value); if (props.id === 'doroga' && current.value) store.dismissRoad(current.value) }
 function leave() { store.leaveLocation(); router.push('/map') }
 </script>
@@ -85,7 +86,7 @@ function leave() { store.leaveLocation(); router.push('/map') }
       <b>Встречи в пути:</b>
       <button v-for="(n, i) in store.game.pendingRoad" :key="i" class="small" @click="open(n)">{{ n }}</button>
     </div>
-    <div class="grid wide" style="grid-template-columns: 1fr 1fr">
+    <div class="cols c11">
       <div>
         <div v-if="planSrc" class="card tight"><a :href="planSrc" target="_blank" rel="noopener"><img :src="planSrc" :alt="`План: ${loc.name}`" /></a></div>
         <div class="card tight">
@@ -121,9 +122,9 @@ function leave() { store.leaveLocation(); router.push('/map') }
               <button class="small" @click="coins(-10)">−10 монет</button>
               <button class="small" @click="artifact">Артефакт</button>
               <button class="small" @click="scroll({})">Случайный свиток</button>
-              <button class="small" @click="store.adjustLives(heroUid, -1)">−1 жизнь</button>
-              <button class="small" @click="store.adjustLives(heroUid, -3)">−3 жизни</button>
-              <button class="small" @click="store.adjustLives(heroUid, 3)">+3 жизни</button>
+              <button class="small" @click="lives(-1)">−1 жизнь</button>
+              <button class="small" @click="lives(-3)">−3 жизни</button>
+              <button class="small" @click="lives(3)">+3 жизни</button>
             </div>
           </details>
         </div>

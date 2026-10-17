@@ -89,7 +89,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
     </div>
     <MonsterPicker v-if="picker" @close="picker = false" @start="(s) => { picker = false; store.addMonstersToCombat(s) }" />
 
-    <div class="grid wide" style="grid-template-columns: 1fr 1fr">
+    <div class="cols c11">
       <div>
         <h3>Противники <span class="small muted">— щёлкните, чтобы выбрать цель</span></h3>
         <div v-for="m in c.monsters" :key="m.uid" class="card tight" :class="{ 'hero-down': m.dead || m.fled }"

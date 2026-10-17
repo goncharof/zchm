@@ -29,7 +29,7 @@ function enter(locationId: string) {
 
 <template>
   <p v-if="!store.heroes.length" class="muted">Сначала соберите партию.</p>
-  <div v-else class="grid wide" style="grid-template-columns: 2fr 1fr">
+  <div v-else class="cols c21">
     <div>
       <div v-if="!store.world" class="card">Карта мира не загружена (нет src/data/world.json).</div>
       <div v-else class="map-wrap">
