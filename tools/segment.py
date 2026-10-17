@@ -149,7 +149,7 @@ def split_head(s):
     d = _dash_split(s)
     if d and len(d[0]) <= 160:
         label, rest = d
-        label = re.sub(r',?\s*то$', '', label).strip()
+        label = re.sub(r'(?:,\s*|\s+)то$', '', label).strip()
         return label, _cap(rest)
     m = re.search(r',\s*то\s+', s)
     if m and m.start() <= 160:
@@ -245,7 +245,8 @@ def segment(text, hints_for=None):
             parts = [s.get('label', '')]
             for b in s['blocks']:
                 parts.append(b.get('text', '') or ' '.join(o['text'] for o in b.get('roll', [])))
-            h = hints_for(' '.join(parts))
+            # условие и исход разделены тире, как в книге: иначе «взять золото» + «Драконы…» = «Золотой дракон»
+            h = hints_for(' — '.join(x for x in parts if x))
             if h:
                 s['hints'] = h
             for b in s['blocks']:
