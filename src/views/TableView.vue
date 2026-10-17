@@ -21,11 +21,11 @@ const plan = computed(() => (store.location?.plan ? base + store.location.plan :
         <h1>За столом <span class="badge accent">комната {{ store.room?.code }}</span></h1>
         <div class="row">
           <router-link v-if="store.combat" class="btn" to="/combat" style="color:var(--danger)">⚔ К бою</router-link>
-          <router-link class="btn" to="/map">Карта</router-link>
-          <router-link v-if="store.location" class="btn" :to="`/location/${store.location.id}`">{{ store.location.name }}</router-link>
+          <router-link class="btn hide-sm" to="/map">Карта</router-link>
+          <router-link v-if="store.location" class="btn hide-sm" :to="`/location/${store.location.id}`">{{ store.location.name }}</router-link>
         </div>
       </div>
-      <GmChat height="62vh" />
+      <GmChat class="table-chat" height="62vh" />
     </div>
     <div>
       <div class="card tight">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { SendHorizontal, Volume2, VolumeX } from 'lucide-vue-next'
 import { useGameStore } from '@/stores/game'
 import { onVoicesChanged, russianVoices, saveSpeechPrefs, speak, speaking, speechPrefs, speechSupported, stopSpeaking } from '@/ui/speech'
 
@@ -44,6 +45,20 @@ function myVote(m: { votes?: Record<string, { id: string }[]> }, choiceId: strin
   return !!me && !!m.votes?.[choiceId]?.some((v) => v.id === me)
 }
 
+/** поле ввода растёт по мере набора (до четырёх строк) */
+const input = ref<HTMLTextAreaElement | null>(null)
+function autosize() {
+  const el = input.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, 140)}px`
+}
+watch(text, () => void nextTick(autosize))
+function flipSpeech() {
+  speechPrefs.value.on = !speechPrefs.value.on
+  toggleSpeech()
+}
+
 async function send() {
   const t = text.value.trim()
   if (!t) return
@@ -58,7 +73,7 @@ async function send() {
   <div class="gm-chat">
     <div ref="box" class="gm-chat-log" :style="{ height: props.height }">
       <div v-if="!items.length && !live.length" class="muted small">Здесь будет рассказ ведущего и реплики игроков.</div>
-      <div v-for="m in items" :key="m.id" class="gm-msg" :class="m.from">
+      <div v-for="m in items" :key="m.id" class="gm-msg" :class="[m.from, { mine: m.from === 'player' && !!store.room && m.author.startsWith(store.room.me.name) }]">
         <div class="gm-author">{{ m.author }}<span v-if="m.from === 'player' && ai && !m.toGm" class="muted"> · игрокам</span></div>
         <div class="gm-text">{{ m.text }}</div>
         <div v-if="m.choices?.length" class="row" style="margin-top:.35rem">
@@ -74,20 +89,25 @@ async function send() {
       <div v-if="readyMode && store.room && !store.room.gmBusy && (store.room.held || store.room.ready.length)" class="muted small">Ведущий ждёт готовности всех. Реплик в очереди: {{ store.room.held }}.</div>
       <div v-if="store.room?.gm === 'script'" class="muted small">Сценарный ведущий понимает номера помещений и кнопки вариантов.</div>
     </div>
-    <div class="row" style="margin-top:.5rem;flex-wrap:nowrap">
-      <textarea v-model="text" rows="2" style="flex:1;resize:vertical" :placeholder="ai && toGm ? (readyMode ? 'Что делает ваш герой? Ведущий ответит, когда напишут или нажмут «Готов» все' : 'Что делают ваши герои? (Enter — отправить ведущему)') : 'Сообщение игрокам'" @keydown.enter.exact.prevent="send" />
-      <button class="primary" @click="send">Отправить</button>
-    </div>
-    <div v-if="readyMode" class="row small ready-bar" style="gap:.4rem;margin-top:.3rem">
-      <span class="muted">Ход по готовности:</span>
-      <span v-for="w in waiting" :key="w.name" class="chip" :style="{ borderColor: w.ready ? 'var(--ok)' : undefined, color: w.ready ? 'var(--ok)' : undefined }">{{ w.ready ? '✓' : '…' }} {{ w.name }}</span>
+    <div v-if="readyMode" class="ready-bar">
+      <span class="muted small">Ход по готовности</span>
+      <span v-for="w in waiting" :key="w.name" class="chip" :class="{ ok: w.ready }">{{ w.ready ? '✓' : '…' }} {{ w.name }}</span>
+      <span class="grow" />
       <button class="small" :class="{ primary: !iAmReady }" @click="store.setReady(!iAmReady)">{{ iAmReady ? 'Я ещё не готов' : 'Готов' }}</button>
       <button v-if="store.room?.me.isHost" class="small" title="Не ждать остальных" @click="store.turnGo()">Ход ведущего</button>
     </div>
-    <label v-if="ai" class="row small" style="gap:.3rem;margin-top:.3rem"><input type="checkbox" v-model="toGm" /> ведущему (иначе — только игрокам, ведущий не услышит)</label>
-    <div v-if="canSpeak" class="row small" style="gap:.5rem;margin-top:.3rem">
-      <label class="row" style="gap:.3rem"><input type="checkbox" v-model="speechPrefs.on" @change="toggleSpeech" /> озвучивать ведущего</label>
-      <template v-if="speechPrefs.on">
+    <form class="composer" @submit.prevent="send">
+      <div v-if="ai" class="seg" role="group" aria-label="Кому">
+        <button type="button" :class="{ active: toGm }" :aria-pressed="toGm" @click="toGm = true">Ведущему</button>
+        <button type="button" :class="{ active: !toGm }" :aria-pressed="!toGm" title="Ведущий не услышит" @click="toGm = false">Игрокам</button>
+      </div>
+      <div class="composer-row">
+        <textarea ref="input" v-model="text" rows="1" :placeholder="ai && toGm ? (readyMode ? 'Что делает ваш герой?' : 'Что делают ваши герои?') : 'Сообщение игрокам'" enterkeyhint="send" @keydown.enter.exact.prevent="send" />
+        <button type="submit" class="primary send" aria-label="Отправить" title="Отправить (Enter)"><SendHorizontal :size="18" /><span class="send-lbl">Отправить</span></button>
+        <button v-if="canSpeak" type="button" class="icon ghost speech" :class="{ on: speechPrefs.on }" :aria-pressed="speechPrefs.on" aria-label="озвучивать ведущего" :title="speechPrefs.on ? 'Озвучка ведущего включена' : 'Озвучивать ведущего'" @click="flipSpeech"><Volume2 v-if="speechPrefs.on" :size="19" /><VolumeX v-else :size="19" /></button>
+      </div>
+      <div v-if="ai && toGm && readyMode" class="small muted">Ведущий ответит, когда напишут или нажмут «Готов» все.</div>
+      <div v-if="canSpeak && speechPrefs.on" class="row small speech-opts">
         <select v-if="voices.length > 1" v-model="speechPrefs.voice" class="small" title="Голос" @change="saveSpeechPrefs">
           <option :value="undefined">голос по умолчанию</option>
           <option v-for="v in voices" :key="v.name" :value="v.name">{{ v.name }}</option>
@@ -95,9 +115,9 @@ async function send() {
         <select v-model.number="speechPrefs.rate" class="small" title="Скорость" @change="saveSpeechPrefs">
           <option :value="0.85">медленно</option><option :value="1">обычно</option><option :value="1.2">быстрее</option><option :value="1.4">быстро</option>
         </select>
-        <button v-if="speaking" class="small" @click="stopSpeaking">Стоп</button>
-        <span v-if="!voices.length" class="muted">в системе не найден русский голос, браузер прочтёт как сможет</span>
-      </template>
-    </div>
+        <button v-if="speaking" type="button" class="small" @click="stopSpeaking">Стоп</button>
+        <span v-if="!voices.length" class="muted">русский голос в системе не найден</span>
+      </div>
+    </form>
   </div>
 </template>
