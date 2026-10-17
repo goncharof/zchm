@@ -15,7 +15,7 @@ import re
 
 OPEN_Q, CLOSE_Q = '“«„', '”»'
 LIST_LINE = re.compile(r'^((?:\d+|б)(?:\s*,\s*(?:\d+|б))*)\s*[—–-]\s+(.*)$')
-HEAD_IF = re.compile(r'^(?:А\s+)?(?:Если|Иначе)\b')
+HEAD_IF = re.compile(r'^(?:А\s+)?Если\b')  # «Иначе …» продолжает текущий сегмент (исход проверки удачи)
 HEAD_VERB = re.compile(r'^(?:Не\s+|А\s+)?[А-ЯЁ][а-яё]+(?:ете|ите|етесь|итесь)\b')
 HEAD_ANSWER = re.compile(r'^Ответ\s*:\s*')
 # глаголы на -ете/-ите, которые в книге встречаются в повествовании, а не как выбор
@@ -23,17 +23,46 @@ VERB_STOP = {'Видите', 'Слышите', 'Чувствуете', 'Заме
 DASH = re.compile(r'\s[—–]\s')
 
 
+def _closing_after(line):
+    """Для каждой позиции: есть ли закрывающая кавычка правее (незакрытые кавычки OCR не учитываются)."""
+    has = [False] * (len(line) + 1)
+    seen = False
+    for i in range(len(line) - 1, -1, -1):
+        if line[i] in CLOSE_Q:
+            seen = True
+        has[i] = seen
+    return has
+
+
+def _is_boundary(line, k):
+    n = len(line)
+    while k < n and line[k] == ' ':
+        k += 1
+    return k, (k >= n or line[k].isupper() or line[k].isdigit() or line[k] in OPEN_Q + '"(—–')
+
+
 def split_sentences(line):
     """Режет строку на предложения, не разрывая прямую речь в кавычках."""
     out, buf, depth, i = [], [], 0, 0
     n = len(line)
+    closing = _closing_after(line)
     while i < n:
         ch = line[i]
         buf.append(ch)
         if ch in OPEN_Q:
-            depth += 1
+            if closing[i]:
+                depth += 1
         elif ch in CLOSE_Q:
             depth = max(0, depth - 1)
+            # «…идти?” Если отказываетесь — …»: предложение кончается на закрывающей кавычке
+            prev = line[i - 1] if i > 0 else ''
+            if depth == 0 and prev in '.!?…':
+                k, ok = _is_boundary(line, i + 1)
+                if ok and k < n and line[k] not in '—–':
+                    out.append(''.join(buf).strip())
+                    buf = []
+                    i = k
+                    continue
         elif ch == '"':
             depth = 0 if depth else 1
         if ch in '.!?…' and depth == 0:
@@ -41,10 +70,8 @@ def split_sentences(line):
             j = i + 1
             while j < n and line[j] in '.!?…)”»':
                 buf.append(line[j]); j += 1
-            k = j
-            while k < n and line[k] == ' ':
-                k += 1
-            if k >= n or line[k].isupper() or line[k].isdigit() or line[k] in OPEN_Q + '"(—–':
+            k, ok = _is_boundary(line, j)
+            if ok:
                 s = ''.join(buf).strip()
                 if s:
                     out.append(s)
@@ -85,6 +112,31 @@ def _dash_split(s):
     return None
 
 
+SUBORD = {'чтобы', 'что', 'который', 'которая', 'которое', 'которые', 'которых', 'которого', 'и', 'а', 'но', 'или',
+          'как', 'когда', 'пока', 'если', 'где', 'куда', 'откуда', 'потому', 'так', 'хотя', 'либо', 'то', 'чем',
+          'ни', 'не', 'да', 'даже', 'причем', 'причём', 'будто', 'словно'}
+VERBISH = re.compile(r'(?<![а-яё])[а-яё]{2,}(?:ет|ют|ит|ят|ется|ются|ится|ятся|ете|ите|ал|ял|ил|ел|ла|ли|ло|ут|ют)(?![а-яё])')
+
+
+def _comma_split(s):
+    """«Если вы поймали кендера, тот извиняется…»: делит по первой запятой перед главным предложением."""
+    depth = 0
+    for i, ch in enumerate(s):
+        if ch in OPEN_Q:
+            depth += 1
+        elif ch in CLOSE_Q:
+            depth = max(0, depth - 1)
+        elif ch == ',' and depth == 0 and 6 < i <= 160:
+            rest = s[i + 1:].strip()
+            first = re.match(r'[«“"(]?([А-Яа-яЁё-]+)', rest)
+            if not first or first.group(1).lower() in SUBORD:
+                continue
+            if not VERBISH.search(rest.lower()):
+                continue
+            return s[:i].strip(), _cap(rest)
+    return None
+
+
 def _cap(s):
     return s[:1].upper() + s[1:] if s else s
 
@@ -102,6 +154,9 @@ def split_head(s):
     m = re.search(r',\s*то\s+', s)
     if m and m.start() <= 160:
         return s[:m.start()].strip(), _cap(s[m.end():].strip())
+    c = _comma_split(s)
+    if c:
+        return c
     if s.endswith(':'):
         return s[:-1].strip(), ''
     return s.rstrip('.'), ''
