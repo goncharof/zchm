@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { gameData, idx } from '@/data'
 import { paragraphText } from '@/game/book'
+import overrides from '../tools/book_overrides.json'
 import world from '@/data/world.json'
 import type { ParagraphHints, WorldMap } from '@/types'
 
@@ -85,5 +86,30 @@ describe('данные игры', () => {
     const queue = [w.nodes[0].id]
     while (queue.length) for (const nb of adj.get(queue.shift()!) ?? []) if (!seen.has(nb)) { seen.add(nb); queue.push(nb) }
     expect(seen.size).toBe(w.nodes.length)
+  })
+
+  it('ручные правки разметки применены и не устарели (tools/book_overrides.json)', () => {
+    type Ov = { hints?: Record<string, Record<string, unknown>>; when?: Record<string, string | null> }
+    for (const [key, ov] of Object.entries(overrides as Record<string, Ov | string>)) {
+      if (key.startsWith('_') || typeof ov === 'string') continue
+      const [locId, n] = key.split(':')
+      const p = idx.locationById.get(locId)?.paragraphs.find((x) => x.n === Number(n))
+      expect(p, key).toBeDefined()
+      const target = (name: string) => name === 'paragraph' ? p : name === 'scene' ? p!.segments?.find((g) => g.kind === 'scene') : p!.segments?.find((g) => g.kind === 'branch' && g.label === name)
+      for (const [name, fields] of Object.entries(ov.hints ?? {})) {
+        const t = target(name)
+        expect(t, `${key} «${name}»`).toBeDefined()
+        for (const [k, v] of Object.entries(fields)) {
+          const got = (t!.hints as Record<string, unknown> | undefined)?.[k]
+          if (v === null || (Array.isArray(v) && !v.length)) expect(got, `${key} «${name}» ${k}`).toBeUndefined()
+          else expect(got, `${key} «${name}» ${k}`).toEqual(v)
+        }
+      }
+      for (const [name, when] of Object.entries(ov.when ?? {})) {
+        const t = p!.segments?.find((g) => g.kind === 'branch' && g.label === name)
+        expect(t, `${key} «${name}»`).toBeDefined()
+        expect(t!.when, `${key} «${name}»`).toBe(when ?? undefined)
+      }
+    }
   })
 })

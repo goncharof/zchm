@@ -47,7 +47,7 @@ node tools/qa/offline.mjs [url]           # при pnpm build && pnpm preview --
 source/pdf/      оцифрованные книги (не в git, см. tools/fetch_sources.sh); source/text/ — выгруженный текст (в git)
 tools/           Python-скрипты извлечения данных (tools/.venv: pypdfium2, pillow)
 src/types.ts     схема всех данных (JSON в src/data должен ей соответствовать)
-src/data/        сгенерированные JSON — НЕ править руками, править скрипты в tools/
+src/data/        сгенерированные JSON — НЕ править руками, править скрипты в tools/; точечные ошибки разметки книги — в tools/book_overrides.json
 src/engine/      чистая логика без Vue: dice, character, combat, spells, inventory
 src/game/        GameSession — все команды партии (общие для браузера и сервера), таблица прав COMMANDS
 src/net/         протокол и клиент сетевой игры (socket.io)

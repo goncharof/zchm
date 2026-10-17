@@ -226,6 +226,8 @@ export interface ParagraphSegment {
   label?: string
   blocks: SegmentBlock[]
   hints?: ParagraphHints
+  /** ветка-исход: после победы или поражения в бою, после удачной или проваленной проверки удачи */
+  when?: 'win' | 'lose' | 'luckOk' | 'luckFail'
 }
 
 export interface Paragraph {

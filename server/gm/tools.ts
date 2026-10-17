@@ -148,7 +148,8 @@ export function executeGmTool(room: Room, name: string, input: unknown): ToolOut
         const before = (room.state.visited[loc.id] ?? []).includes(p.n)
         s.markVisited(loc.id, p.n)
         if (loc.id === 'doroga') s.dismissRoad(p.n)
-        const branches = (p.segments ?? []).filter((g) => g.kind === 'branch').map((g) => ({ если: g.label, исход: g.blocks.map((b) => ('text' in b ? b.text : b.roll.map((o) => `${o.values.join(',')} — ${o.text}`).join('; '))).join(' ') }))
+        const WHEN = { win: 'после победы в бою', lose: 'после поражения', luckOk: 'если проверка удачи прошла', luckFail: 'если проверка удачи не прошла' } as const
+        const branches = (p.segments ?? []).filter((g) => g.kind === 'branch').map((g) => ({ если: g.label, ...(g.when ? { когда: WHEN[g.when] } : {}), исход: g.blocks.map((b) => ('text' in b ? b.text : b.roll.map((o) => `${o.values.join(',')} — ${o.text}`).join('; '))).join(' ') }))
         return { content: json({ локация: loc.name, параграф: p.n, уже_пройден: before, текст: sceneText(p), ветки: branches, подсказки: p.hints ?? {}, напоминание: 'Раскрывай игрокам только то, что видят герои; исходы веток — после их выбора.' }) }
       }
       case 'roll_luck': {

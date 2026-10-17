@@ -200,6 +200,59 @@ def build_monster_patterns():
     return pats
 
 
+OVERRIDES = os.path.join(os.path.dirname(__file__), 'book_overrides.json')
+
+
+def apply_overrides(locations, issues):
+    """Ручные правки разметки (tools/book_overrides.json) поверх эвристик."""
+    with open(OVERRIDES, encoding='utf-8') as f:
+        data = json.load(f)
+    by_id = {l['id']: l for l in locations}
+    for key, ov in data.items():
+        if key.startswith('_'):
+            continue
+        loc_id, _, n = key.partition(':')
+        p = next((x for x in by_id.get(loc_id, {}).get('paragraphs', []) if x['n'] == int(n or 0)), None)
+        if not p:
+            issues.append(f'правка {key}: нет такого параграфа')
+            continue
+        segs = p.get('segments') or []
+
+        def target(name):
+            if name == 'paragraph':
+                return p
+            if name == 'scene':
+                return next((g for g in segs if g['kind'] == 'scene'), None)
+            return next((g for g in segs if g['kind'] == 'branch' and g.get('label') == name), None)
+
+        for name, fields in ov.get('hints', {}).items():
+            t = target(name)
+            if t is None:
+                issues.append(f'правка {key}: не найдено «{name}»')
+                continue
+            h = t.setdefault('hints', {})
+            for k, v in fields.items():
+                if v in (None, []):
+                    h.pop(k, None)
+                else:
+                    h[k] = v
+            if 'monsterCounts' in h:
+                h['monsterCounts'] = {m: c for m, c in h['monsterCounts'].items() if m in h.get('monsters', [])}
+                if not h['monsterCounts']:
+                    del h['monsterCounts']
+            if not h:
+                del t['hints']
+        for name, when in ov.get('when', {}).items():
+            t = target(name)
+            if t is None or t is p:
+                issues.append(f'правка {key}: нет ветки «{name}»')
+                continue
+            if when is None:
+                t.pop('when', None)
+            else:
+                t['when'] = when
+
+
 MONSTER_PATTERNS = None
 # слова перед суммой, означающие плату, а не находку: «за 15 монет», «просит 10 монет», «по 5 монет»
 PAY_WORDS = {'за', 'по', 'просит', 'требует', 'мне', 'щель', 'брось', 'бросьте', 'заплатить', 'заплатите', 'плата',
@@ -316,6 +369,7 @@ def main():
         ok = bool(ns) and ns[0] == 1 and all(b > a for a, b in zip(ns, ns[1:]))
         print(f'{order:2d}. {name:28s} стр. {first:2d}-{last:2d}  параграфов: {len(paras):3d}  '
               f'нумерация {"ok" if ok else "BROKEN"}  план: {size}')
+    apply_overrides(locations, issues)
     with open(OUT_JSON, 'w', encoding='utf-8') as w:
         json.dump(locations, w, ensure_ascii=False, indent=1)
     allp = [p for l in locations for p in l['paragraphs']]

@@ -26,22 +26,16 @@ interface Offer {
 /** Где в книге стоит кнопка (для проверок удачи — чтобы найти последствия и ветки-исходы) */
 interface Place { loc: string; n: number; seg: number }
 
-/** Ветки-исходы по формулировке: «Если выигрываете», «Проигрываете», «Если не удалось…» */
-const WIN = /побежда|выигр|убива|победител|одолева/i
-const LOSE = /проигр|поражени/i
-const LUCK_FAIL = /не\s+(удал|успел|откинут|смогл|получил)/i
-const LUCK_OK = /(^|[^е]\s)(удалось|успели|смогли)/i
-
 
 function segmentsAt(loc: string, n: number): ParagraphSegment[] {
   const p = idx.locationById.get(loc)?.paragraphs.find((x) => x.n === n)
   return p ? paragraphSegments(p) : []
 }
 
-/** Кнопки веток параграфа, чья формулировка подходит под исход */
-function outcomeOffers(loc: string, n: number, test: RegExp, skip?: number): Offer[] {
+/** Кнопки веток-исходов параграфа (разметка when: «Если выигрываете», «Если не удалось…» — tools/segment.py и правки) */
+function outcomeOffers(loc: string, n: number, when: NonNullable<ParagraphSegment['when']>, skip?: number): Offer[] {
   return segmentsAt(loc, n).flatMap((g, i) =>
-    g.kind === 'branch' && g.blocks.length && i !== skip && test.test(g.label ?? "") ? [{ label: `▸ ${g.label}`, action: { t: 'branch', loc, n, seg: i } as ScriptAction }] : [])
+    g.kind === 'branch' && g.blocks.length && i !== skip && g.when === when ? [{ label: `▸ ${g.label}`, action: { t: 'branch', loc, n, seg: i } as ScriptAction }] : [])
 }
 
 export interface LuckPenalty { kind: 'death' | 'lives' | 'half'; amount?: number; text: string }
@@ -147,7 +141,7 @@ export class ScriptedGm {
       } else if (ev.type === 'combatEnd') {
         const f = room.script.fight
         delete room.script.fight
-        const offers = f && ev.outcome ? outcomeOffers(f.loc, f.n, ev.outcome === 'victory' ? WIN : LOSE) : []
+        const offers = f && ev.outcome ? outcomeOffers(f.loc, f.n, ev.outcome === 'victory' ? 'win' : 'lose') : []
         if (offers.length) this.say(room, `${ev.text} Что дальше по книге:`, [...offers, { label: 'Идти дальше', action: { t: 'next' } }])
         else this.say(room, `${ev.text} Продолжайте: выберите вариант выше или назовите номер следующего помещения.`)
       } else if (ev.type === 'pass') {
@@ -216,7 +210,7 @@ export class ScriptedGm {
         const head = `${h.name} испытывает удачу (${a.target}): к18 = ${r.roll}${r.luck ? ` + ${r.luck}` : ''} — ${r.ok ? 'удача!' : 'неудача.'}`
         if (a.loc === undefined || a.n === undefined) { this.say(room, head); return }
         // ветки-исходы этого параграфа и последствие провала из текста
-        const offers = outcomeOffers(a.loc, a.n, r.ok ? LUCK_OK : LUCK_FAIL, a.seg)
+        const offers = outcomeOffers(a.loc, a.n, r.ok ? 'luckOk' : 'luckFail', a.seg)
         const seg = a.seg !== undefined ? segmentsAt(a.loc, a.n)[a.seg] : undefined
         const text = seg ? [seg.kind === 'branch' ? seg.label : '', ...seg.blocks.map(blockText)].join(' ') : ''
         const pen = r.ok ? null : luckPenalty(text, a.target)

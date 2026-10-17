@@ -211,6 +211,22 @@ def _ends_with_luck(seg):
     return bool(re.search(r'удач', last, re.IGNORECASE))
 
 
+# исход ветки по формулировке условия: ветка победы, поражения, удачной или проваленной проверки удачи
+WHEN_RULES = [
+    ('luckFail', re.compile(r'не\s+(удал|успел|откинут|смогл|получил)', re.IGNORECASE)),
+    ('luckOk', re.compile(r'(^|[^е]\s)(удалось|успели|смогли)', re.IGNORECASE)),
+    ('lose', re.compile(r'проигр|поражени|(^|\s)не\s+(убива|побежда|выигр)', re.IGNORECASE)),
+    ('win', re.compile(r'побежда|выигр|убива|победител|одолева', re.IGNORECASE)),
+]
+
+
+def branch_when(label):
+    for when, rx in WHEN_RULES:
+        if rx.search(label or ''):
+            return when
+    return None
+
+
 def segment(text, hints_for=None):
     """Возвращает список сегментов или None, если в параграфе нет ни веток, ни бросков."""
     segs = [{'kind': 'scene', 'blocks': []}]
@@ -240,6 +256,10 @@ def segment(text, hints_for=None):
         return None
     if not segs[0]['blocks']:
         segs.pop(0)
+    for s in segs:
+        w = branch_when(s.get('label')) if s['kind'] == 'branch' else None
+        if w:
+            s['when'] = w
     if hints_for:
         for s in segs:
             parts = [s.get('label', '')]
