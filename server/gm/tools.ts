@@ -1,5 +1,6 @@
 /** Инструменты ИИ-ведущего: схемы для Claude API и исполнение через GameSession. */
 import type Anthropic from '@anthropic-ai/sdk'
+import { sceneText } from '@/game/book'
 import { z } from 'zod'
 import { idx } from '@/data'
 import type { Hero } from '@/engine/model'
@@ -148,7 +149,7 @@ export function executeGmTool(room: Room, name: string, input: unknown): ToolOut
         s.markVisited(loc.id, p.n)
         if (loc.id === 'doroga') s.dismissRoad(p.n)
         const branches = (p.segments ?? []).filter((g) => g.kind === 'branch').map((g) => ({ если: g.label, исход: g.blocks.map((b) => ('text' in b ? b.text : b.roll.map((o) => `${o.values.join(',')} — ${o.text}`).join('; '))).join(' ') }))
-        return { content: json({ локация: loc.name, параграф: p.n, уже_пройден: before, текст: p.text, ветки: branches, подсказки: p.hints ?? {}, напоминание: 'Раскрывай игрокам только то, что видят герои; исходы веток — после их выбора.' }) }
+        return { content: json({ локация: loc.name, параграф: p.n, уже_пройден: before, текст: sceneText(p), ветки: branches, подсказки: p.hints ?? {}, напоминание: 'Раскрывай игрокам только то, что видят герои; исходы веток — после их выбора.' }) }
       }
       case 'roll_luck': {
         const h = findHero(room, String(a.hero))

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { gameData, idx } from '@/data'
+import { paragraphText } from '@/game/book'
 import world from '@/data/world.json'
 import type { ParagraphHints, WorldMap } from '@/types'
 
@@ -55,7 +56,10 @@ describe('данные игры', () => {
       expect(ns[0], l.id).toBe(1)
       for (let i = 1; i < ns.length; i++) expect(ns[i], l.id).toBeGreaterThan(ns[i - 1])
       for (const p of l.paragraphs) {
-        expect(p.text.length, `${l.id} §${p.n}`).toBeGreaterThan(10)
+        // у размеченных параграфов полный текст не хранится, а собирается из сегментов
+        if (p.segments) expect(p.text, `${l.id} §${p.n}`).toBeUndefined()
+        else expect(p.text?.length, `${l.id} §${p.n}`).toBeGreaterThan(10)
+        expect(paragraphText(p).length, `${l.id} §${p.n}`).toBeGreaterThan(10)
         checkHints(p.hints, `${l.id} §${p.n}`)
         for (const seg of p.segments ?? []) {
           expect(['scene', 'branch']).toContain(seg.kind)

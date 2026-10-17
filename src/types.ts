@@ -230,7 +230,8 @@ export interface ParagraphSegment {
 
 export interface Paragraph {
   n: number
-  text: string
+  /** полный текст — только у параграфов без разметки; у размеченных собирается из segments (src/game/book.ts) */
+  text?: string
   hints?: ParagraphHints
   /** разбиение на сцену и ветки (tools/segment.py); нет — параграф без выборов */
   segments?: ParagraphSegment[]

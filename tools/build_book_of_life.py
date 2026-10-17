@@ -301,6 +301,8 @@ def main():
             segs = segment(p['text'], hints_for)
             if segs:
                 p['segments'] = segs
+                # полный текст размеченного параграфа собирается из сегментов (src/game/book.ts) — не храним дважды
+                del p['text']
         loc['paragraphs'] = paras
         locations.append(loc)
         ns = [p['n'] for p in paras]

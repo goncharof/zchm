@@ -5,7 +5,8 @@
  */
 import { randomUUID } from 'node:crypto'
 import { idx } from '@/data'
-import type { Paragraph, ParagraphHints, ParagraphSegment, SegmentBlock } from '@/types'
+import type { ParagraphHints, ParagraphSegment, SegmentBlock } from '@/types'
+import { blockText, paragraphSegments } from '@/game/book'
 import type { Hero } from '@/engine/model'
 import { GameError } from '@/game/session'
 import { plural } from '@/ui/format'
@@ -21,9 +22,6 @@ interface Offer {
   action: ScriptAction
 }
 
-function blockText(b: SegmentBlock): string {
-  return 'text' in b ? b.text : b.roll.map((o) => `${o.values.join(', ')} — ${o.text}`).join('\n')
-}
 
 /** Где в книге стоит кнопка (для проверок удачи — чтобы найти последствия и ветки-исходы) */
 interface Place { loc: string; n: number; seg: number }
@@ -34,19 +32,15 @@ const LOSE = /проигр|поражени/i
 const LUCK_FAIL = /не\s+(удал|успел|откинут|смогл|получил)/i
 const LUCK_OK = /(^|[^е]\s)(удалось|успели|смогли)/i
 
-/** Сегменты параграфа; неразмеченный параграф — одна сцена */
-function segmentsOf(p: Paragraph): ParagraphSegment[] {
-  return p.segments ?? [{ kind: 'scene', blocks: [{ text: p.text }], hints: p.hints }]
-}
 
-function paragraphSegments(loc: string, n: number): ParagraphSegment[] {
+function segmentsAt(loc: string, n: number): ParagraphSegment[] {
   const p = idx.locationById.get(loc)?.paragraphs.find((x) => x.n === n)
-  return p ? segmentsOf(p) : []
+  return p ? paragraphSegments(p) : []
 }
 
 /** Кнопки веток параграфа, чья формулировка подходит под исход */
 function outcomeOffers(loc: string, n: number, test: RegExp, skip?: number): Offer[] {
-  return paragraphSegments(loc, n).flatMap((g, i) =>
+  return segmentsAt(loc, n).flatMap((g, i) =>
     g.kind === 'branch' && g.blocks.length && i !== skip && test.test(g.label ?? "") ? [{ label: `▸ ${g.label}`, action: { t: 'branch', loc, n, seg: i } as ScriptAction }] : [])
 }
 
@@ -124,7 +118,7 @@ export class ScriptedGm {
     if (loc.id === 'doroga') s.dismissRoad(n)
     room.script = { locationId: loc.id, n }
     const head = loc.id === 'doroga' ? `В пути (§ ${n}).` : `${loc.name}, помещение ${n}${before ? ' (вы здесь уже были)' : ''}.`
-    const segs = segmentsOf(p)
+    const segs = paragraphSegments(p)
     const scene = segs.filter((g) => g.kind === 'scene')
     const sceneText = scene.flatMap((g) => g.blocks.map(blockText)).join('\n')
     const offers: Offer[] = []
@@ -223,7 +217,7 @@ export class ScriptedGm {
         if (a.loc === undefined || a.n === undefined) { this.say(room, head); return }
         // ветки-исходы этого параграфа и последствие провала из текста
         const offers = outcomeOffers(a.loc, a.n, r.ok ? LUCK_OK : LUCK_FAIL, a.seg)
-        const seg = a.seg !== undefined ? paragraphSegments(a.loc, a.n)[a.seg] : undefined
+        const seg = a.seg !== undefined ? segmentsAt(a.loc, a.n)[a.seg] : undefined
         const text = seg ? [seg.kind === 'branch' ? seg.label : '', ...seg.blocks.map(blockText)].join(' ') : ''
         const pen = r.ok ? null : luckPenalty(text, a.target)
         if (pen) offers.unshift({ label: `Принять последствия: ${pen.text}`, action: { t: 'penalty', heroUid: h.uid, kind: pen.kind, amount: pen.amount } })
