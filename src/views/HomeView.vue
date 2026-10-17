@@ -57,12 +57,12 @@ function newGame() {
       </div>
       <div class="card" v-if="store.heroes.length">
         <h2>Партия</h2>
-        <table class="list">
+        <table class="list stack">
           <thead><tr><th>Герой</th><th>Класс</th><th>Ур.</th><th>Жизни</th><th>Мана</th><th>Монеты</th><th>Опыт</th></tr></thead>
           <tbody>
             <tr v-for="h in store.heroes" :key="h.uid" :class="{ 'hero-down': h.status.dead }">
-              <td><b>{{ h.name }}</b><span v-if="h.status.dead" class="badge" style="margin-left:.3rem;border-color:var(--danger);color:var(--danger)">мёртв</span></td>
-              <td>{{ idx.cls(h.classId).name }}</td><td>{{ h.level }}</td><td>{{ h.lives }}/{{ h.maxLives }}</td><td>{{ h.maxMana ? `${h.mana}/${h.maxMana}` : '—' }}</td><td>{{ h.money }}</td><td>{{ h.xp }}</td>
+              <td data-label="Герой"><b>{{ h.name }}</b><span v-if="h.status.dead" class="badge" style="margin-left:.3rem;border-color:var(--danger);color:var(--danger)">мёртв</span></td>
+              <td data-label="Класс">{{ idx.cls(h.classId).name }}</td><td data-label="Ур.">{{ h.level }}</td><td data-label="Жизни">{{ h.lives }}/{{ h.maxLives }}</td><td data-label="Мана">{{ h.maxMana ? `${h.mana}/${h.maxMana}` : '—' }}</td><td data-label="Монеты">{{ h.money }}</td><td data-label="Опыт">{{ h.xp }}</td>
             </tr>
           </tbody>
         </table>

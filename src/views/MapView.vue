@@ -35,7 +35,7 @@ function enter(locationId: string) {
       <div v-else class="map-wrap">
         <img :src="mapSrc" alt="Карта мира" />
         <button v-for="n in store.world.nodes" :key="n.id" class="map-node"
-          :class="{ junction: !n.locationId, current: n.id === current?.id, selected: n.id === selectedId }"
+          :class="{ junction: !n.locationId, current: n.id === current?.id, selected: n.id === selectedId, 'anchor-left': !!n.locationId && n.x < 0.14, 'anchor-right': !!n.locationId && n.x > 0.86 }"
           :style="{ left: n.x * 100 + '%', top: n.y * 100 + '%' }" :title="n.name" @click="selectedId = n.id">
           <template v-if="n.locationId">{{ n.name }}</template>
         </button>

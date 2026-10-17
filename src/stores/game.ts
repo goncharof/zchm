@@ -11,6 +11,7 @@ import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
 import { closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
+import { plural } from '@/ui/format'
 import { REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
 
 const SAVE_KEY = 'zchm.save.v1'
@@ -256,7 +257,7 @@ export const useGameStore = defineStore('game', () => {
       if (r.days < days) log(`${h.name} может оплатить только ${r.days} сут. из ${days}.`)
     }
     game.value.day += days
-    log(`Команда отдыхает в трактире ${days} сут. (2 монеты в сутки с каждого; +5 жизней и +5 маны в сутки). День ${game.value.day}.`)
+    log(`Команда отдыхает в трактире: ${days} ${plural(days, 'сутки', 'суток', 'суток')} (2 монеты в сутки с каждого; +5 жизней и +5 маны в сутки). День ${game.value.day}.`)
   }
 
   // ---------- мир и локации ----------
@@ -273,7 +274,8 @@ export const useGameStore = defineStore('game', () => {
     game.value.locationId = null
     game.value.pendingRoad.push(...encounters)
     const target = world.value.nodes.find((n) => n.id === nodeId)
-    log(`Переход: ${route.nodes.length - 1} участков дороги, ${days} дн.${allMounted ? ' (верхом)' : ''}. Прибытие — ${target?.name ?? nodeId}, день ${game.value.day}.${encounters.length ? ` В пути случилось ${encounters.length} встреч(и): параграфы «Дороги» ${encounters.join(', ')}.` : ''}`)
+    const legs = route.nodes.length - 1
+    log(`Переход: ${legs} ${plural(legs, 'участок', 'участка', 'участков')} дороги, ${days} ${plural(days, 'день', 'дня', 'дней')} пути${allMounted ? ' верхом' : ''}. Прибытие — ${target?.name ?? nodeId}, день ${game.value.day}.${encounters.length ? ` В пути ${plural(encounters.length, 'случилась', 'случились', 'случилось')} ${encounters.length} ${plural(encounters.length, 'встреча', 'встречи', 'встреч')}: «Дорога», ${encounters.map((n) => `§ ${n}`).join(', ')}.` : ''}`)
   }
   function enterLocation(locationId: string): void {
     if (!game.value) return

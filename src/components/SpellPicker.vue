@@ -23,12 +23,12 @@ function pick(id: string) {
         <button class="small" @click="emit('close')">Позже</button>
       </div>
       <p class="muted small">ХАУСРУЛ: при переходе на уровень кастер записывает в книгу одно заклинание уровня не выше своего.</p>
-      <table class="list">
+      <table class="list stack">
         <thead><tr><th>Ур.</th><th>Заклинание</th><th>Мана</th><th>Описание</th><th></th></tr></thead>
         <tbody>
           <tr v-for="s in options" :key="s.id">
-            <td>{{ s.level }}</td><td><b>{{ s.name }}</b></td><td>{{ s.cost ?? s.costFormula }}</td>
-            <td class="small muted">{{ s.description }}</td>
+            <td data-label="Ур.">{{ s.level }}</td><td data-label="Заклинание"><b>{{ s.name }}</b></td><td data-label="Мана">{{ s.cost ?? s.costFormula }}</td>
+            <td data-label="Описание" class="small muted">{{ s.description }}</td>
             <td><button class="small primary" @click="pick(s.id)">Выучить</button></td>
           </tr>
         </tbody>

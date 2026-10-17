@@ -28,6 +28,7 @@ pnpm data:book      # → src/data/locations.json + public/img/locations/*.jpg
 pnpm data:world     # → src/data/world.json + public/img/map/world.jpg
 pnpm data:rules     # → src/data/{classes,weapons,armor,items,artifacts,spells,rules}.json
 pnpm data:lore      # → src/data/lore.json (Книга Сумерек)
+node tools/qa/screens.mjs [url] [outDir]  # при запущенном pnpm dev: проход по экранам в Chrome, скриншоты desktop/mobile в tools/qa/out, отчёт об ошибках и горизонтальной прокрутке
 ```
 
 ## Структура
@@ -40,7 +41,8 @@ src/engine/      чистая логика без Vue: dice, character, combat, 
 src/stores/      Pinia: game (партия, сохранения), combat
 src/views/       экраны (роутер), src/components/ — переиспользуемые куски
 public/img/      картинки (иллюстрации бестиария, планы локаций, карта мира)
-tests/           Vitest, только движок
+tests/           Vitest: движок, стор, сквозной прогон приложения в jsdom
+tools/qa/        визуальный прогон в Chrome (playwright-core)
 docs/            документация проекта
 ```
 
@@ -53,7 +55,7 @@ docs/            документация проекта
 - Движок (`src/engine`) не зависит от Vue и от `localStorage`; всё состояние сериализуемо.
 - Случайность только через `src/engine/dice.ts` (подменяемый генератор, чтобы тесты были детерминированы).
 - После заметных изменений обновлять `docs/PROGRESS.md` (что сделано, что дальше) и при необходимости `docs/DECISIONS.md`.
-- Коммиты небольшие, сообщения на английском; заканчивать строкой `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+- Коммиты небольшие, сообщения на английском; заканчивать строкой `Co-Authored-By:` с текущей моделью Claude (например, `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`).
 
 ## Лицензия материалов
 Тексты и иллюстрации © Багдасаров Ж. Г., ЗАО «Камелот», 1997. Оцифровка П. Немченко, 2020,

@@ -43,30 +43,30 @@ function usable(wId: string) {
       <button :class="{ active: tab === 'tavern' }" @click="tab = 'tavern'">Трактир</button>
     </div>
 
-    <table v-if="tab === 'weapons' && allowed" class="list">
+    <table v-if="tab === 'weapons' && allowed" class="list stack">
       <thead><tr><th>Оружие</th><th>Атаки (к6)</th><th>Рука</th><th>Цена</th><th></th></tr></thead>
       <tbody>
         <tr v-for="w in weapons" :key="w.id" :class="{ muted: !usable(w.id) }">
-          <td>{{ w.name }} <span v-if="w.ranged" class="badge">метательное</span><span v-if="w.throwable" class="badge">можно метать</span><span v-if="w.accuracyBonus" class="badge">меткость +{{ w.accuracyBonus }}</span></td>
-          <td>{{ attacksStr(w.attacks) }}</td><td class="small">{{ w.hand ? HAND_NAMES[w.hand] : '' }}</td><td>{{ w.price }}</td>
+          <td data-label="Оружие">{{ w.name }} <span v-if="w.ranged" class="badge">метательное</span><span v-if="w.throwable" class="badge">можно метать</span><span v-if="w.accuracyBonus" class="badge">меткость +{{ w.accuracyBonus }}</span></td>
+          <td data-label="Атаки (к6)">{{ attacksStr(w.attacks) }}</td><td data-label="Рука" class="small">{{ w.hand ? HAND_NAMES[w.hand] : '' }}</td><td data-label="Цена">{{ w.price }}</td>
           <td><button class="small" :disabled="!buyer || buyer.money < w.price" :title="usable(w.id) ? '' : 'Класс не может этим пользоваться, но купить можно'" @click="buy('weapon', w.id)">Купить</button></td>
         </tr>
       </tbody>
     </table>
-    <table v-if="tab === 'armor' && allowed" class="list">
+    <table v-if="tab === 'armor' && allowed" class="list stack">
       <thead><tr><th>Доспех</th><th>Защита</th><th>Цена</th><th></th></tr></thead>
       <tbody>
         <tr v-for="a in gameData.armor.filter(x => x.price > 0)" :key="a.id">
-          <td>{{ a.name }}</td><td>{{ a.defense ?? (a.defenseBonus ? `+${a.defenseBonus}` : a.strengthBonus ? `сила +${a.strengthBonus}` : '') }}</td><td>{{ a.price }}</td>
+          <td data-label="Доспех">{{ a.name }}</td><td data-label="Защита">{{ a.defense ?? (a.defenseBonus ? `+${a.defenseBonus}` : a.strengthBonus ? `сила +${a.strengthBonus}` : '') }}</td><td data-label="Цена">{{ a.price }}</td>
           <td><button class="small" :disabled="!buyer || buyer.money < a.price" @click="buy('armor', a.id)">Купить</button></td>
         </tr>
       </tbody>
     </table>
-    <table v-if="tab === 'items' && allowed" class="list">
+    <table v-if="tab === 'items' && allowed" class="list stack">
       <thead><tr><th>Вещь</th><th>Описание</th><th>Цена</th><th></th></tr></thead>
       <tbody>
         <tr v-for="i in gameData.items" :key="i.id">
-          <td>{{ i.name }}</td><td class="small muted">{{ i.description }}</td><td>{{ i.price }}</td>
+          <td data-label="Вещь">{{ i.name }}</td><td data-label="Описание" class="small muted">{{ i.description }}</td><td data-label="Цена">{{ i.price }}</td>
           <td><button class="small" :disabled="!buyer || buyer.money < i.price" @click="buy('item', i.id)">Купить</button></td>
         </tr>
       </tbody>

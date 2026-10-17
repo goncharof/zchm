@@ -25,13 +25,15 @@ const visited = computed(() => store.game?.visited[props.id] ?? [])
 const services = computed(() => SERVICES[props.id] ?? [])
 const gm = computed(() => store.game?.gmMode ?? false)
 const activeHeroes = computed(() => store.heroes.filter((h) => !h.status.dead))
+const fightable = computed(() => (paragraph.value?.hints?.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special))
+const npcs = computed(() => (paragraph.value?.hints?.monsters ?? []).filter((m) => idx.monsterById.get(m)?.special))
 
 function open(n: number) {
   current.value = n
   revealed.value = false
   lastLuck.value = ''
   counts.value = {}
-  for (const m of paragraph.value?.hints?.monsters ?? []) counts.value[m] = 1
+  for (const m of paragraph.value?.hints?.monsters ?? []) if (!idx.monsterById.get(m)?.special) counts.value[m] = 1
 }
 onMounted(() => {
   if (store.game && store.game.locationId !== props.id && props.id !== 'doroga' && store.worldNode?.locationId === props.id) store.enterLocation(props.id)
@@ -50,7 +52,7 @@ function luck(target: number) {
   lastLuck.value = `к18 = ${r.roll}${r.luck ? ` + ${r.luck}` : ''} против ${target}: ${r.ok ? 'удача!' : 'неудача'}`
 }
 function fight(ids?: string[]) {
-  const specs: EncounterSpec[] = (ids ?? Object.keys(counts.value)).map((monsterId) => ({ monsterId, count: counts.value[monsterId] ?? 1 })).filter((s) => s.count > 0)
+  const specs: EncounterSpec[] = (ids ?? fightable.value).map((monsterId) => ({ monsterId, count: counts.value[monsterId] ?? 1 })).filter((s) => s.count > 0)
   if (!specs.length) return
   startFight(specs)
 }
@@ -95,13 +97,13 @@ function leave() { store.leaveLocation(); router.push('/map') }
     </div>
     <div class="cols c11">
       <div>
-        <div v-if="planSrc" class="card tight"><a :href="planSrc" target="_blank" rel="noopener"><img :src="planSrc" :alt="`План: ${loc.name}`" /></a></div>
         <div class="card tight">
           <div class="numgrid">
             <button v-for="p in loc.paragraphs" :key="p.n" :class="{ visited: visited.includes(p.n), active: p.n === current }" @click="open(p.n)">{{ p.n }}</button>
           </div>
           <p class="small muted" style="margin:.4rem 0 0">{{ id === 'doroga' ? 'Ведущий выбирает любое приключение из главы «Дорога».' : 'Номера соответствуют плану локации. Пройденные параграфы приглушены.' }}</p>
         </div>
+        <div v-if="planSrc" class="card tight"><a :href="planSrc" target="_blank" rel="noopener" title="Открыть план целиком"><img class="plan-img" :src="planSrc" :alt="`План: ${loc.name}`" /></a></div>
       </div>
       <div>
         <div v-if="!paragraph" class="card muted">Выберите номер параграфа.</div>
@@ -113,10 +115,11 @@ function leave() { store.leaveLocation(); router.push('/map') }
           <div class="row" style="margin:.6rem 0 .3rem"><label>Действует</label><select v-model="heroUid"><option v-for="h in activeHeroes" :key="h.uid" :value="h.uid">{{ h.name }}</option></select></div>
           <div class="row" v-if="paragraph.hints">
             <template v-for="t in paragraph.hints.luck ?? []" :key="'l' + t"><button @click="luck(t)">Бросок удачи {{ t }}</button></template>
-            <template v-for="m in paragraph.hints.monsters ?? []" :key="m">
+            <template v-for="m in fightable" :key="m">
               <span class="row" style="gap:.2rem"><input type="number" min="0" max="20" v-model.number="counts[m]" style="width:3.6rem" /><button class="danger" @click="fight([m])">⚔ {{ idx.monsterById.get(m)?.name }}</button></span>
             </template>
-            <button v-if="(paragraph.hints.monsters?.length ?? 0) > 1" class="danger" @click="fight()">⚔ Бой со всеми</button>
+            <button v-if="fightable.length > 1" class="danger" @click="fight()">⚔ Бой со всеми</button>
+            <span v-for="m in npcs" :key="'npc' + m" class="badge" :title="idx.monsterById.get(m)?.description">{{ idx.monsterById.get(m)?.name }} — персонаж, не противник</span>
             <template v-for="c in paragraph.hints.coins ?? []" :key="'c' + c"><button @click="coins(c)">+{{ c }} монет</button></template>
             <template v-for="b in paragraph.hints.bottles ?? []" :key="'b' + b"><button @click="bottle(b)">Взять бутылку ({{ b }})</button></template>
             <button v-if="paragraph.hints.artifact" @click="artifact">Найти артефакт (к18)</button>

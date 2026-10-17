@@ -6,3 +6,4 @@ tools/.venv/
 # тяжёлые исходники (скачиваются скриптом tools/fetch_sources.sh)
 source/pdf/*.pdf
 source/pdf/*.jpg
+tools/qa/out/

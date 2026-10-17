@@ -28,12 +28,12 @@ function add(id: string, d: number) {
         <span v-for="s in specs" :key="s.monsterId" class="badge accent">{{ gameData.bestiary.find(m => m.id === s.monsterId)?.name }} ×{{ s.count }}</span>
         <button class="primary" @click="emit('start', specs)">Начать бой</button>
       </div>
-      <table class="list">
+      <table class="list stack">
         <thead><tr><th>Монстр</th><th>Ур.</th><th>Защита</th><th>Жизни</th><th>Атаки</th><th></th></tr></thead>
         <tbody>
           <tr v-for="m in list" :key="m.id">
-            <td>{{ m.name }}</td><td>{{ m.level }}</td><td>{{ m.defense ?? '—' }}</td><td>{{ m.lives ?? '—' }}</td>
-            <td class="small">{{ Array.isArray(m.attacks) ? m.attacks.join('-') : m.attacks }}</td>
+            <td data-label="Монстр">{{ m.name }}</td><td data-label="Ур.">{{ m.level }}</td><td data-label="Защита">{{ m.defense ?? '—' }}</td><td data-label="Жизни">{{ m.lives ?? '—' }}</td>
+            <td data-label="Атаки" class="small">{{ Array.isArray(m.attacks) ? m.attacks.join('-') : m.attacks }}</td>
             <td class="row" style="flex-wrap:nowrap">
               <button class="small" @click="add(m.id, -1)">−</button>
               <span style="min-width:1.2rem;text-align:center">{{ picked[m.id] ?? 0 }}</span>

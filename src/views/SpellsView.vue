@@ -22,13 +22,13 @@ const levels = computed(() => {
   <p class="small muted">Пользоваться можно только заклинаниями, записанными в книгу: заклинание 0 уровня известно с начала, новые — при переходе на уровень или со свитков. Опыт начисляется за удачно применённое заклинание.</p>
   <div v-for="g in levels" :key="g.level" class="card">
     <h2>{{ g.level }} уровень</h2>
-    <table class="list">
+    <table class="list stack">
       <thead><tr><th>Заклинание</th><th>Мана</th><th>Место действия</th><th>Удача</th><th>Опыт</th><th>Описание</th></tr></thead>
       <tbody>
         <tr v-for="s in g.spells" :key="s.id">
-          <td><b>{{ s.name }}</b><div v-if="s.duration" class="small muted">{{ s.duration }}</div></td>
-          <td>{{ s.cost ?? s.costFormula }}</td><td class="small">{{ s.target ?? '—' }}</td><td>{{ s.luck ?? '—' }}</td><td class="small">{{ s.xp ?? s.xpFormula }}</td>
-          <td class="small">{{ s.description }}</td>
+          <td data-label="Заклинание"><b>{{ s.name }}</b><div v-if="s.duration" class="small muted">{{ s.duration }}</div></td>
+          <td data-label="Мана">{{ s.cost ?? s.costFormula }}</td><td data-label="Место действия" class="small">{{ s.target ?? '—' }}</td><td data-label="Удача">{{ s.luck ?? '—' }}</td><td data-label="Опыт" class="small">{{ s.xp ?? s.xpFormula }}</td>
+          <td data-label="Описание" class="small">{{ s.description }}</td>
         </tr>
       </tbody>
     </table>

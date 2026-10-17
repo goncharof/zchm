@@ -93,3 +93,26 @@ table.list th { color: var(--muted); font-weight: 500; }
 .cols.c11 { grid-template-columns: 1fr 1fr; }
 .cols.side { grid-template-columns: 260px 1fr; }
 @media (max-width: 820px) { .cols.c21, .cols.c11, .cols.side { grid-template-columns: 1fr; } }
+/* читаемость приглушённого текста на акцентных кнопках */
+button.primary .muted { color: rgba(27, 20, 9, .7); }
+/* карта: подписи у краёв не вылезают */
+.map-wrap { overflow: hidden; border-radius: var(--radius); }
+.map-node.anchor-left { transform: translate(-6px, -50%); }
+.map-node.anchor-right { transform: translate(calc(-100% + 6px), -50%); }
+.plan-img { max-height: 78vh; width: auto; margin: 0 auto; }
+@media (max-width: 640px) {
+  .app-header { position: static; }
+  .app-header .inner { gap: .35rem; }
+  nav.main { flex-wrap: nowrap; overflow-x: auto; width: 100%; scrollbar-width: none; }
+  nav.main::-webkit-scrollbar { display: none; }
+  nav.main a { white-space: nowrap; }
+  .party-strip { flex-wrap: nowrap; overflow-x: auto; width: 100%; margin-left: 0; scrollbar-width: none; }
+  .party-strip .chip { white-space: nowrap; }
+  .map-node { font-size: .58rem; padding: 0 .3rem; border-width: 1px; }
+  h1 { font-size: 1.4rem; }
+  /* таблицы превращаются в карточки */
+  table.stack thead { display: none; }
+  table.stack tr { display: block; border-bottom: 1px solid var(--border); padding: .45rem 0; }
+  table.stack td { display: block; border: none; padding: .1rem 0; }
+  table.stack td[data-label]::before { content: attr(data-label) ': '; color: var(--muted); }
+}

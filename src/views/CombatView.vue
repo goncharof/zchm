@@ -45,6 +45,15 @@ function needRoll(h: Hero, slot: string) {
   const n = toHit(h, w, targetMonster.value, idx)
   return n <= 1 ? 'попадает всегда' : `нужно ${n}+`
 }
+function weaponReady(w: ReturnType<typeof heroWeapons>[number]) {
+  if (!c.value) return false
+  if (c.value.phase === 'ranged') return w.ranged
+  if (w.ranged && w.entry?.kind === 'weapon') return !!idx.weapon(w.entry.ref).throwable
+  return true
+}
+function weaponWhy(w: ReturnType<typeof heroWeapons>[number]) {
+  return c.value?.phase === 'ranged' && !w.ranged ? 'Сначала сойдитесь вплотную' : 'Противник вплотную — из лука не выстрелить'
+}
 function finish() {
   const back = c.value?.returnTo
   store.endCombat()
@@ -126,7 +135,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
           </div>
           <div v-if="h.buffs.length" class="row small" style="margin-bottom:.3rem"><span v-for="(b, i) in h.buffs" :key="i" class="badge accent" :title="b.stat === 'ward' && b.ward ? wardName(b.ward) : ''">{{ b.source }}<template v-if="b.rounds > 0"> ({{ b.rounds }})</template></span></div>
           <div v-if="canAct(h)" class="row">
-            <button v-for="w in heroWeapons(h, idx)" :key="w.slot + w.name" class="small primary" :disabled="!targetMonster" :title="needRoll(h, w.slot)" @click="store.attack(h.uid, w.slot, target)">{{ w.ranged ? '🏹' : '⚔' }} {{ w.name }} ({{ attacksLabel(w) }}) <span class="muted">{{ needRoll(h, w.slot) }}</span></button>
+            <button v-for="w in heroWeapons(h, idx)" :key="w.slot + w.name" class="small primary" :disabled="!targetMonster || !weaponReady(w)" :title="weaponReady(w) ? needRoll(h, w.slot) : weaponWhy(w)" @click="store.attack(h.uid, w.slot, target)">{{ w.ranged ? '🏹' : '⚔' }} {{ w.name }} ({{ attacksLabel(w) }}) <span class="muted">{{ needRoll(h, w.slot) }}</span></button>
             <button v-if="!heroWeapons(h, idx).some(w => !w.ranged)" class="small" :disabled="!targetMonster || c.phase === 'ranged'" :title="needRoll(h, 'unarmed')" @click="store.attack(h.uid, 'unarmed', target)">Голыми руками <span class="muted">{{ needRoll(h, 'unarmed') }}</span></button>
             <button class="small" @click="store.flee(h.uid)" :title="`Нужно выкинуть ${fleeNeed()}+`">Бежать ({{ fleeNeed() }}+)</button>
             <button class="small" @click="store.skip(h.uid)">Пропустить</button>
