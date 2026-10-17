@@ -194,6 +194,10 @@ def build_monster_patterns():
 
 
 MONSTER_PATTERNS = None
+# слова перед суммой, означающие плату, а не находку: «за 15 монет», «просит 10 монет», «по 5 монет»
+PAY_WORDS = {'за', 'по', 'просит', 'требует', 'мне', 'щель', 'брось', 'бросьте', 'заплатить', 'заплатите', 'плата',
+             'одолжить', 'одолжите', 'отдать', 'отдайте', 'дайте', 'дай', 'потребует', 'берет', 'взимает', 'пошлину'}
+PAY_PAIRS = ('с вас', 'с каждого', 'на 1', 'играть на', 'сыграть на', 'ставку')
 NUM_WORDS = {'два': 2, 'две': 2, 'двое': 2, 'пара': 2, 'пару': 2, 'три': 3, 'трое': 3, 'четыре': 4, 'четверо': 4,
              'пять': 5, 'пятеро': 5, 'шесть': 6, 'шестеро': 6, 'семь': 7, 'семеро': 7, 'восемь': 8, 'девять': 9,
              'десять': 10, 'дюжина': 12}
@@ -225,9 +229,18 @@ def hints_for(text):
     bottles = [int(v) for v in re.findall(r'\((\d)\)', text) if 1 <= int(v) <= 6]
     if bottles:
         h['bottles'] = bottles
-    coins = [int(v) for v in re.findall(r'(\d+)\s*монет', text)]
+    coins, prices = [], []
+    for mm in re.finditer(r'(\d+)\s*монет', text):
+        words = [w.lower().strip('(,.“”«»:') for w in re.findall(r'\S+', text[max(0, mm.start() - 40):mm.start()])]
+        last = words[-1] if words else ''
+        pair = ' '.join(words[-2:])
+        after = text[mm.end():mm.end() + 12].lower()
+        is_price = last in PAY_WORDS or any(p in pair for p in PAY_PAIRS) or 'в долг' in after
+        (prices if is_price else coins).append(int(mm.group(1)))
     if coins:
         h['coins'] = coins
+    if prices:
+        h['prices'] = prices
     # monsters: collect spans, drop matches nested inside a longer match (назгул in «король назгулов»)
     spans = []
     for mid, pat in MONSTER_PATTERNS:
