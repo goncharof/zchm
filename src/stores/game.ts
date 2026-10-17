@@ -13,6 +13,7 @@ import type { CastResult } from '@/engine/spells'
 import { GameSession, blankGame, migrate, parseSave, runCommand, type CommandArgs, type CommandName, type CommandResult } from '@/game/session'
 import { NetClient, savedSession } from '@/net/client'
 import type { ChatMessage, GmMode, RoomView, TurnMode } from '@/net/protocol'
+import type { NetStatus } from '@/net/client'
 
 const SAVE_KEY = 'zchm.save.v1'
 
@@ -35,6 +36,8 @@ export const useGameStore = defineStore('game', () => {
   const chat = ref<ChatMessage[]>([])
   /** реплики ведущего, которые сейчас пишутся (id → текст) */
   const streaming = ref<Record<string, string>>({})
+  /** связь с сервером сетевой игры */
+  const netStatus = ref<NetStatus>('connecting')
   const connecting = ref(false)
   loadWorld().then((w) => { world.value = w })
 
@@ -98,7 +101,11 @@ export const useGameStore = defineStore('game', () => {
     client.onState((state) => { game.value = migrate(state) })
     client.onRoom((r) => { room.value = r })
     client.onNotice((text) => say(text))
-    client.onChatHistory((ms) => { chat.value = ms })
+    client.onStatus((st) => { netStatus.value = st })
+    client.onLost((why) => { say(`Не удалось вернуться за стол: ${why}`); detachNet() })
+    // история приходит при входе: недописанный текст ведущего сервер пришлёт заново целиком
+    client.onChatHistory((ms) => { chat.value = ms; streaming.value = {} })
+    client.onRoom(() => { netStatus.value = 'online' })
     client.onChat((m) => {
       chat.value.push(m)
       if (chat.value.length > 300) chat.value.splice(0, chat.value.length - 300)
@@ -257,7 +264,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   return {
-    game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, isMine, chat, streaming, connecting,
+    game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, isMine, chat, netStatus, streaming, connecting,
     createRoom, joinRoom, rejoin, leaveRoom, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, setReady, turnGo, ownerOf,
     heroes, combat, location, worldNode, started,
     say, hero, cmd, attachNet, detachNet,

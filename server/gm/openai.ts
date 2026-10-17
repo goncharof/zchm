@@ -69,6 +69,7 @@ export class OpenAiCompatProvider implements LlmProvider {
   async turn(room: Room, input: { userText: string; snapshot: string }, io: { delta(text: string): void; stateChanged(): void }): Promise<string> {
     const hist = (room.gmHistories[this.id] ??= []) as OaMsg[]
     const mark = hist.length
+    room.gmMarks[this.id] = mark
     // состояние партии — в той же реплике: не все совместимые API принимают system посреди разговора
     hist.push({ role: 'user', content: `${input.userText}\n\n[Состояние партии — сообщение сервера, а не игроков]\n${input.snapshot}` })
     let text = ''
@@ -93,6 +94,7 @@ export class OpenAiCompatProvider implements LlmProvider {
       }
     } catch (e) {
       hist.length = mark
+      delete room.gmMarks[this.id]
       const pe = e instanceof ProviderError ? e : new ProviderError(`${this.label}: ${(e as Error).message}`, 30_000)
       pe.done = done
       throw pe
@@ -107,9 +109,11 @@ export class OpenAiCompatProvider implements LlmProvider {
         else hist.push({ role: 'assistant', content: text })
       } else {
         hist.length = mark
+        delete room.gmMarks[this.id]
         throw new ProviderError(`${this.label}: пустой ответ`, 30_000)
       }
     }
+    delete room.gmMarks[this.id]
     // хранимая история тоже ограничена (в запрос и так уходит только окно последних сообщений)
     const keep = Math.max(200, (this.cfg.historyLimit ?? 40) * 4)
     if (hist.length > keep) {

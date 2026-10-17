@@ -30,6 +30,8 @@ export interface GmContext {
 export interface GmDriver {
   /** несколько входов сразу уходят одним ходом */
   enqueue(room: Room, input: GmInput | GmInput[]): void
+  /** продолжить очередь комнаты, оставшуюся с прошлого запуска сервера */
+  resume?(room: Room): void
   /** нажата кнопка-вариант сценарного ведущего */
   choose(room: Room, playerId: string, messageId: string, choiceId: string): void
   /** настроенные модели ИИ по порядку перебора */

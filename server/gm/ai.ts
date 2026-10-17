@@ -81,6 +81,7 @@ export class AnthropicProvider implements LlmProvider {
       console.log(`[ведущий Claude ${room.code}] история ${JSON.stringify(stored).length} символов — новый разговор с кратким содержанием`)
     }
     const mark = history.length
+    room.gmMarks[this.id] = stored.length
     const done: string[] = []
     history.push({ role: 'user', content: [{ type: 'text', text: prefix + input.userText }] })
     // системное сообщение посреди разговора: не трогает кэшированный префикс и не подделывается игроками
@@ -138,12 +139,14 @@ export class AnthropicProvider implements LlmProvider {
     } catch (err) {
       // откатить незавершённый ход: история остаётся корректной для следующего запроса (старая — если начинали новую)
       if (!fresh) history.length = mark
+      delete room.gmMarks[this.id]
       const why = err instanceof Anthropic.APIError ? `ошибка API ${err.status ?? ''}`.trim() : (err as Error).message
       const pe = err instanceof ProviderError ? err : new ProviderError(`Claude: ${why}`, cooldownForApiError(err))
       pe.done = done
       throw pe
     }
     if (fresh) room.gmHistories[this.id] = history
+    delete room.gmMarks[this.id]
     return text.trim() || '…'
   }
 }
@@ -163,7 +166,6 @@ const EVENT_HINT: Record<GmEvent['type'], string> = {
 }
 
 export class GmDirector implements GmDriver {
-  private queues = new Map<string, GmInput[]>()
   private running = new Map<string, Promise<void>>()
   private cooling = new Map<string, number>()
   private script: ScriptedGm
@@ -177,14 +179,17 @@ export class GmDirector implements GmDriver {
   }
 
   enqueue(room: Room, input: GmInput | GmInput[]): void {
-    const q = this.queues.get(room.code) ?? []
-    q.push(...(Array.isArray(input) ? input : [input]))
-    if (!q.length) return
-    this.queues.set(room.code, q)
-    if (!this.running.has(room.code)) {
-      const p = this.pump(room).finally(() => this.running.delete(room.code))
-      this.running.set(room.code, p)
-    }
+    // очередь живёт в комнате и сохраняется на диск: перезапуск сервера её не теряет
+    room.gmQueue.push(...(Array.isArray(input) ? input : [input]))
+    this.ctx.persist(room)
+    this.resume(room)
+  }
+
+  /** Запустить обработку очереди комнаты (в том числе оставшейся с прошлого запуска сервера) */
+  resume(room: Room): void {
+    if (!room.gmQueue.length || this.running.has(room.code)) return
+    const p = this.pump(room).finally(() => this.running.delete(room.code))
+    this.running.set(room.code, p)
   }
 
   choose(room: Room, playerId: string, messageId: string, choiceId: string): void {
@@ -200,9 +205,16 @@ export class GmDirector implements GmDriver {
     this.ctx.roomChanged(room)
     try {
       for (;;) {
-        const q = this.queues.get(room.code) ?? []
-        if (!q.length) break
-        await this.turn(room, q.splice(0))
+        if (!room.gmQueue.length) break
+        const batch = room.gmQueue.splice(0)
+        room.gmInFlight = batch
+        this.ctx.persist(room)
+        try {
+          await this.turn(room, batch)
+        } finally {
+          room.gmInFlight = null
+          this.ctx.persist(room)
+        }
       }
     } catch (e) {
       console.error('[ведущий]', e)

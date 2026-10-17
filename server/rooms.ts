@@ -42,6 +42,9 @@ export interface RoomData {
   turnMode?: TurnMode
   held?: HeldInput[]
   votes?: Record<string, Record<string, string>>
+  gmMarks?: Record<string, number>
+  gmQueue?: import('./gm/types').GmInput[]
+  gmInFlight?: import('./gm/types').GmInput[] | null
   choiceActions?: Record<string, ChoiceRecord>
   createdAt: number
   updatedAt: number
@@ -93,6 +96,13 @@ export class Room {
   players = new Map<string, Player>()
   chat: ChatMessage[] = []
   gmHistories: Record<string, unknown[]> = {}
+  /** длина истории провайдера в начале идущего хода: если сервер упадёт посреди хода, недописанный ход отрезается */
+  gmMarks: Record<string, number> = {}
+  /** очередь входов ведущему и ход, который сейчас идёт, — сохраняются, чтобы пережить перезапуск сервера */
+  gmQueue: import('./gm/types').GmInput[] = []
+  gmInFlight: import('./gm/types').GmInput[] | null = null
+  /** недописанный текст ведущего (стрим): игрок, обновивший страницу, видит его сразу */
+  live: Record<string, string> = {}
   gmSeen: Record<string, string> = {}
   script: ScriptState = { locationId: null, n: null }
   choiceActions: Record<string, ChoiceRecord> = {}
@@ -174,6 +184,7 @@ export class Room {
       players: [...this.players.values()].map(({ sockets: _s, ...rest }) => { void _s; return rest }),
       chat: this.chat, gmHistories: this.gmHistories, gmSeen: this.gmSeen, script: this.script, choiceActions: this.choiceActions,
       turnMode: this.turnMode, held: this.held, votes: this.votes,
+      gmMarks: this.gmMarks, gmQueue: this.gmQueue, gmInFlight: this.gmInFlight,
       createdAt: this.createdAt, updatedAt: this.updatedAt,
     }
   }
@@ -188,6 +199,12 @@ export class Room {
     r.turnMode = d.turnMode ?? 'instant'
     r.held = d.held ?? []
     r.votes = d.votes ?? {}
+    // сервер упал посреди хода ведущего: отрезать недописанный ход (иначе API отвергает историю), ход повторится
+    for (const [id, mark] of Object.entries(d.gmMarks ?? {})) {
+      const h = r.gmHistories[id]
+      if (h && h.length > mark) h.length = mark
+    }
+    r.gmQueue = [...(d.gmInFlight ?? []), ...(d.gmQueue ?? [])]
     // отправившие отложенные реплики были готовы — после перезапуска сервера тоже
     r.ready = new Set(r.held.map((h) => h.playerId))
     r.createdAt = d.createdAt

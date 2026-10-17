@@ -84,8 +84,8 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
     },
     chat(room, m) { const msg = room.addChat(m); io.to(room.code).emit('chat', msg); store.touch(room); return msg },
     updateChat(room, m) { io.to(room.code).emit('chat:update', m); store.touch(room) },
-    delta(room, id, text) { io.to(room.code).emit('gm:delta', { id, text }) },
-    done(room, id) { io.to(room.code).emit('gm:done', { id }) },
+    delta(room, id, text) { room.live[id] = (room.live[id] ?? '') + text; io.to(room.code).emit('gm:delta', { id, text }) },
+    done(room, id) { delete room.live[id]; io.to(room.code).emit('gm:done', { id }) },
     notice(room, text) { io.to(room.code).emit('notice', text) },
     persist(room) { store.touch(room) },
   }
@@ -158,8 +158,12 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       ack({ ok: true, result: joined })
       socket.emit('state', stateForClients(r.state))
       socket.emit('chat:history', r.chat.slice(-150))
+      // недописанный рассказ ведущего — сразу целиком (страницу обновили посреди ответа)
+      for (const [id, text] of Object.entries(r.live)) socket.emit('gm:delta', { id, text })
       ctx.roomChanged(r)
       recheck(r)
+      // очередь ведущего, оставшаяся с прошлого запуска сервера
+      gm.resume?.(r)
     }
 
     socket.on('room:create', async (raw, rawAck) => {
@@ -188,6 +192,8 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!socket.connected) return
         if (!r) throw new GameError('Комната не найдена')
         let p = req.token ? r.playerByToken(req.token) : undefined
+        // вход с другого устройства (или после очистки браузера): игрок не в сети с тем же именем — это он, герои при нём
+        if (!p) p = [...r.players.values()].find((x) => x.sockets.size === 0 && x.name.trim().toLowerCase() === req.name.trim().toLowerCase())
         if (!p) {
           if ([...r.players.values()].filter((x) => x.sockets.size > 0).length >= 8) throw new GameError('В комнате уже 8 игроков')
           p = r.addPlayer(req.name, false)
