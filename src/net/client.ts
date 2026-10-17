@@ -1,7 +1,7 @@
 /** Клиент сетевой игры поверх socket.io. */
 import { io, type Socket } from 'socket.io-client'
 import type { GameState } from '@/engine/model'
-import type { Ack, ChatMessage, ClientToServer, GmMode, Joined, RoomView, ServerToClient } from './protocol'
+import type { Ack, ChatMessage, ClientToServer, GmMode, Joined, RoomView, ServerToClient, TurnMode } from './protocol'
 
 const SESSION_KEY = 'zchm.net.session'
 
@@ -90,6 +90,9 @@ export class NetClient {
   async releaseHero(heroUid: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('hero:release', heroUid)) }
   async chat(text: string, toGm: boolean): Promise<boolean> { this.unwrap(await this.socket.emitWithAck('chat', { text, toGm })); return true }
   async choose(messageId: string, choiceId: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('gm:choose', { messageId, choiceId })) }
+  async setTurnMode(mode: TurnMode): Promise<void> { this.unwrap(await this.socket.emitWithAck('room:turnMode', mode)) }
+  async setReady(ready: boolean): Promise<void> { this.unwrap(await this.socket.emitWithAck('turn:ready', ready)) }
+  async turnGo(): Promise<void> { this.unwrap(await this.socket.emitWithAck('turn:go')) }
 
   /** Выйти из комнаты (забыть сохранённый вход) */
   close(): void {

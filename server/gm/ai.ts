@@ -146,6 +146,7 @@ const EVENT_HINT: Record<GmEvent['type'], string> = {
   enter: 'Опиши вход и спроси, куда герои направятся (номера помещений видны игрокам на плане).',
   combatEnd: 'Опиши исход боя и продолжи сцену. Трофеи с убитых герои собирают сами на экране боя — оружие и доспехи врагов повторно не выдавай.',
   rest: 'Коротко опиши отдых.',
+  pass: 'Игроки ничего не добавили и ждут продолжения: продвинь сцену.',
 }
 
 export class GmDirector implements GmDriver {
@@ -162,9 +163,10 @@ export class GmDirector implements GmDriver {
     return this.opts.providers.map((p) => p.label)
   }
 
-  enqueue(room: Room, input: GmInput): void {
+  enqueue(room: Room, input: GmInput | GmInput[]): void {
     const q = this.queues.get(room.code) ?? []
-    q.push(input)
+    q.push(...(Array.isArray(input) ? input : [input]))
+    if (!q.length) return
     this.queues.set(room.code, q)
     if (!this.running.has(room.code)) {
       const p = this.pump(room).finally(() => this.running.delete(room.code))

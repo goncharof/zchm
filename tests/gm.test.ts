@@ -141,4 +141,18 @@ describe('ИИ-ведущий', () => {
     expect(last.messages[0].content[0].text).toContain('Вторая сцена в таверне.')
     expect(last.messages.length).toBeLessThanOrEqual(2)
   })
+
+  it('пачка реплик (ход по готовности) уходит модели одним запросом', async () => {
+    const g = await setup([{ text: 'Отвечаю обоим.' }])
+    const room = (await g.s.store.get(g.j.code))!
+    g.s.gm.enqueue(room, [
+      { kind: 'player', author: 'Иван', text: 'Иду налево' },
+      { kind: 'player', author: 'Пётр', text: 'Иду направо' },
+    ])
+    await g.s.gm.idle()
+    expect(g.model.calls).toHaveLength(1)
+    const req = g.model.calls[0] as { messages: { content: { text?: string }[] }[] }
+    expect(req.messages[0].content[0].text).toContain('Иду налево')
+    expect(req.messages[0].content[0].text).toContain('Иду направо')
+  })
 })

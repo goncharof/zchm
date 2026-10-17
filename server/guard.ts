@@ -9,6 +9,8 @@ export const Schemas = {
   create: z.object({ name: z.string().trim().min(1).max(30), gm: z.enum(GM_MODES), state: z.unknown().optional() }),
   join: z.object({ code: z.string().trim().min(4).max(8), name: z.string().trim().min(1).max(30), token: z.string().max(80).optional() }),
   gm: z.enum(GM_MODES),
+  turnMode: z.enum(['instant', 'ready']),
+  ready: z.boolean(),
   heroUid: id,
   cmd: z.object({ name: z.string().min(1).max(40), args: z.array(z.unknown()).max(8) }),
   chat: z.object({ text: z.string().max(1500), toGm: z.boolean() }),

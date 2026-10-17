@@ -105,6 +105,22 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
     ack({ ok: false, error: msg || 'Ошибка' })
   }
 
+  /** Отложенные реплики (и событие, если есть) уходят ведущему одним ходом; отметки «готов» сбрасываются */
+  function flushTurn(r: Room, event?: GmEvent, pass = false): void {
+    const inputs: GmInput[] = r.held.map((h) => ({ kind: 'player', ...h }))
+    if (event) inputs.push({ kind: 'event', event })
+    else if (pass && !inputs.length) inputs.push({ kind: 'event', event: { type: 'pass', text: 'Все игроки готовы.' } })
+    r.held = []
+    r.ready.clear()
+    ctx.roomChanged(r)
+    store.touch(r)
+    if (inputs.length) gm.enqueue(r, inputs)
+  }
+  /** Ход по готовности: все активные игроки готовы — ход ведущего */
+  function checkReady(r: Room): void {
+    if (r.turnMode === 'ready' && autoGm(r) && r.ready.size && r.allReady()) flushTurn(r, undefined, true)
+  }
+
   io.on('connection', (socket) => {
     let room: Room | null = null
     let player: Player | null = null
@@ -163,9 +179,53 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!room || !player) throw new GameError('Вы не в комнате')
         if (!player.isHost) throw new GameError('Это может только хозяин комнаты')
         room.gm = mode
+        // ведущий больше не отвечает сам — отложенные реплики и отметки «готов» не нужны
+        if (!autoGm(room)) { room.held = []; room.ready.clear() }
         ctx.chat(room, { from: 'system', author: 'Игра', text: `Режим ведущего: ${GM_TITLE[mode]}.` })
         ctx.roomChanged(room)
         store.touch(room)
+        ack({ ok: true })
+      } catch (e) { fail(ack, e) }
+    })
+
+    socket.on('room:turnMode', (raw, rawAck) => {
+      const ack = safeAck(rawAck)
+      try {
+        const mode = parse(Schemas.turnMode, raw)
+        if (!room || !player) throw new GameError('Вы не в комнате')
+        if (!player.isHost) throw new GameError('Это может только хозяин комнаты')
+        limit(limiters.choose.take(socket.id), 'Слишком часто')
+        room.turnMode = mode
+        ctx.chat(room, { from: 'system', author: 'Игра', text: mode === 'ready' ? 'Ведущий отвечает, когда все игроки готовы: каждый пишет, что делает его герой, или жмёт «Готов».' : 'Ведущий отвечает сразу на каждую реплику.' })
+        if (mode === 'instant') flushTurn(room)
+        else { ctx.roomChanged(room); store.touch(room) }
+        ack({ ok: true })
+      } catch (e) { fail(ack, e) }
+    })
+
+    socket.on('turn:ready', (raw, rawAck) => {
+      const ack = safeAck(rawAck)
+      try {
+        const ready = parse(Schemas.ready, raw)
+        if (!room || !player) throw new GameError('Вы не в комнате')
+        limit(limiters.choose.take(socket.id), 'Слишком часто')
+        if (room.turnMode !== 'ready') throw new GameError('Ведущий и так отвечает сразу')
+        if (ready) room.ready.add(player.id)
+        else room.ready.delete(player.id)
+        ctx.roomChanged(room)
+        checkReady(room)
+        ack({ ok: true })
+      } catch (e) { fail(ack, e) }
+    })
+
+    socket.on('turn:go', (rawAck) => {
+      const ack = safeAck(rawAck)
+      try {
+        if (!room || !player) throw new GameError('Вы не в комнате')
+        if (!player.isHost) throw new GameError('Начать ход без готовности всех может только хозяин комнаты')
+        limit(limiters.choose.take(socket.id), 'Слишком часто')
+        if (!autoGm(room)) throw new GameError('В этом режиме ведущий не отвечает сам')
+        flushTurn(room, undefined, true)
         ack({ ok: true })
       } catch (e) { fail(ack, e) }
     })
@@ -240,7 +300,8 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         ack({ ok: true, result: JSON.parse(JSON.stringify(result ?? null)) })
         if (autoGm(r)) {
           const ev = gmEventFor(name, r, before)
-          if (ev) gm.enqueue(r, { kind: 'event', event: ev })
+          // событие игры не ждёт готовности: отложенные реплики уходят вместе с ним
+          if (ev) { if (r.turnMode === 'ready') flushTurn(r, ev); else gm.enqueue(r, { kind: 'event', event: ev }) }
         }
       } catch (e) { fail(ack, e) }
     })
@@ -258,7 +319,14 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         const author = heroes.length ? `${player.name} (${heroes.join(', ')})` : player.name
         const toGm = !!req.toGm && autoGm(room)
         const msg = ctx.chat(room, { from: 'player', author, text, toGm })
-        if (toGm) gm.enqueue(room, { kind: 'player', author, text, playerId: player.id, chatId: msg.id })
+        if (toGm && room.turnMode === 'ready') {
+          // реплика = заявка героя: игрок готов; ход — когда готовы все
+          room.held.push({ author, text, playerId: player.id, chatId: msg.id })
+          room.ready.add(player.id)
+          ctx.roomChanged(room)
+          store.touch(room)
+          checkReady(room)
+        } else if (toGm) gm.enqueue(room, { kind: 'player', author, text, playerId: player.id, chatId: msg.id })
         ack({ ok: true })
       } catch (e) { fail(ack, e) }
     })
@@ -278,6 +346,8 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       if (room && player) {
         player.sockets.delete(socket.id)
         ctx.roomChanged(room)
+        // ушёл тот, кого ждали, — остальные могут быть уже готовы
+        checkReady(room)
       }
     })
   })

@@ -75,6 +75,14 @@ function copyLink() {
         <span class="muted">Сменить режим:</span>
         <button v-for="(_label, k) in GM_LABEL" :key="k" class="small" :disabled="k === r.gm" @click="store.setGmMode(k)">{{ SHORT[k] }}</button>
       </div>
+      <div v-if="r.gm === 'ai' || r.gm === 'script'" class="row small" style="margin-bottom:.4rem">
+        <span class="muted">Ведущий отвечает:</span>
+        <template v-if="r.me.isHost">
+          <button class="small" :disabled="r.turnMode === 'instant'" @click="store.setTurnMode('instant')">сразу</button>
+          <button class="small" :disabled="r.turnMode === 'ready'" title="Реплики копятся, пока все не готовы, — меньше запросов к моделям" @click="store.setTurnMode('ready')">когда все готовы</button>
+        </template>
+        <b v-else>{{ r.turnMode === 'ready' ? 'когда все готовы' : 'сразу на каждую реплику' }}</b>
+      </div>
       <table class="list">
         <tbody>
           <tr v-for="p in r.players" :key="p.id">

@@ -29,6 +29,15 @@ function toggleSpeech() {
   else stopSpeaking()
 }
 
+// ход по готовности
+const readyMode = computed(() => ai.value && store.room?.turnMode === 'ready')
+const iAmReady = computed(() => !!store.room && store.room.ready.includes(store.room.me.id))
+const waiting = computed(() => {
+  const r = store.room
+  if (!r) return []
+  return r.players.filter((p) => r.active.includes(p.id)).map((p) => ({ name: p.name, ready: r.ready.includes(p.id) }))
+})
+
 async function send() {
   const t = text.value.trim()
   if (!t) return
@@ -55,11 +64,18 @@ async function send() {
         <div class="gm-text">{{ t }}</div>
       </div>
       <div v-if="ai && store.room?.gmBusy && !live.length" class="muted small">Ведущий обдумывает ход…</div>
+      <div v-if="readyMode && store.room && !store.room.gmBusy && (store.room.held || store.room.ready.length)" class="muted small">Ведущий ждёт готовности всех. Реплик в очереди: {{ store.room.held }}.</div>
       <div v-if="store.room?.gm === 'script'" class="muted small">Сценарный ведущий понимает номера помещений и кнопки вариантов.</div>
     </div>
     <div class="row" style="margin-top:.5rem;flex-wrap:nowrap">
-      <textarea v-model="text" rows="2" style="flex:1;resize:vertical" :placeholder="ai && toGm ? 'Что делают ваши герои? (Enter — отправить ведущему)' : 'Сообщение игрокам'" @keydown.enter.exact.prevent="send" />
+      <textarea v-model="text" rows="2" style="flex:1;resize:vertical" :placeholder="ai && toGm ? (readyMode ? 'Что делает ваш герой? Ведущий ответит, когда напишут или нажмут «Готов» все' : 'Что делают ваши герои? (Enter — отправить ведущему)') : 'Сообщение игрокам'" @keydown.enter.exact.prevent="send" />
       <button class="primary" @click="send">Отправить</button>
+    </div>
+    <div v-if="readyMode" class="row small ready-bar" style="gap:.4rem;margin-top:.3rem">
+      <span class="muted">Ход по готовности:</span>
+      <span v-for="w in waiting" :key="w.name" class="chip" :style="{ borderColor: w.ready ? 'var(--ok)' : undefined, color: w.ready ? 'var(--ok)' : undefined }">{{ w.ready ? '✓' : '…' }} {{ w.name }}</span>
+      <button class="small" :class="{ primary: !iAmReady }" @click="store.setReady(!iAmReady)">{{ iAmReady ? 'Я ещё не готов' : 'Готов' }}</button>
+      <button v-if="store.room?.me.isHost" class="small" title="Не ждать остальных" @click="store.turnGo()">Ход ведущего</button>
     </div>
     <label v-if="ai" class="row small" style="gap:.3rem;margin-top:.3rem"><input type="checkbox" v-model="toGm" /> ведущему (иначе — только игрокам, ведущий не услышит)</label>
     <div v-if="canSpeak" class="row small" style="gap:.5rem;margin-top:.3rem">

@@ -6,6 +6,8 @@ import type { GameState } from '@/engine/model'
  * сами игроки по Книге Жизни, живой ведущий (хозяин комнаты)
  */
 export type GmMode = 'ai' | 'script' | 'book' | 'human'
+/** когда ведущий отвечает: сразу на каждую реплику или когда все игроки готовы */
+export type TurnMode = 'instant' | 'ready'
 
 /** Кнопка-вариант в сообщении ведущего (сценарный ведущий) */
 export interface ChatChoice {
@@ -32,6 +34,13 @@ export interface RoomView {
   gmChain: string[]
   /** ИИ-ведущий сейчас отвечает */
   gmBusy: boolean
+  turnMode: TurnMode
+  /** игроки, чьей готовности ждёт ход (в сети и с живыми героями) */
+  active: string[]
+  /** кто уже готов */
+  ready: string[]
+  /** сколько реплик ведущему ждут хода */
+  held: number
 }
 
 export interface ChatMessage {
@@ -76,6 +85,9 @@ export interface ClientToServer {
   'room:create': (req: CreateRoomReq, ack: (a: Ack) => void) => void
   'room:join': (req: JoinRoomReq, ack: (a: Ack) => void) => void
   'room:setGm': (gm: GmMode, ack: (a: Ack) => void) => void
+  'room:turnMode': (mode: TurnMode, ack: (a: Ack) => void) => void
+  'turn:ready': (ready: boolean, ack: (a: Ack) => void) => void
+  'turn:go': (ack: (a: Ack) => void) => void
   'room:loadState': (state: GameState, ack: (a: Ack) => void) => void
   'hero:claim': (heroUid: string, ack: (a: Ack) => void) => void
   'hero:release': (heroUid: string, ack: (a: Ack) => void) => void

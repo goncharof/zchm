@@ -6,7 +6,15 @@ import path from 'node:path'
 import type { WorldMap } from '@/types'
 import type { GameState } from '@/engine/model'
 import { GameSession, blankGame, migrate } from '@/game/session'
-import type { ChatMessage, GmMode, PlayerView, RoomView } from '@/net/protocol'
+import type { ChatMessage, GmMode, PlayerView, RoomView, TurnMode } from '@/net/protocol'
+
+/** Реплика ведущему, ждущая хода (режим «по готовности») */
+export interface HeldInput {
+  author: string
+  text: string
+  playerId: string
+  chatId: string
+}
 
 export interface Player {
   id: string
@@ -31,6 +39,8 @@ export interface RoomData {
   /** последний сообщение чата, которое видел каждый провайдер (для сводки пропущенного) */
   gmSeen?: Record<string, string>
   script?: ScriptState
+  turnMode?: TurnMode
+  held?: HeldInput[]
   choiceActions?: Record<string, ChoiceRecord>
   createdAt: number
   updatedAt: number
@@ -80,6 +90,10 @@ export class Room {
   script: ScriptState = { locationId: null, n: null }
   choiceActions: Record<string, ChoiceRecord> = {}
   gmBusy = false
+  /** ход по готовности: реплики ведущему копятся, пока все активные игроки не готовы */
+  turnMode: TurnMode = 'instant'
+  held: HeldInput[] = []
+  ready = new Set<string>()
   createdAt = Date.now()
   updatedAt = Date.now()
 
@@ -126,8 +140,22 @@ export class Room {
   playerView(p: Player): PlayerView {
     return { id: p.id, name: p.name, isHost: p.isHost, heroUids: [...p.heroUids], online: p.sockets.size > 0 }
   }
+  /** Чьей готовности ждёт ход: игроки в сети с живыми героями, а если таких нет — все в сети */
+  activePlayers(): Player[] {
+    const online = [...this.players.values()].filter((p) => p.sockets.size > 0)
+    const alive = new Set(this.state.heroes.filter((h) => !h.status.dead).map((h) => h.uid))
+    const withHeroes = online.filter((p) => p.heroUids.some((u) => alive.has(u)))
+    return withHeroes.length ? withHeroes : online
+  }
+  allReady(): boolean {
+    const active = this.activePlayers()
+    return active.length > 0 && active.every((p) => this.ready.has(p.id))
+  }
   view(p: Player, gmChain: string[]): RoomView {
-    return { code: this.code, gm: this.gm, players: [...this.players.values()].map((x) => this.playerView(x)), me: this.playerView(p), aiAvailable: true, gmChain, gmBusy: this.gmBusy }
+    return {
+      code: this.code, gm: this.gm, players: [...this.players.values()].map((x) => this.playerView(x)), me: this.playerView(p), aiAvailable: true, gmChain, gmBusy: this.gmBusy,
+      turnMode: this.turnMode, active: this.activePlayers().map((x) => x.id), ready: [...this.ready], held: this.held.length,
+    }
   }
 
   toData(): RoomData {
@@ -135,6 +163,7 @@ export class Room {
       code: this.code, gm: this.gm, state: this.state,
       players: [...this.players.values()].map(({ sockets: _s, ...rest }) => { void _s; return rest }),
       chat: this.chat, gmHistories: this.gmHistories, gmSeen: this.gmSeen, script: this.script, choiceActions: this.choiceActions,
+      turnMode: this.turnMode, held: this.held,
       createdAt: this.createdAt, updatedAt: this.updatedAt,
     }
   }
@@ -146,6 +175,8 @@ export class Room {
     r.gmSeen = d.gmSeen ?? {}
     r.script = d.script ?? { locationId: null, n: null }
     r.choiceActions = d.choiceActions ?? {}
+    r.turnMode = d.turnMode ?? 'instant'
+    r.held = d.held ?? []
     r.createdAt = d.createdAt
     r.updatedAt = d.updatedAt
     return r

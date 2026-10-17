@@ -156,6 +156,8 @@ export class ScriptedGm {
         const offers = f && ev.outcome ? outcomeOffers(f.loc, f.n, ev.outcome === 'victory' ? WIN : LOSE) : []
         if (offers.length) this.say(room, `${ev.text} Что дальше по книге:`, [...offers, { label: 'Идти дальше', action: { t: 'next' } }])
         else this.say(room, `${ev.text} Продолжайте: выберите вариант выше или назовите номер следующего помещения.`)
+      } else if (ev.type === 'pass') {
+        this.say(room, room.state.locationId ? 'Все готовы. Выберите вариант выше или назовите номер помещения на плане.' : 'Все готовы. Выберите путь на карте или войдите в локацию.')
       } else {
         this.say(room, ev.text)
       }

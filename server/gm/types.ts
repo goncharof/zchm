@@ -4,7 +4,7 @@ import type { Room } from '../rooms'
 
 /** Событие игры, о котором стоит рассказать */
 export interface GmEvent {
-  type: 'travel' | 'enter' | 'combatEnd' | 'rest'
+  type: 'travel' | 'enter' | 'combatEnd' | 'rest' | 'pass'
   /** исход боя (для combatEnd) */
   outcome?: 'victory' | 'fled' | 'defeat'
   text: string
@@ -28,7 +28,8 @@ export interface GmContext {
 }
 
 export interface GmDriver {
-  enqueue(room: Room, input: GmInput): void
+  /** несколько входов сразу уходят одним ходом */
+  enqueue(room: Room, input: GmInput | GmInput[]): void
   /** нажата кнопка-вариант сценарного ведущего */
   choose(room: Room, playerId: string, messageId: string, choiceId: string): void
   /** настроенные модели ИИ по порядку перебора */

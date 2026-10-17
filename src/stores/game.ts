@@ -12,7 +12,7 @@ import type { EncounterSpec } from '@/engine/combat'
 import type { CastResult } from '@/engine/spells'
 import { GameSession, blankGame, migrate, parseSave, runCommand, type CommandArgs, type CommandName, type CommandResult } from '@/game/session'
 import { NetClient, savedSession } from '@/net/client'
-import type { ChatMessage, GmMode, RoomView } from '@/net/protocol'
+import type { ChatMessage, GmMode, RoomView, TurnMode } from '@/net/protocol'
 
 const SAVE_KEY = 'zchm.save.v1'
 
@@ -145,6 +145,9 @@ export const useGameStore = defineStore('game', () => {
   const claimHero = (heroUid: string) => netAction((c) => c.claimHero(heroUid))
   const releaseHero = (heroUid: string) => netAction((c) => c.releaseHero(heroUid))
   const setGmMode = (gm: GmMode) => netAction((c) => c.setGm(gm))
+  const setTurnMode = (mode: TurnMode) => netAction((c) => c.setTurnMode(mode))
+  const setReady = (ready: boolean) => netAction((c) => c.setReady(ready))
+  const turnGo = () => netAction((c) => c.turnGo())
   function ownerOf(heroUid: string): string | null {
     return room.value?.players.find((p) => p.heroUids.includes(heroUid))?.name ?? null
   }
@@ -248,7 +251,7 @@ export const useGameStore = defineStore('game', () => {
 
   return {
     game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, chat, streaming, connecting,
-    createRoom, joinRoom, rejoin, leaveRoom, sendChat, choose, claimHero, releaseHero, setGmMode, ownerOf,
+    createRoom, joinRoom, rejoin, leaveRoom, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, setReady, turnGo, ownerOf,
     heroes, combat, location, worldNode, started,
     say, hero, cmd, attachNet, detachNet,
     resetGame, exportSave, importSave, slotInfo, saveSlot, loadSlot, clearSlot,
