@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { idx } from '@/data'
 import { useGameStore } from '@/stores/game'
 import LogPanel from '@/components/LogPanel.vue'
+import OnlinePanel from '@/components/OnlinePanel.vue'
 
 const store = useGameStore()
 const router = useRouter()
@@ -44,16 +45,17 @@ async function importSave(ev: Event) {
   if (!f) return
   try { store.importSave(await f.text()); store.say('Сохранение загружено'); continueGame() } catch (e) { store.say((e as Error).message) }
 }
-function quick() {
-  if (store.started && !confirm('Текущая партия будет удалена. Начать заново?')) return
-  store.resetGame()
-  store.quickStart()
+async function quick() {
+  if (store.started && !confirm(store.online ? 'Партия комнаты будет заменена. Начать заново?' : 'Текущая партия будет удалена. Начать заново?')) return
+  // в сетевой игре это команда хозяина комнаты, выходить из комнаты нельзя
+  if (!store.online) store.resetGame()
+  await store.quickStart()
   router.push('/map')
 }
-function newGame() {
-  if (store.started && !confirm('Текущая партия будет удалена. Начать заново?')) return
-  store.resetGame()
-  store.newGame()
+async function newGame() {
+  if (store.started && !confirm(store.online ? 'Партия комнаты будет заменена. Начать заново?' : 'Текущая партия будет удалена. Начать заново?')) return
+  if (!store.online) store.resetGame()
+  await store.newGame()
   router.push('/party')
 }
 </script>
@@ -69,13 +71,16 @@ function newGame() {
         <div v-if="allDead" class="card tight" style="border-color:var(--danger)"><b>Партия погибла.</b> Жрец мог бы оживить павших, но жрецов не осталось. Начните новую партию или загрузите сохранение.</div>
         <div class="row" style="margin-top:1rem">
           <button v-if="store.started" class="primary" @click="continueGame">Продолжить (день {{ store.game?.day }}, {{ where }})</button>
-          <button :class="{ primary: !store.started }" @click="newGame">Новая партия</button>
-          <button @click="quick" title="Воин, маг, жрец и вор со снаряжением на 40 монет">Быстрый старт</button>
+          <template v-if="!store.online || store.room?.me.isHost">
+            <button :class="{ primary: !store.started }" @click="newGame">Новая партия</button>
+            <button @click="quick" title="Воин, маг, жрец и вор со снаряжением на 40 монет">Быстрый старт</button>
+          </template>
           <button v-if="store.started" @click="exportSave">Экспорт сохранения</button>
           <button @click="fileInput?.click()">Импорт сохранения</button>
           <input ref="fileInput" type="file" accept="application/json" style="display:none" @change="importSave" />
         </div>
       </div>
+      <OnlinePanel />
       <div class="card">
         <h2>Сохранения</h2>
         <p class="small muted">Партия сохраняется автоматически. Слоты — дополнительные копии в этом браузере.</p>

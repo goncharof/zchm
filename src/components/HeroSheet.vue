@@ -15,6 +15,11 @@ const cls = computed(() => idx.cls(props.hero.classId))
 const next = computed(() => (props.hero.level < 12 ? levelRow(cls.value, props.hero.level + 1).xp : null))
 const prevXp = computed(() => levelRow(cls.value, props.hero.level).xp)
 const showPicker = ref(false)
+/** чужой герой в сетевой игре — только просмотр */
+const ro = computed(() => !store.canControl(props.hero.uid))
+const owner = computed(() => store.ownerOf(props.hero.uid))
+/** ручная правка — для ведущего (в игре без ведущего — для всех) */
+const gmTools = computed(() => store.isGm && !store.aiGm)
 const transferTo = ref('')
 const renaming = ref(false)
 const newName = ref(props.hero.name)
@@ -51,8 +56,13 @@ const statusText = computed(() => {
       <h2 v-if="!renaming" class="row" style="gap:.6rem"><img :src="classArt(hero.classId)" alt="" class="portrait" />{{ hero.name }} <span class="badge accent">{{ cls.name }} {{ hero.level }} ур.</span> <span v-if="statusText" class="badge" style="border-color:var(--danger);color:var(--danger)">{{ statusText }}</span></h2>
       <div v-else class="row"><input v-model="newName" /><button class="small primary" @click="store.renameHero(hero.uid, newName); renaming = false">Ок</button></div>
       <div class="row">
-        <button class="small" @click="renaming = !renaming">Имя</button>
-        <button class="small danger" @click="store.removeHero(hero.uid)">Убрать</button>
+        <span v-if="store.online" class="badge" :style="ro ? '' : 'border-color:var(--ok);color:var(--ok)'">{{ owner ? (ro ? `игрок: ${owner}` : 'ваш герой') : 'ничей' }}</span>
+        <button v-if="store.online && ro" class="small" @click="store.claimHero(hero.uid)">Взять героя</button>
+        <button v-if="store.online && !ro && owner" class="small" @click="store.releaseHero(hero.uid)">Отпустить</button>
+        <template v-if="!ro">
+          <button class="small" @click="renaming = !renaming">Имя</button>
+          <button class="small danger" @click="store.removeHero(hero.uid)">Убрать</button>
+        </template>
       </div>
     </div>
     <div class="row" style="gap:1rem;margin:.4rem 0 .6rem">
@@ -71,7 +81,7 @@ const statusText = computed(() => {
     </div>
 
     <div v-if="hero.buffs.length" class="row small" style="margin-top:.4rem"><span class="muted">Эффекты:</span><span v-for="(b, i) in hero.buffs" :key="i" class="badge accent">{{ b.source }}</span></div>
-    <div v-if="hero.pendingSpellPicks > 0" class="row" style="margin-top:.6rem">
+    <div v-if="hero.pendingSpellPicks > 0 && !ro" class="row" style="margin-top:.6rem">
       <button class="primary" @click="showPicker = true">Выбрать новое заклинание ({{ hero.pendingSpellPicks }})</button>
     </div>
     <SpellPicker v-if="showPicker" :hero="hero" @close="showPicker = false" />
@@ -80,7 +90,7 @@ const statusText = computed(() => {
     <div v-if="!equipped.length" class="muted small">Ничего не надето: защита 9, атаки без оружия 1-1-1-2-2-2.</div>
     <table v-else class="list">
       <tbody>
-        <tr v-for="e in equipped" :key="e.slot"><td class="muted">{{ SLOT_NAMES[e.slot] }}</td><td>{{ e.name }} <span class="small muted">{{ e.detail }}</span></td><td style="text-align:right"><button class="small" @click="store.unequipItem(hero.uid, e.slot)">Снять</button></td></tr>
+        <tr v-for="e in equipped" :key="e.slot"><td class="muted">{{ SLOT_NAMES[e.slot] }}</td><td>{{ e.name }} <span class="small muted">{{ e.detail }}</span></td><td style="text-align:right"><button v-if="!ro" class="small" @click="store.unequipItem(hero.uid, e.slot)">Снять</button></td></tr>
       </tbody>
     </table>
 
@@ -91,7 +101,7 @@ const statusText = computed(() => {
       <tbody>
         <tr v-for="e in hero.inventory" :key="e.uid">
           <td>{{ entryName(e, idx) }}<span v-if="e.qty > 1"> ×{{ e.qty }}</span><span v-if="e.poisoned" class="badge" style="margin-left:.3rem">яд</span><div class="small muted">{{ detail(e) }}</div></td>
-          <td style="text-align:right;white-space:nowrap">
+          <td v-if="!ro" style="text-align:right;white-space:nowrap">
             <template v-if="canEquip(e) && !isEquipped(e)">
               <button class="small" @click="act(() => store.equipItem(hero.uid, e.uid))">Надеть</button>
               <button v-if="e.kind === 'weapon' && idx.weapon(e.ref).hand === 'any'" class="small" @click="act(() => store.equipItem(hero.uid, e.uid, 'leftHand'))">В левую</button>
@@ -114,7 +124,7 @@ const statusText = computed(() => {
 
     <template v-if="cls.caster">
       <h3 style="margin-top:.9rem">Книга заклинаний</h3>
-      <div v-if="!store.combat" style="margin-bottom:.5rem"><SpellCaster :hero="hero" :in-combat="false" /></div>
+      <div v-if="!store.combat && !ro" style="margin-bottom:.5rem"><SpellCaster :hero="hero" :in-combat="false" /></div>
       <table class="list">
         <tbody>
           <tr v-for="id in hero.spellbook" :key="id">
@@ -124,7 +134,7 @@ const statusText = computed(() => {
       </table>
     </template>
 
-    <details style="margin-top:.8rem"><summary class="muted small">Ручная правка (ведущий)</summary>
+    <details v-if="gmTools" style="margin-top:.8rem"><summary class="muted small">Ручная правка (ведущий)</summary>
       <div class="row" style="margin-top:.4rem">
         <button class="small" @click="store.adjustLives(hero.uid, -1)">−1 жизнь</button><button class="small" @click="store.adjustLives(hero.uid, 1)">+1 жизнь</button>
         <button class="small" @click="store.adjustLives(hero.uid, hero.maxLives)">Все жизни</button>

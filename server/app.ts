@@ -217,10 +217,8 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         const result = runCommand(r.session(), name, args as CommandArgs<typeof name>)
         // новый герой принадлежит тому, кто его создал
         if (name === 'addHero' && result && typeof result === 'object' && 'uid' in result) p.heroUids.push((result as { uid: string }).uid)
-        if (name === 'quickStart' || name === 'newGame') {
-          for (const x of r.players.values()) x.heroUids = []
-          if (name === 'quickStart') p.heroUids = r.state.heroes.map((h) => h.uid)
-        }
+        // новая партия: герои ничьи, каждый игрок берёт своего («Взять героя»)
+        if (name === 'quickStart' || name === 'newGame') for (const x of r.players.values()) x.heroUids = []
         if (name === 'removeHero' || name === 'quickStart' || name === 'newGame') r.pruneHeroes()
         ctx.stateChanged(r)
         if (['addHero', 'removeHero', 'quickStart', 'newGame'].includes(name)) ctx.roomChanged(r)

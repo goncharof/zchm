@@ -19,13 +19,24 @@
 ## Запуск
 ```bash
 pnpm install
-pnpm dev          # http://localhost:5173
-pnpm test         # тесты движка, данных и приложения
+pnpm dev          # одиночная игра: http://localhost:5173
+pnpm test         # тесты
 pnpm build        # сборка в dist/
 ```
 
-Сборку можно выложить на любой статический хостинг (`base: './'`). Для GitHub Pages готов workflow
-`.github/workflows/deploy.yml`: в настройках репозитория выбрать Pages → Source: GitHub Actions.
+## Игра по сети и ИИ-ведущий
+```bash
+ANTHROPIC_API_KEY=... pnpm server   # сервер на 8787 (без ключа — комнаты без ведущего или с живым ведущим)
+pnpm dev                            # в другом терминале; на главной — «Игра по сети»
+```
+Хозяин создаёт комнату и сообщает код, остальные входят по коду со своих устройств и берут героев.
+Ведущий — ИИ (Claude, нужен ключ API на сервере), кто-то из игроков или никто. ИИ-ведущий читает Книгу Жизни,
+рассказывает, озвучивает персонажей и сам бросает за проверки, а бои игроки ведут на экране боя.
+Продакшен — один процесс: `pnpm build && pnpm build:server && pnpm start` или `docker build -t zchm . &&
+docker run -p 8787:8787 -v zchm-data:/data -e ANTHROPIC_API_KEY=... zchm`.
+
+Одиночную игру можно выложить на любой статический хостинг (`base: './'`), для GitHub Pages готов workflow
+`.github/workflows/deploy.yml`. Сетевой игре нужен сервер (см. выше).
 
 ## Данные
 JSON в `src/data/` генерируются из оцифрованной коробки скриптами в `tools/` (см. `CLAUDE.md`).

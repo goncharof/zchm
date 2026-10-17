@@ -25,7 +25,7 @@ function add() {
     <div class="row between">
       <h1>Партия</h1>
       <div class="row">
-        <label class="row" style="gap:.3rem" v-if="store.game"><input type="checkbox" :checked="store.game.gmMode" @change="store.toggleGm()" /> режим ведущего</label>
+        <label class="row" style="gap:.3rem" v-if="store.game && !store.online"><input type="checkbox" :checked="store.game.gmMode" @change="store.toggleGm()" /> режим ведущего</label>
         <button v-if="store.heroes.length" class="primary" @click="router.push('/shop')">Лавка (снаряжение)</button>
         <button v-if="store.heroes.length" @click="router.push('/map')">На карту</button>
       </div>
@@ -38,7 +38,7 @@ function add() {
       <button class="primary" @click="add">Добавить в партию</button>
       <div v-if="canChooseStart && startNodes.length && store.game">
         <label>Стартовая точка</label><br />
-        <select v-model="store.game.worldNodeId"><option v-for="n in startNodes" :key="n.id" :value="n.id">{{ n.name }}</option></select>
+        <select :value="store.game.worldNodeId" @change="store.setStart(($event.target as HTMLSelectElement).value)"><option v-for="n in startNodes" :key="n.id" :value="n.id">{{ n.name }}</option></select>
       </div>
     </div>
     <p class="small muted" style="margin-top:.6rem"><b>{{ cls.name }}.</b> {{ cls.description }} <i>Оружие: {{ cls.weaponRule }}. Метательное: {{ cls.rangedRule }}.</i>
@@ -58,6 +58,7 @@ function add() {
     </table>
     <p class="small muted">Спутники сражаются на стороне партии оговорённое число боёв, их отыгрывает движок (стр. 16 Инструкции).</p>
   </div>
+  <p v-if="store.online && store.heroes.some(h => !store.ownerOf(h.uid))" class="card tight small">Нажмите «Взять героя» у того, кем будете играть, или создайте своего. Пока у героя нет игрока, им может управлять любой.</p>
   <p v-if="!store.heroes.length" class="muted">Добавьте героев. У каждого 40 монет, характеристики на старте равны нулю.</p>
   <HeroSheet v-for="h in store.heroes" :key="h.uid" :hero="h" />
 </template>

@@ -13,8 +13,10 @@
 - `docs/SOURCES.md` — происхождение материалов, разрешение автора, что можно и нельзя.
 
 ## Стек
-Vue 3 + Vite + TypeScript + Pinia + vue-router (hash-режим). Бэкенда нет: статическая сборка,
-сохранения в localStorage + экспорт/импорт JSON. Тесты движка — Vitest. Пакетный менеджер — pnpm.
+Фронтенд: Vue 3 + Vite + TypeScript + Pinia + vue-router (hash-режим); одиночная игра работает без сервера
+(localStorage, экспорт/импорт JSON, PWA). Сетевая игра: сервер Node.js + socket.io в `server/`, игровая
+логика общая (`src/game/session.ts`), ИИ-ведущий — Claude API (`@anthropic-ai/sdk`). Тесты — Vitest.
+Пакетный менеджер — pnpm.
 
 ## Команды
 ```bash
@@ -22,6 +24,11 @@ pnpm dev            # dev-сервер
 pnpm test           # тесты движка (tests/**/*.test.ts)
 pnpm typecheck      # vue-tsc --noEmit
 pnpm build          # typecheck + vite build → dist/
+pnpm server         # сервер сетевой игры (tsx watch, порт 8787); вместе с pnpm dev — Vite проксирует /socket.io
+pnpm build:server && pnpm start   # продакшен: node server-dist/index.js раздаёт dist и сокеты на одном порту
+# окружение сервера: PORT, HOST, DATA_DIR (data/rooms), STATIC_DIR (dist), ANTHROPIC_API_KEY (включает ИИ-ведущего), GM_MODEL, GM_EFFORT
+pnpm exec tsx tools/qa/fake-gm-server.ts   # сервер с демо-ведущим без Claude API (для проверки интерфейса)
+node tools/qa/online.mjs                    # при pnpm dev + демо-сервере: два игрока в комнате, скриншоты
 tools/fetch_sources.sh   # скачать оцифрованную коробку (120 МБ) в source/pdf и создать tools/.venv
 pnpm data:bestiary  # source/pdf → src/data/bestiary.json + public/img/bestiary/*.jpg
 pnpm data:book      # → src/data/locations.json + public/img/locations/*.jpg
@@ -39,6 +46,9 @@ tools/           Python-скрипты извлечения данных (tools/
 src/types.ts     схема всех данных (JSON в src/data должен ей соответствовать)
 src/data/        сгенерированные JSON — НЕ править руками, править скрипты в tools/
 src/engine/      чистая логика без Vue: dice, character, combat, spells, inventory
+src/game/        GameSession — все команды партии (общие для браузера и сервера), таблица прав COMMANDS
+src/net/         протокол и клиент сетевой игры (socket.io)
+server/          сервер сетевой игры и ИИ-ведущий (server/gm)
 src/stores/      Pinia: game (партия, сохранения), combat
 src/views/       экраны (роутер), src/components/ — переиспользуемые куски
 public/img/      картинки (иллюстрации бестиария, планы локаций, карта мира); при их изменении поднять CACHE в public/sw.js
@@ -54,7 +64,11 @@ docs/            документация проекта
   Книги Жизни цитируются как есть (исправляются только явные опечатки OCR).
 - Правила реализуются по Инструкции; где текст неполон — выбирается вариант, помечается «ХАУСРУЛ»
   в `docs/RULES.md` и `docs/DECISIONS.md`, а в коде — комментарием `// ХАУСРУЛ:`.
-- Движок (`src/engine`) не зависит от Vue и от `localStorage`; всё состояние сериализуемо.
+- Движок (`src/engine`) и сессия (`src/game`) не зависят от Vue и от `localStorage`; всё состояние сериализуемо.
+- Новая команда партии: метод в `GameSession` + строка в `COMMANDS` (роль) + обёртка в сторе; UI не меняет
+  состояние напрямую — только через команды (иначе в сетевой игре изменение увидит один игрок).
+- ИИ-ведущий: системный промпт и набор инструментов не менять «на лету» (сломается кэш); история только
+  дописывается; механика — только через инструменты.
 - Случайность только через `src/engine/dice.ts` (подменяемый генератор, чтобы тесты были детерминированы).
 - После заметных изменений обновлять `docs/PROGRESS.md` (что сделано, что дальше) и при необходимости `docs/DECISIONS.md`.
 - Коммиты небольшие, сообщения на английском; заканчивать строкой `Co-Authored-By:` с текущей моделью Claude (например, `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`).

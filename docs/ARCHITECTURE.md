@@ -2,16 +2,16 @@
 
 ## Слои
 ```
-source/pdf  ──(tools/*.py)──►  src/data/*.json + public/img/**
-                                      │
-                                      ▼
-                             src/engine  (чистый TS, без Vue)
-                                      │
-                                      ▼
-                             src/stores/game.ts  (Pinia, localStorage)
-                                      │
-                                      ▼
-                       src/views + src/components  (Vue 3, vue-router hash)
+source/pdf ──(tools/*.py)──► src/data/*.json + public/img/**
+                                     │
+                                     ▼
+                  src/engine (механика, чистый TS) ◄── src/game/session.ts (GameSession: все команды партии)
+                                                          │                       │
+                       одиночная игра: выполняется в браузере      сетевая: выполняется на сервере
+                                                          │                       │
+                       src/stores/game.ts (Pinia) ◄─ src/net/client.ts ◄─socket.io─► server/app.ts
+                                     │                                                │
+                       src/views + src/components (Vue 3)            server/gm (ИИ-ведущий, Claude API)
 ```
 
 ## Данные (`src/data`, схема в `src/types.ts`)
@@ -66,3 +66,21 @@ source/pdf  ──(tools/*.py)──►  src/data/*.json + public/img/**
 2. `travelTo(node)`: дни += маршрут, встречи «Дороги» в `pendingRoad`.
 3. `enterLocation(id)` → LocationView: параграф → действия → при бое `startEncounter(specs, returnTo)` → CombatView → `endCombat()` → возврат к параграфу.
 4. Опыт начисляется сразу (`gainXp`), уровни объявляются в журнале; кастеры получают `pendingSpellPicks`.
+
+## Сервер (`server/`)
+| Файл | Что делает |
+|---|---|
+| `index.ts` | точка входа: порт, каталоги, включение ИИ-ведущего по `ANTHROPIC_API_KEY` |
+| `app.ts` | `createGameServer`: HTTP (статика `dist`, `/health`) + socket.io; события `room:create/join/setGm/loadState`, `hero:claim/release`, `cmd`, `chat`; рассылка `state`, `room`, `chat`, `gm:delta`, `gm:done`, `notice`; события для ведущего после пути, входа в локацию, отдыха и боя |
+| `permissions.ts` | `authorize(gm, player, command, args)` по ролям `owner/party/gm/host` |
+| `rooms.ts` | `Room` (состояние, игроки, чат, история ведущего), `RoomStore` (память + JSON-файлы с отложенной записью) |
+| `gm/prompt.ts` | неизменный системный промпт и снимок состояния партии |
+| `gm/tools.ts` | инструменты ведущего: схемы и исполнение через `GameSession` |
+| `gm/ai.ts` | `AiGm`: очередь ходов по комнатам, стриминговый цикл с инструментами, откат при ошибке; модель подменяется (`ModelClient`) |
+
+Протокол — `src/net/protocol.ts` (общие типы), клиент — `src/net/client.ts` (`NetClient`: вызов команд с
+подтверждением, чат, автоматический возврат в комнату после обрыва; вход хранится в `localStorage`).
+
+Экраны сетевой игры: панель «Игра по сети» на главной (`OnlinePanel`), «Стол» (`/table`: чат с ведущим
+`GmChat`, партия, план), лист партии с «Взять героя», локация без текста книги при ИИ-ведущем (номер на
+плане — реплика ведущему).

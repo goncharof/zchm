@@ -57,7 +57,11 @@ describe('сетевая игра', () => {
     await host.c.call('quickStart', [])
     await until(() => guest.state.heroes.length === 4)
     const conan = guest.state.heroes[0]
-    await until(() => host.room.me.heroUids.length === 4)
+    // герои быстрого старта ничьи: хозяин берёт Конана, гость — Мерлина
+    await host.c.claimHero(conan.uid)
+    await guest.c.claimHero(guest.state.heroes[1].uid)
+    await until(() => host.room.me.heroUids.length === 1 && guest.room.me.heroUids.length === 1)
+    await expect(guest.c.claimHero(conan.uid)).rejects.toThrow(/управляет Иван/)
 
     await expect(guest.c.call('attack', [conan.uid, 'rightHand', 'x'])).rejects.toThrow(/не ваш герой/)
     const mine = (await guest.c.call('addHero', ['Арагорн', 'warrior'])) as { uid: string }

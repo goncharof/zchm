@@ -10,8 +10,9 @@ import HeroSheet from '@/components/HeroSheet.vue'
 
 const store = useGameStore()
 const tab = ref<'weapons' | 'armor' | 'items' | 'sell' | 'tavern'>('weapons')
-const buyerUid = ref(store.heroes[0]?.uid ?? '')
-const buyer = computed(() => store.heroes.find((h) => h.uid === buyerUid.value) ?? store.heroes[0])
+const mine = computed(() => store.heroes.filter((h) => store.canControl(h.uid)))
+const buyerUid = ref(mine.value[0]?.uid ?? '')
+const buyer = computed(() => mine.value.find((h) => h.uid === buyerUid.value) ?? mine.value[0])
 const services = computed(() => (store.location ? SERVICES[store.location.id] ?? [] : []))
 const allowed = computed(() => !!store.game && (store.game.day === 1 || services.value.includes('shop') || store.game.gmMode))
 const tavern = computed(() => !!store.game && (services.value.includes('tavern') || store.game.gmMode))
@@ -32,7 +33,7 @@ function usable(wId: string) {
   <div class="card">
     <div class="row between">
       <h1>Лавка и трактир</h1>
-      <div class="row"><label>Покупатель</label><select v-model="buyerUid"><option v-for="h in store.heroes" :key="h.uid" :value="h.uid">{{ h.name }} ({{ h.money }} монет)</option></select></div>
+      <div class="row"><label>Покупатель</label><select v-model="buyerUid"><option v-for="h in mine" :key="h.uid" :value="h.uid">{{ h.name }} ({{ h.money }} монет)</option></select></div>
     </div>
     <p v-if="!store.heroes.length" class="muted">Сначала соберите партию.</p>
     <p v-else-if="!allowed" class="muted">Лавки здесь нет. ХАУСРУЛ: торговля доступна в городах и крепостях (Золотой город, Крепость рыцарей, Замок жрецов, Крепость последней надежды, Брошенный город, Северный форт), а также перед началом пути. Ведущий может включить режим ведущего и разрешить торговлю.</p>
@@ -82,6 +83,6 @@ function usable(wId: string) {
   </div>
   <template v-if="tab === 'sell' && allowed">
     <p class="small muted">ХАУСРУЛ: продажа за половину цены.</p>
-    <HeroSheet v-for="h in store.heroes" :key="h.uid" :hero="h" shop />
+    <HeroSheet v-for="h in mine" :key="h.uid" :hero="h" shop />
   </template>
 </template>

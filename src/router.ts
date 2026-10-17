@@ -5,6 +5,7 @@ export const router = createRouter({
   routes: [
     { path: '/', component: () => import('./views/HomeView.vue') },
     { path: '/party', component: () => import('./views/PartyView.vue') },
+    { path: '/table', component: () => import('./views/TableView.vue') },
     { path: '/shop', component: () => import('./views/ShopView.vue') },
     { path: '/map', component: () => import('./views/MapView.vue') },
     { path: '/location/:id', component: () => import('./views/LocationView.vue'), props: true },

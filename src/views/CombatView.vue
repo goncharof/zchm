@@ -38,7 +38,7 @@ onBeforeUnmount(() => { if (autoTimer) clearTimeout(autoTimer) })
 const targetMonster = computed(() => alive.value.find((m) => m.uid === target.value) ?? null)
 
 function canAct(h: Hero) {
-  return !!c.value && c.value.turn === 'heroes' && !c.value.finished && !c.value.acted.includes(h.uid) && !c.value.escaped.includes(h.uid) && isActive(h)
+  return !!c.value && store.canControl(h.uid) && c.value.turn === 'heroes' && !c.value.finished && !c.value.acted.includes(h.uid) && !c.value.escaped.includes(h.uid) && isActive(h)
 }
 function heroState(h: Hero) {
   if (!c.value) return ''
@@ -112,9 +112,9 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
         <label class="row small" style="gap:.3rem" title="Ход монстров выполняется автоматически"><input type="checkbox" v-model="autoMonsters" /> монстры ходят сами</label>
         <button v-if="!c.finished && c.turn === 'monsters'" class="primary" @click="store.monstersAct()">Ход монстров</button>
         <button v-if="!c.finished && c.turn === 'heroes'" class="small" title="Оставшиеся герои пропускают ход" @click="store.endHeroesTurn()">Закончить ход героев</button>
-        <button v-if="!c.finished" class="small" @click="picker = true">Добавить монстров</button>
+        <button v-if="!c.finished && store.isGm && !store.aiGm" class="small" @click="picker = true">Добавить монстров</button>
         <button v-if="c.finished" class="primary" @click="finish">Завершить бой</button>
-        <button v-else class="small danger" @click="store.abortCombat()">Прервать</button>
+        <button v-else-if="store.isGm && !store.aiGm" class="small danger" @click="store.abortCombat()">Прервать</button>
       </div>
     </div>
     <MonsterPicker v-if="picker" @close="picker = false" @start="(s) => { picker = false; store.addMonstersToCombat(s) }" />
@@ -162,7 +162,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
             <button class="small" @click="store.skip(h.uid)">Пропустить</button>
           </div>
           <div v-if="canAct(h) && h.spellbook.length" style="margin-top:.35rem"><SpellCaster :hero="h" :in-combat="true" :target-uid="target" /></div>
-          <div v-if="!canAct(h) && isActive(h) && !c.escaped.includes(h.uid) && c.turn === 'heroes' && !c.finished" class="small muted">ждёт следующего раунда</div>
+          <div v-if="!canAct(h) && isActive(h) && !c.escaped.includes(h.uid) && c.turn === 'heroes' && !c.finished" class="small muted">{{ store.canControl(h.uid) ? 'ждёт следующего раунда' : `ходит ${store.ownerOf(h.uid) ?? 'другой игрок'}` }}</div>
         </div>
         <p class="small muted">Попадание: к18 + ловкость (меткость для метательного) ≥ защита цели. Урон: таблица атак по к6 + сила.</p>
       </div>

@@ -1,5 +1,5 @@
 // Офлайн-режим: страница — сначала сеть, потом кэш; ассеты и картинки — сначала кэш.
-const CACHE = 'zchm-v1'
+const CACHE = 'zchm-v2'
 
 self.addEventListener('install', (e) => {
   self.skipWaiting()
@@ -13,7 +13,10 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return
+  const url = new URL(req.url)
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return
+  // сетевая игра и служебные адреса сервера — всегда напрямую
+  if (url.pathname.includes('/socket.io/') || url.pathname.endsWith('/health')) return
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req)

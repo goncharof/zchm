@@ -1,0 +1,9 @@
+node_modules
+dist
+server-dist
+data
+source/pdf
+tools/.venv
+tools/qa/out
+tools/qa/out-prod
+.git

@@ -11,8 +11,8 @@ import type { CombatState, EquipSlot, GameState, Hero, InventoryKind, LogEntry }
 import type { EncounterSpec } from '@/engine/combat'
 import type { CastResult } from '@/engine/spells'
 import { GameSession, blankGame, migrate, parseSave, runCommand, type CommandArgs, type CommandName, type CommandResult } from '@/game/session'
-import type { NetClient } from '@/net/client'
-import type { RoomView } from '@/net/protocol'
+import { NetClient, savedSession } from '@/net/client'
+import type { ChatMessage, GmMode, RoomView } from '@/net/protocol'
 
 const SAVE_KEY = 'zchm.save.v1'
 
@@ -32,6 +32,10 @@ export const useGameStore = defineStore('game', () => {
   /** сетевая игра: клиент и сведения о комнате (null — одиночная игра) */
   const net = shallowRef<NetClient | null>(null)
   const room = ref<RoomView | null>(null)
+  const chat = ref<ChatMessage[]>([])
+  /** реплики ведущего, которые сейчас пишутся (id → текст) */
+  const streaming = ref<Record<string, string>>({})
+  const connecting = ref(false)
   loadWorld().then((w) => { world.value = w })
 
   const online = computed(() => !!net.value && !!room.value)
@@ -54,7 +58,7 @@ export const useGameStore = defineStore('game', () => {
 
   // автосохранение — только для одиночной игры (сетевую хранит сервер)
   watch(game, (g) => {
-    if (online.value) return
+    if (net.value) return
     if (!g) { localStorage.removeItem(SAVE_KEY); return }
     g.updatedAt = Date.now()
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(g)) } catch { /* переполнение хранилища — игнорируем */ }
@@ -89,12 +93,56 @@ export const useGameStore = defineStore('game', () => {
     client.onState((state) => { game.value = migrate(state) })
     client.onRoom((r) => { room.value = r })
     client.onNotice((text) => say(text))
+    client.onChatHistory((ms) => { chat.value = ms })
+    client.onChat((m) => {
+      chat.value.push(m)
+      if (chat.value.length > 300) chat.value.splice(0, chat.value.length - 300)
+      if (streaming.value[m.id] !== undefined) { const s = { ...streaming.value }; delete s[m.id]; streaming.value = s }
+    })
+    client.onGmDelta(({ id, text }) => { streaming.value = { ...streaming.value, [id]: (streaming.value[id] ?? '') + text } })
   }
   function detachNet(): void {
     net.value?.close()
     net.value = null
     room.value = null
+    chat.value = []
+    streaming.value = {}
     game.value = readSave()
+  }
+  function ensureNet(url?: string): NetClient {
+    if (!net.value) attachNet(new NetClient(url))
+    return net.value!
+  }
+  async function netAction<T>(fn: (c: NetClient) => Promise<T>, url?: string): Promise<T | undefined> {
+    connecting.value = true
+    try {
+      return await fn(ensureNet(url))
+    } catch (e) {
+      say((e as Error).message || 'Нет связи с сервером')
+      if (!room.value) detachNet()
+      return undefined
+    } finally {
+      connecting.value = false
+    }
+  }
+  /** Создать комнату; withParty — взять с собой текущую одиночную партию */
+  const createRoom = (name: string, gm: GmMode, withParty: boolean) => netAction((c) => c.create(name, gm, withParty && game.value ? JSON.parse(JSON.stringify(game.value)) : undefined))
+  const joinRoom = (code: string, name: string) => netAction((c) => c.join(code, name))
+  /** Вернуться в комнату после перезагрузки страницы */
+  async function rejoin(): Promise<void> {
+    const s = savedSession()
+    if (!s || net.value) return
+    await netAction((c) => c.join(s.code, s.name, s.token), s.url)
+  }
+  function leaveRoom(): void {
+    detachNet()
+  }
+  const sendChat = (text: string, toGm: boolean) => netAction((c) => c.chat(text, toGm))
+  const claimHero = (heroUid: string) => netAction((c) => c.claimHero(heroUid))
+  const releaseHero = (heroUid: string) => netAction((c) => c.releaseHero(heroUid))
+  const setGmMode = (gm: GmMode) => netAction((c) => c.setGm(gm))
+  function ownerOf(heroUid: string): string | null {
+    return room.value?.players.find((p) => p.heroUids.includes(heroUid))?.name ?? null
   }
 
   // ---------- партия и сохранения (локальное) ----------
@@ -194,7 +242,8 @@ export const useGameStore = defineStore('game', () => {
   }
 
   return {
-    game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl,
+    game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, chat, streaming, connecting,
+    createRoom, joinRoom, rejoin, leaveRoom, sendChat, claimHero, releaseHero, setGmMode, ownerOf,
     heroes, combat, location, worldNode, started,
     say, hero, cmd, attachNet, detachNet,
     resetGame, exportSave, importSave, slotInfo, saveSlot, loadSlot, clearSlot,

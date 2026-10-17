@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
 // base './' — сборка работает из любого подкаталога (GitHub Pages, file://)
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
   base: './',
   plugins: [vue()],
   // JSON как строка + JSON.parse: быстрее разбирается браузером
@@ -13,6 +13,8 @@ export default defineConfig({
     proxy: { '/socket.io': { target: 'http://localhost:8787', ws: true } },
   },
   build: {
+    // сборка сервера (--ssr) не копирует картинки: их раздаёт dist
+    copyPublicDir: !isSsrBuild,
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
@@ -31,4 +33,4 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts'],
   },
-})
+}))

@@ -8,6 +8,7 @@ import { useGameStore } from '@/stores/game'
 import MonsterPicker from '@/components/MonsterPicker.vue'
 import ParagraphActions from '@/components/ParagraphActions.vue'
 import RollBlock from '@/components/RollBlock.vue'
+import GmChat from '@/components/GmChat.vue'
 
 const props = defineProps<{ id: string }>()
 const store = useGameStore()
@@ -29,6 +30,13 @@ const activeHeroes = computed(() => store.heroes.filter((h) => !h.status.dead))
 const segments = computed(() => paragraph.value?.segments ?? null)
 const isFinal = computed(() => props.id === 'zamok-chernogo-maga' && current.value === 13)
 const lastFinal = ref('')
+/** текст Книги Жизни скрыт: его читает ИИ-ведущий или живой ведущий */
+const hideText = computed(() => store.aiGm || (store.online && !store.isGm))
+function pick(n: number) {
+  if (!hideText.value) { open(n); return }
+  current.value = n
+  void store.sendChat(`Идём в помещение ${n}.`, store.aiGm)
+}
 
 function open(n: number) {
   current.value = n
@@ -92,7 +100,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
       <h1>{{ loc.name }} <span class="badge">Книга Жизни, стр. {{ loc.pages[0] }}–{{ loc.pages[1] }}</span> <span v-if="visited.length" class="badge accent">пройдено {{ visited.length }} из {{ loc.paragraphs.length }}</span></h1>
       <div class="row">
         <router-link v-if="services.includes('shop') || services.includes('tavern')" class="btn" to="/shop">Лавка / трактир</router-link>
-        <button @click="picker = true">Произвольный бой</button>
+        <button v-if="store.isGm && !store.aiGm" @click="picker = true">Произвольный бой</button>
         <button v-if="store.game?.locationId === id" @click="leave">Покинуть локацию</button>
         <router-link v-else class="btn" to="/map">Карта</router-link>
       </div>
@@ -101,18 +109,30 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
       <b>Встречи в пути:</b>
       <button v-for="(n, i) in store.game.pendingRoad" :key="i" class="small" @click="open(n)">§ {{ n }}</button>
     </div>
-    <div class="cols c11">
+    <div class="cols c11" :class="{ 'chat-first': hideText }">
       <div>
         <div class="card tight">
           <div class="numgrid">
-            <button v-for="p in loc.paragraphs" :key="p.n" :class="{ visited: visited.includes(p.n), active: p.n === current }" :title="p.segments ? 'есть выбор' : ''" @click="open(p.n)">{{ p.n }}<sup v-if="p.segments" style="color:var(--accent)">•</sup></button>
+            <button v-for="p in loc.paragraphs" :key="p.n" :class="{ visited: visited.includes(p.n), active: p.n === current }" :title="hideText ? 'идти сюда' : p.segments ? 'есть выбор' : ''" @click="pick(p.n)">{{ p.n }}<sup v-if="p.segments && !hideText" style="color:var(--accent)">•</sup></button>
           </div>
-          <p class="small muted" style="margin:.4rem 0 0">{{ id === 'doroga' ? 'Ведущий выбирает любое приключение из главы «Дорога».' : 'Номера соответствуют плану локации. Пройденные приглушены, точкой отмечены параграфы с выбором.' }}</p>
+          <p class="small muted" style="margin:.4rem 0 0">{{ hideText ? 'Нажмите номер, чтобы пойти в это помещение. Пройденные приглушены.' : id === 'doroga' ? 'Ведущий выбирает любое приключение из главы «Дорога».' : 'Номера соответствуют плану локации. Пройденные приглушены, точкой отмечены параграфы с выбором.' }}</p>
         </div>
         <div v-if="planSrc" class="card tight"><a :href="planSrc" target="_blank" rel="noopener" title="Открыть план целиком"><img class="plan-img" :src="planSrc" :alt="`План: ${loc.name}`" /></a></div>
       </div>
       <div>
-        <div v-if="!paragraph" class="card muted">Выберите номер параграфа.</div>
+        <div v-if="hideText" class="card">
+          <template v-if="store.aiGm">
+            <h3>Ведущий</h3>
+            <p class="small muted">Нажмите номер помещения на плане или напишите, что делают герои.</p>
+            <GmChat height="58vh" />
+          </template>
+          <template v-else>
+            <h3>Текст читает ведущий</h3>
+            <p class="small muted">Номера на плане — куда вы идёте; ведущий описывает, что вы видите, и разыгрывает события.</p>
+            <GmChat height="40vh" />
+          </template>
+        </div>
+        <div v-else-if="!paragraph" class="card muted">Выберите номер параграфа.</div>
         <div v-else class="card">
           <div class="row between">
             <h2>§ {{ paragraph.n }}</h2>
