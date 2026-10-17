@@ -10,7 +10,7 @@ import { createGameServer, type GameServer } from '../server/app'
 import { aiGmFactory, type ModelClient } from '../server/gm/ai'
 import { GM_TOOLS } from '../server/gm/tools'
 
-type Reply = { text?: string; tools?: { name: string; input: unknown }[]; error?: Error }
+type Reply = { text?: string; tools?: { name: string; input: unknown }[]; error?: Error; stop?: string }
 
 /** Имитация модели: по очереди отдаёт заготовленные ответы и запоминает запросы */
 function fakeModel(replies: Reply[]) {
@@ -29,7 +29,7 @@ function fakeModel(replies: Reply[]) {
             ...(r.text ? [{ type: 'text', text: r.text, citations: null }] : []),
             ...(r.tools ?? []).map((t, i) => ({ type: 'tool_use', id: `tu_${calls.length}_${i}`, name: t.name, input: t.input })),
           ]
-          return { id: 'msg', type: 'message', role: 'assistant', model: 'fake', content, stop_reason: r.tools?.length ? 'tool_use' : 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } as unknown as Anthropic.Beta.BetaMessage
+          return { id: 'msg', type: 'message', role: 'assistant', model: 'fake', content, stop_reason: r.stop ?? (r.tools?.length ? 'tool_use' : 'end_turn'), stop_sequence: null, usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } as unknown as Anthropic.Beta.BetaMessage
         },
       }
     },
@@ -154,5 +154,35 @@ describe('ИИ-ведущий', () => {
     const req = g.model.calls[0] as { messages: { content: { text?: string }[] }[] }
     expect(req.messages[0].content[0].text).toContain('Иду налево')
     expect(req.messages[0].content[0].text).toContain('Иду направо')
+  })
+
+  it('ответ, оборванный на лимите токенов посреди вызова инструмента, не ломает историю', async () => {
+    const g = await setup([
+      { text: 'Вы входите в зал', tools: [{ name: 'change_money', input: { hero: 'Конан', delta: 5 } }], stop: 'max_tokens' },
+      { text: 'Продолжаем.' },
+    ])
+    await g.c.chat('Осматриваемся', true)
+    await g.s.gm.idle()
+    await g.c.chat('Дальше', true)
+    await g.s.gm.idle()
+    const req = g.model.calls.at(-1) as { messages: { role: string; content: { type: string }[] | string }[] }
+    const assistant = req.messages.filter((m) => m.role === 'assistant')
+    expect(assistant.every((m) => Array.isArray(m.content) && m.content.length > 0 && !m.content.some((b) => b.type === 'tool_use'))).toBe(true)
+  })
+
+  it('сбой хода сразу после перезапуска длинного разговора не стирает историю', async () => {
+    const err = new Anthropic.APIError(500, undefined, 'boom', new Headers())
+    const g = await setup([{ text: 'Первая сцена.' }, { error: err }, { text: 'Снова на месте.' }], 200)
+    await g.c.chat('Начинаем', true)
+    await g.s.gm.idle()
+    const room = (await g.s.store.get(g.j.code))!
+    const before = room.gmHistories.claude!.length
+    await g.c.chat('Ещё ход', true)
+    await g.s.gm.idle()
+    expect(room.gmHistories.claude!.length).toBe(before)
+    await g.c.chat('И ещё', true)
+    await g.s.gm.idle()
+    const last = g.model.calls.at(-1) as { messages: { content: { text?: string }[] }[] }
+    expect(last.messages[0].content[0].text).toContain('Краткое содержание прошлой игры')
   })
 })

@@ -5,7 +5,7 @@
 import type { Room } from '../rooms'
 import { buildCompactPrompt } from './prompt'
 import { GM_TOOLS_OPENAI, executeGmTool } from './tools'
-import { ProviderError, type LlmProvider } from './types'
+import { ProviderError, describeTool, type LlmProvider } from './types'
 
 export interface OpenAiCompatConfig {
   id: string
@@ -50,7 +50,10 @@ export function windowHistory(hist: OaMsg[], limit: number): OaMsg[] {
   if (hist.length <= limit) return hist
   let start = hist.length - limit
   while (start < hist.length && hist[start].role !== 'user') start++
-  return hist.slice(start)
+  // длинный ход (много вызовов инструментов) не должен вытеснить свою же реплику игрока: окно не позже последней
+  let lastUser = hist.length - 1
+  while (lastUser > 0 && hist[lastUser].role !== 'user') lastUser--
+  return hist.slice(Math.min(start, lastUser))
 }
 
 export class OpenAiCompatProvider implements LlmProvider {
@@ -69,6 +72,7 @@ export class OpenAiCompatProvider implements LlmProvider {
     // состояние партии — в той же реплике: не все совместимые API принимают system посреди разговора
     hist.push({ role: 'user', content: `${input.userText}\n\n[Состояние партии — сообщение сервера, а не игроков]\n${input.snapshot}` })
     let text = ''
+    const done: string[] = []
     try {
       for (let step = 0; step < (this.cfg.maxSteps ?? 8); step++) {
         const { content, toolCalls } = await this.request(hist, (d) => { text += d; io.delta(d) })
@@ -81,6 +85,7 @@ export class OpenAiCompatProvider implements LlmProvider {
           let args: unknown
           try { args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {} } catch { args = undefined }
           const out = args === undefined ? { content: 'INVALID_JSON: аргументы не разобраны, повтори вызов', isError: true } : executeGmTool(room, tc.function.name, args)
+          if (!out.isError) done.push(describeTool(tc.function.name, args))
           hist.push({ role: 'tool', tool_call_id: tc.id, content: out.isError ? `Ошибка: ${out.content}` : out.content })
         }
         io.stateChanged()
@@ -88,12 +93,22 @@ export class OpenAiCompatProvider implements LlmProvider {
       }
     } catch (e) {
       hist.length = mark
-      if (e instanceof ProviderError) throw e
-      throw new ProviderError(`${this.label}: ${(e as Error).message}`, 30_000)
+      const pe = e instanceof ProviderError ? e : new ProviderError(`${this.label}: ${(e as Error).message}`, 30_000)
+      pe.done = done
+      throw pe
     }
     if (!text.trim()) {
-      hist.length = mark
-      throw new ProviderError(`${this.label}: пустой ответ`, 30_000)
+      if (done.length) {
+        // модель выполнила действия, но не дописала рассказ (рассуждения съели лимит): ход засчитан, иначе следующая
+        // модель повторит те же награды и урон
+        text = 'Ведущий сделал ход — подробности в журнале игры.'
+        const last = hist[hist.length - 1]
+        if (last?.role === 'assistant' && !last.tool_calls?.length) last.content = text
+        else hist.push({ role: 'assistant', content: text })
+      } else {
+        hist.length = mark
+        throw new ProviderError(`${this.label}: пустой ответ`, 30_000)
+      }
     }
     // хранимая история тоже ограничена (в запрос и так уходит только окно последних сообщений)
     const keep = Math.max(200, (this.cfg.historyLimit ?? 40) * 4)

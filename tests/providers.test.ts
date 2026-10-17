@@ -139,6 +139,44 @@ describe('цепочка моделей ведущего', () => {
     expect(a.bodies).toHaveLength(2)
   })
 
+  it('прерванный ход: следующая модель знает, что уже выполнено, и не повторяет награду', async () => {
+    const a = fakeFetch([
+      () => sse(textChunks('Ворота.')),
+      () => sse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'change_money', arguments: '{"hero":"Конан","delta":50}' } }] } }] }]),
+      () => new Response('boom', { status: 503 }),
+    ])
+    const b = fakeFetch([
+      (body) => {
+        const user = body.messages.filter((m) => m.role === 'user').at(-1)!
+        expect(String(user.content)).toContain('уже выполнила в игре: change_money')
+        return sse(textChunks('Стражник отсчитывает монеты.'))
+      },
+    ])
+    const g = await room([
+      [{ id: 'a', label: 'Первая', baseUrl: 'http://a', model: 'm' }, a.f],
+      [{ id: 'b', label: 'Вторая', baseUrl: 'http://b', model: 'm' }, b.f],
+    ])
+    await g.s.gm.idle()
+    const money = g.state.heroes.find((h) => h.name === 'Конан')!.money
+    await g.c.chat('Берём награду', true)
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.author === 'Ведущий · Вторая'))
+    expect(g.state.heroes.find((h) => h.name === 'Конан')!.money).toBe(money + 50)
+  })
+
+  it('модель выполнила действие, но не дописала рассказ — ход засчитан, а не отдан другой модели', async () => {
+    const a = fakeFetch([
+      () => sse(textChunks('Ворота.')),
+      () => sse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'change_money', arguments: '{"hero":"Конан","delta":10}' } }] } }] }]),
+      () => sse([{ choices: [{ delta: { content: '' } }] }]),
+    ])
+    const g = await room([[{ id: 'a', label: 'Первая', baseUrl: 'http://a', model: 'm' }, a.f]])
+    await g.s.gm.idle()
+    await g.c.chat('Берём', true)
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.author === 'Ведущий · Первая' && m.text.includes('журнале')))
+  })
+
   it('окно истории начинается с реплики игрока; цепочка собирается из окружения', () => {
     const hist = [
       { role: 'user', content: '1' }, { role: 'assistant', content: null, tool_calls: [] }, { role: 'tool', tool_call_id: 'x', content: 'r' },

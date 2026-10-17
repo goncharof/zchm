@@ -53,8 +53,15 @@ export interface LlmProvider {
 
 /** Провайдер недоступен: нет ключа, лимит, сбой. cooldownMs — сколько его не пробовать */
 export class ProviderError extends Error {
+  /** инструменты, которые прерванный ход уже выполнил (их изменения в игре остались) */
+  done: string[] = []
   constructor(message: string, public cooldownMs: number) {
     super(message)
     this.name = 'ProviderError'
   }
+}
+
+/** Краткая запись выполненного инструмента — для следующей модели, чтобы она не повторила действие */
+export function describeTool(name: string, input: unknown): string {
+  return `${name} ${JSON.stringify(input ?? {}).slice(0, 160)}`
 }

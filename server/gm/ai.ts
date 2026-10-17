@@ -15,7 +15,7 @@ import type { Room } from '../rooms'
 import { buildSystemPrompt, recap, snapshot } from './prompt'
 import { ScriptedGm } from './script'
 import { GM_TOOLS, executeGmTool } from './tools'
-import { ProviderError, type GmContext, type GmDriver, type GmEvent, type GmFactory, type GmInput, type LlmProvider } from './types'
+import { ProviderError, describeTool, type GmContext, type GmDriver, type GmEvent, type GmFactory, type GmInput, type LlmProvider } from './types'
 
 type Msg = Anthropic.Beta.BetaMessageParam
 
@@ -68,17 +68,20 @@ export class AnthropicProvider implements LlmProvider {
   }
 
   async turn(room: Room, input: { userText: string; snapshot: string }, io: { delta(text: string): void; stateChanged(): void }): Promise<string> {
-    let history = (room.gmHistories[this.id] ??= []) as Msg[]
+    const stored = (room.gmHistories[this.id] ??= []) as Msg[]
+    let history = stored
     let prefix = ''
     const limit = this.opts.maxHistoryChars ?? Number(process.env.GM_HISTORY_CHARS ?? 300_000)
-    if (history.length && JSON.stringify(history).length > limit) {
-      // длинная партия: новый разговор с кратким содержанием (один промах кэша вместо растущего контекста)
-      const prev = history
-      history = room.gmHistories[this.id] = []
+    const fresh = stored.length > 0 && JSON.stringify(stored).length > limit
+    if (fresh) {
+      // длинная партия: новый разговор с кратким содержанием (один промах кэша вместо растущего контекста).
+      // Новая история заменит старую только после удачного хода — сбой не должен стереть и то и другое.
+      history = []
       prefix = `${recap(room)}\n\n`
-      console.log(`[ведущий Claude ${room.code}] история ${JSON.stringify(prev).length} символов — новый разговор с кратким содержанием`)
+      console.log(`[ведущий Claude ${room.code}] история ${JSON.stringify(stored).length} символов — новый разговор с кратким содержанием`)
     }
     const mark = history.length
+    const done: string[] = []
     history.push({ role: 'user', content: [{ type: 'text', text: prefix + input.userText }] })
     // системное сообщение посреди разговора: не трогает кэшированный префикс и не подделывается игроками
     history.push({ role: 'system', content: input.snapshot })
@@ -100,6 +103,7 @@ export class AnthropicProvider implements LlmProvider {
           fallbacks: 'default',
         })
         if (text && !text.endsWith('\n')) { text += '\n\n'; io.delta('\n\n') }
+        const stepStart = text.length
         stream.on('text', (d) => { text += d; io.delta(d) })
         let msg: Anthropic.Beta.BetaMessage
         try {
@@ -107,30 +111,39 @@ export class AnthropicProvider implements LlmProvider {
           jsonRetries = 0
         } catch (err) {
           if (err instanceof Anthropic.APIError || jsonRetries++ >= 2) throw err
+          // повтор шага: недописанный текст не должен попасть в итог дважды
+          text = text.slice(0, stepStart)
           continue
         }
         if (this.opts.logUsage ?? true) {
           const u = msg.usage
           console.log(`[ведущий Claude ${room.code}] шаг ${step + 1}: вход ${u.input_tokens}, из кэша ${u.cache_read_input_tokens ?? 0}, в кэш ${u.cache_creation_input_tokens ?? 0}, выход ${u.output_tokens}`)
         }
-        history.push({ role: 'assistant', content: msg.content })
         if (msg.stop_reason === 'refusal') throw new ProviderError('Claude отказался вести эту сцену', 0)
-        const uses = msg.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use')
-        if (!uses.length || msg.stop_reason === 'max_tokens') break
+        // оборванный на лимите ответ: вызовы инструментов в нём недописаны — без них (иначе tool_use без tool_result
+        // навсегда ломает историю); пустой ответ тоже нельзя хранить
+        const truncated = msg.stop_reason === 'max_tokens'
+        const content = truncated ? msg.content.filter((b) => b.type !== 'tool_use') : msg.content
+        history.push({ role: 'assistant', content: content.some((b) => b.type === 'text' || b.type === 'tool_use') ? content : [...content, { type: 'text', text: '…', citations: null }] })
+        const uses = content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use')
+        if (!uses.length || truncated) break
         const results: Anthropic.Beta.BetaToolResultBlockParam[] = uses.map((u) => {
           const out = executeGmTool(room, u.name, u.input)
+          if (!out.isError) done.push(describeTool(u.name, u.input))
           return { type: 'tool_result', tool_use_id: u.id, content: out.content, ...(out.isError ? { is_error: true } : {}) }
         })
         history.push({ role: 'user', content: results })
         io.stateChanged()
       }
     } catch (err) {
-      // откатить незавершённый ход: история остаётся корректной для следующего запроса
-      history.length = mark
-      if (err instanceof ProviderError) throw err
+      // откатить незавершённый ход: история остаётся корректной для следующего запроса (старая — если начинали новую)
+      if (!fresh) history.length = mark
       const why = err instanceof Anthropic.APIError ? `ошибка API ${err.status ?? ''}`.trim() : (err as Error).message
-      throw new ProviderError(`Claude: ${why}`, cooldownForApiError(err))
+      const pe = err instanceof ProviderError ? err : new ProviderError(`Claude: ${why}`, cooldownForApiError(err))
+      pe.done = done
+      throw pe
     }
+    if (fresh) room.gmHistories[this.id] = history
     return text.trim() || '…'
   }
 }
@@ -209,15 +222,20 @@ export class GmDirector implements GmDriver {
     }
     const userText = formatInputs(events, texts)
     const exclude = new Set(texts.map((t) => t.chatId).filter(Boolean) as string[])
+    // что уже сделали прерванные попытки этого хода: их изменения в игре остались, следующая модель не должна их повторить
+    const carried: string[] = []
     for (const p of this.opts.providers) {
       if ((this.cooling.get(p.id) ?? 0) > Date.now()) continue
       const id = randomUUID()
+      const already = carried.length ? `[Прошлая попытка этого хода прервалась, но уже выполнила в игре: ${carried.join('; ')}. Эти действия не повторяй — опиши их результат и продолжи.]\n\n` : ''
       try {
-        const text = await p.turn(room, { userText: this.catchup(room, p.id, exclude) + userText, snapshot: snapshot(room) }, {
+        const text = await p.turn(room, { userText: this.catchup(room, p.id, exclude) + already + userText, snapshot: snapshot(room) }, {
           delta: (d) => this.ctx.delta(room, id, d),
           stateChanged: () => this.ctx.stateChanged(room),
         })
         const msg = this.ctx.chat(room, { id, from: 'gm', author: `Ведущий · ${p.label}`, text })
+        // исход боя описал ИИ — привязка боя к параграфу для сценарного ведущего больше не нужна
+        if (events.some((e) => e.type === 'combatEnd')) delete room.script.fight
         this.ctx.done(room, id)
         room.gmSeen[p.id] = msg.id
         this.ctx.stateChanged(room)
@@ -227,6 +245,7 @@ export class GmDirector implements GmDriver {
         // убрать у игроков недописанный текст и перейти к следующей модели
         this.ctx.done(room, id)
         const err = e instanceof ProviderError ? e : new ProviderError(String((e as Error)?.message ?? e), 30_000)
+        carried.push(...err.done)
         this.cooling.set(p.id, Date.now() + err.cooldownMs * (this.opts.cooldownScale ?? 1))
         console.warn('[ведущий]', err.message)
       }
