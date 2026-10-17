@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BookOpen, Castle, Dice5, Home, Info, Map as MapIcon, Menu, MessageCircle, MessagesSquare, ScrollText, Skull, Sparkles, Store, Swords, Users, X,
@@ -32,6 +32,12 @@ onMounted(async () => {
 const locationLink = computed(() => (store.location ? `/location/${store.location.id}` : null))
 const onTable = computed(() => route.path === '/table')
 watch(() => route.fullPath, () => { more.value = false; refMenu.value = false })
+// меню «Справочник» и плавающий чат закрываются щелчком мимо и клавишей Esc
+const moreRef = ref<HTMLElement | null>(null)
+function onDocClick(e: MouseEvent) { if (refMenu.value && moreRef.value && !moreRef.value.contains(e.target as Node)) refMenu.value = false }
+function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { refMenu.value = false; more.value = false; chatOpen.value = false } }
+onMounted(() => { document.addEventListener('click', onDocClick); document.addEventListener('keydown', onKey) })
+onBeforeUnmount(() => { document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onKey) })
 
 // чат: непрочитанные — пришедшие после последнего просмотра (не свои и не служебные)
 const seenCount = ref(0)
@@ -77,7 +83,7 @@ const onlineCount = computed(() => store.room?.players.filter((p) => p.online).l
         <router-link v-if="locationLink" :to="locationLink" class="nav-link"><Castle :size="17" /><span class="lbl">{{ store.location?.name }}</span></router-link>
         <router-link v-if="inCombat" to="/combat" class="nav-link hot"><Swords :size="17" /><span>Бой</span></router-link>
         <router-link to="/shop" class="nav-link"><Store :size="17" /><span class="lbl-opt">Лавка</span></router-link>
-        <div class="nav-more">
+        <div ref="moreRef" class="nav-more">
           <button class="nav-link" :class="{ active: refActive }" :aria-expanded="refMenu" @click="refMenu = !refMenu"><BookOpen :size="17" /><span>Справочник</span></button>
           <div v-if="refMenu" class="menu" @click="refMenu = false">
             <router-link v-for="r in reference" :key="r.to" :to="r.to" class="nav-link"><component :is="r.icon" :size="17" />{{ r.label }}</router-link>
