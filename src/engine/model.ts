@@ -181,6 +181,8 @@ export interface GameState {
   pendingRoad: number[]
   /** выбранный стартовый узел карты */
   startNodeId: string
+  /** партия победила Чёрного мага */
+  victory?: { day: number; heroUid: string; heroName: string }
   seed?: number
 }
 

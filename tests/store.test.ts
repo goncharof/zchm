@@ -102,4 +102,21 @@ describe('хранилище партии', () => {
     s.enterLocation('severnyy-fort')
     expect(s.location?.name).toBe('Северный форт')
   })
+
+  it('финал: схватка с Чёрным магом заканчивается победой, короной и артефактом', () => {
+    const s = useGameStore()
+    s.newGame()
+    const w = s.addHero('Воин', 'warrior')
+    let won = false
+    for (let i = 0; i < 200 && !won; i++) {
+      w.lives = w.maxLives; w.status = {}
+      won = s.finalDuelAttack(w.uid)
+    }
+    expect(won).toBe(true)
+    expect(s.game!.victory?.heroName).toBe('Воин')
+    expect(s.hero(w.uid).money).toBeGreaterThanOrEqual(1040)
+    expect(s.hero(w.uid).inventory.some((e) => e.kind === 'artifact')).toBe(true)
+    s.drinkFountain()
+    expect(s.hero(w.uid).lives).toBe(w.maxLives)
+  })
 })

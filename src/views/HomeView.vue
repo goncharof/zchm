@@ -45,6 +45,7 @@ function newGame() {
         <h1>Заклятье Чёрного мага</h1>
         <p class="muted">Браузерная версия настольной ролевой игры 1997 года. Движок ведёт механику: персонажей, кубики, бой, магию, лавку и опыт. Книга Жизни читается как книга-игра по локациям.</p>
         <p>Группа искателей приключений отправляется в далёкий путь. Их задача — добраться до цитадели Чёрного мага и расправиться с ним, спасти мир от вторжения сил Хаоса, которые хлынут через открытые Ворота Инкардагот.</p>
+        <div v-if="store.game?.victory" class="card tight" style="border-color:var(--accent)"><b>Победа!</b> {{ store.game.victory.heroName }} сразил Чёрного мага на {{ store.game.victory.day }}-й день. Ворота Инкардагот остались закрыты.</div>
         <div v-if="allDead" class="card tight" style="border-color:var(--danger)"><b>Партия погибла.</b> Жрец мог бы оживить павших, но жрецов не осталось. Начните новую партию или загрузите сохранение.</div>
         <div class="row" style="margin-top:1rem">
           <button v-if="store.started" class="primary" @click="continueGame">Продолжить (день {{ store.game?.day }}, {{ where }})</button>

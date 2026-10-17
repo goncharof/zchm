@@ -66,6 +66,13 @@ function artifact() { const h = need(); if (h) store.findArtifact(h) }
 function scroll(s: { caster?: 'mage' | 'priest'; level?: number }) { const h = need(); if (h) store.giveScroll(h, s.caster, s.level) }
 function trap() { const h = need(); if (h) store.trapFound(h) }
 function lives(n: number) { const h = need(); if (h) store.adjustLives(h, n) }
+const isFinal = computed(() => props.id === 'zamok-chernogo-maga' && current.value === 13)
+function finalAttack() {
+  const h = need(); if (!h) return
+  const won = store.finalDuelAttack(h)
+  lastLuck.value = won ? 'Попадание! Чёрный маг повержен.' : 'Промах — маг отвечает огненным шаром (см. журнал).'
+  if (won && current.value) store.markVisited(props.id, current.value)
+}
 function done() { if (current.value) store.markVisited(props.id, current.value); if (props.id === 'doroga' && current.value) store.dismissRoad(current.value) }
 function leave() { store.leaveLocation(); router.push('/map') }
 </script>
@@ -116,6 +123,15 @@ function leave() { store.leaveLocation(); router.push('/map') }
             <template v-for="(s, i) in paragraph.hints.scrolls ?? []" :key="'s' + i"><button @click="scroll(s)">Свиток{{ s.caster ? ` ${casterName(s.caster)}а` : '' }}{{ s.level ? ` ${s.level} ур.` : '' }}</button></template>
           </div>
           <p v-if="lastLuck" class="small" style="color:#d7c56a;margin-top:.4rem">{{ lastLuck }}</p>
+          <div v-if="isFinal" class="card tight" style="border-color:var(--accent);margin-top:.6rem">
+            <h3>Схватка с Чёрным магом</h3>
+            <p class="small muted">Попасть в мага — бросок удачи 15. При промахе маг бросает огненный шар: удача 11, иначе −1к18 жизней. Попадание — победа.</p>
+            <div v-if="store.game?.victory"><b>Победа!</b> {{ store.game.victory.heroName }} сразил Чёрного мага на {{ store.game.victory.day }}-й день.</div>
+            <div v-else class="row">
+              <button class="primary" @click="finalAttack">⚔ Атаковать Чёрного мага (удача 15)</button>
+            </div>
+            <div class="row" style="margin-top:.4rem"><button class="small" @click="store.drinkFountain()">Выпить из фонтана (все жизни и мана)</button></div>
+          </div>
           <details style="margin-top:.6rem"><summary class="small muted">Другие действия</summary>
             <div class="row" style="margin-top:.4rem">
               <button class="small" @click="trap">Ловушка/тайник найден (+400 вору)</button>

@@ -7,7 +7,7 @@ import type { CombatState, EquipSlot, GameState, Hero, InventoryKind, LogEntry }
 import { SAVE_VERSION } from '@/engine/model'
 import { changeLives, createHero, gainXp, hasWard, heroLuck, isConscious, rest, type LevelUp } from '@/engine/character'
 import * as inv from '@/engine/inventory'
-import { k18, roll } from '@/engine/dice'
+import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
 import { closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
@@ -332,6 +332,45 @@ export const useGameStore = defineStore('game', () => {
     inv.addToInventory(h, 'scroll', s.id, 1, { identified: true })
     log(`${h.name} получает свиток: «${s.name}» (${c === 'mage' ? 'маг' : 'жрец'}, ${s.level} ур.).`, 'spell')
   }
+  /**
+   * Финал (Замок Чёрного мага, §13): попасть в мага — удача 15; при промахе маг бросает огненный шар
+   * (удача 11, иначе −1к18 жизней — ХАУСРУЛ: урон шара в книге не указан). Попадание — победа,
+   * корона (1000 монет) и артефакт.
+   */
+  function finalDuelAttack(heroUid: string): boolean {
+    if (!game.value) return false
+    const h = hero(heroUid)
+    const r = luckCheck(heroUid, 15)
+    if (r.ok) {
+      log(`${h.name} поражает Чёрного мага! Маг исчезает — на его месте кучка пепла, корона и артефакт. Долина Тмамрак не войдёт в наш мир.`, 'xp')
+      h.money += 1000
+      log(`${h.name} забирает корону Чёрного мага (1000 монет).`)
+      findArtifact(heroUid)
+      game.value.victory = { day: game.value.day, heroUid, heroName: h.name }
+      return true
+    }
+    const save = k18()
+    const luck = heroLuck(h, idx)
+    if (save + luck >= 11) {
+      log(`Чёрный маг бросает огненный шар: ${h.name} уворачивается (к18 = ${save}${luck ? ` + ${luck}` : ''} ≥ 11).`, 'luck')
+    } else {
+      const dmg = rollFormula('1к18').total
+      const lost = -changeLives(h, -dmg)
+      log(`Чёрный маг бросает огненный шар: ${h.name} не успевает увернуться (к18 = ${save}${luck ? ` + ${luck}` : ''} < 11) и теряет ${lost} жизней.`, 'damage')
+      if (h.status.dead) log(`${h.name} погибает.`, 'death')
+      else if (h.status.unconscious) log(`${h.name} теряет сознание.`, 'death')
+    }
+    return false
+  }
+  function drinkFountain(): void {
+    for (const h of heroes.value) {
+      if (h.status.dead) continue
+      changeLives(h, h.maxLives - h.lives)
+      h.mana = h.maxMana
+      delete h.status.poison
+    }
+    log('Команда пьёт из фонтана — все жизни и мана восстановлены.')
+  }
   function trapFound(heroUid: string): void {
     const h = hero(heroUid)
     log(`${h.name} обнаруживает ловушку или потайную дверь: +${XP_TRAP_FOUND} опыта.`, 'xp')
@@ -406,7 +445,7 @@ export const useGameStore = defineStore('game', () => {
     buyItem, sellItem, equipItem, unequipItem, giveItem, dropItem, transferItem, drink, identifyBottle, copyScroll, learnSpell,
     useAntidote, useParalysisPotion, poisonWeapon, adjustLives, adjustMana, adjustMoney, giveXp,
     restAll, travelTo, enterLocation, leaveLocation, markVisited, dismissRoad,
-    luckCheck, findArtifact, giveScroll, trapFound,
+    luckCheck, findArtifact, giveScroll, trapFound, finalDuelAttack, drinkFountain,
     startEncounter, attack, cast, flee, skip, toMelee, monstersAct, endCombat, abortCombat, addMonstersToCombat,
   }
 })
