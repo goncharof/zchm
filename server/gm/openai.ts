@@ -19,9 +19,16 @@ export interface OpenAiCompatConfig {
   historyLimit?: number
   timeoutMs?: number
   maxSteps?: number
+  /** дополнительные поля запроса (например, reasoning_effort у gpt-oss на Groq) */
+  extraBody?: Record<string, unknown>
+  /** просить у API расход токенов в потоке и писать его в консоль сервера */
+  usage?: boolean
+  /** лимит на короткое время (429 с retry-after не дольше этого) — подождать и повторить, а не отдавать ход дальше */
+  maxRetryWaitMs?: number
 }
 
-type OaToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } }
+/** extra_content — служебные данные провайдера у вызова инструмента (подпись мысли Gemini 3); их надо вернуть в истории */
+type OaToolCall = { id: string; type: 'function'; function: { name: string; arguments: string }; extra_content?: Record<string, unknown> }
 type OaMsg =
   | { role: 'system' | 'user'; content: string }
   | { role: 'assistant'; content: string | null; tool_calls?: OaToolCall[] }
@@ -97,7 +104,7 @@ export class OpenAiCompatProvider implements LlmProvider {
     return text.trim()
   }
 
-  private async request(hist: OaMsg[], onText: (d: string) => void): Promise<{ content: string; toolCalls: OaToolCall[] }> {
+  private async request(hist: OaMsg[], onText: (d: string) => void, retried = false): Promise<{ content: string; toolCalls: OaToolCall[] }> {
     const res = await this.fetchImpl(`${this.cfg.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(this.cfg.apiKey ? { authorization: `Bearer ${this.cfg.apiKey}` } : {}) },
@@ -107,17 +114,29 @@ export class OpenAiCompatProvider implements LlmProvider {
         tools: GM_TOOLS_OPENAI,
         tool_choice: 'auto',
         stream: true,
+        ...(this.cfg.usage ? { stream_options: { include_usage: true } } : {}),
         max_tokens: this.cfg.maxTokens ?? 1500,
         temperature: this.cfg.temperature ?? 0.8,
+        ...this.cfg.extraBody,
       }),
       signal: AbortSignal.timeout(this.cfg.timeoutMs ?? 90_000),
     })
     if (!res.ok || !res.body) {
       const body = await res.text().catch(() => '')
-      throw new ProviderError(`${this.label}: HTTP ${res.status} ${body.slice(0, 160)}`, cooldownFor(res.status, res.headers.get('retry-after')))
+      // сколько ждать: заголовок retry-after (Groq) или retryDelay в теле ответа (Gemini)
+      const retryAfter = res.headers.get('retry-after') ?? body.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/)?.[1] ?? null
+      const wait = cooldownFor(res.status, retryAfter)
+      if (res.status === 429 && retryAfter && !retried && wait <= (this.cfg.maxRetryWaitMs ?? 20_000)) {
+        // лимит на секунды (токены в минуту) — подождать один раз, а не отдавать ход другой модели
+        console.log(`[ведущий ${this.label}] лимит, жду ${Math.ceil(wait / 1000)} с`)
+        await new Promise((r) => setTimeout(r, wait))
+        return this.request(hist, onText, true)
+      }
+      throw new ProviderError(`${this.label}: HTTP ${res.status} ${body.replace(/\s+/g, ' ').slice(0, 400)}`, wait)
     }
     let content = ''
-    const calls: { id?: string; name: string; args: string }[] = []
+    const calls: { id?: string; name: string; args: string; extra?: Record<string, unknown> }[] = []
+    let usage: { prompt_tokens?: number; completion_tokens?: number } | undefined
     const reader = res.body.getReader()
     const dec = new TextDecoder()
     let buf = ''
@@ -132,9 +151,10 @@ export class OpenAiCompatProvider implements LlmProvider {
         if (!line.startsWith('data:')) continue
         const data = line.slice(5).trim()
         if (data === '[DONE]') continue
-        let chunk: { choices?: { delta?: { content?: string | null; tool_calls?: { index?: number; id?: string; function?: { name?: string; arguments?: string } }[] } }[]; error?: { message?: string } }
+        let chunk: { choices?: { delta?: { content?: string | null; tool_calls?: { index?: number; id?: string; function?: { name?: string; arguments?: string }; extra_content?: Record<string, unknown> }[] } }[]; error?: { message?: string }; usage?: typeof usage }
         try { chunk = JSON.parse(data) } catch { continue }
         if (chunk.error) throw new ProviderError(`${this.label}: ${chunk.error.message ?? 'ошибка'}`, 30_000)
+        if (chunk.usage) usage = chunk.usage
         const d = chunk.choices?.[0]?.delta
         if (!d) continue
         if (d.content) { content += d.content; onText(d.content) }
@@ -144,10 +164,15 @@ export class OpenAiCompatProvider implements LlmProvider {
           if (tc.id) calls[i].id = tc.id
           if (tc.function?.name) calls[i].name += tc.function.name
           if (tc.function?.arguments) calls[i].args += tc.function.arguments
+          if (tc.extra_content) calls[i].extra = { ...calls[i].extra, ...tc.extra_content }
         }
       }
     }
-    const toolCalls: OaToolCall[] = calls.filter(Boolean).filter((c) => c.name).map((c, i) => ({ id: c.id ?? `call_${Date.now().toString(36)}_${i}`, type: 'function', function: { name: c.name, arguments: c.args } }))
+    const toolCalls: OaToolCall[] = calls.filter(Boolean).filter((c) => c.name).map((c, i) => ({
+      id: c.id ?? `call_${Date.now().toString(36)}_${i}`, type: 'function', function: { name: c.name, arguments: c.args },
+      ...(c.extra ? { extra_content: c.extra } : {}),
+    }))
+    if (usage) console.log(`[ведущий ${this.label}] запрос: вход ${usage.prompt_tokens ?? '?'}, выход ${usage.completion_tokens ?? '?'} токенов`)
     return { content, toolCalls }
   }
 }

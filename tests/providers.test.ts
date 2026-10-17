@@ -84,9 +84,33 @@ describe('цепочка моделей ведущего', () => {
     expect(req.tools.find((t) => t.function.name === 'give_scroll')!.function.parameters).not.toHaveProperty('additionalProperties')
   })
 
+  it('подпись мысли Gemini (extra_content) возвращается в истории; дополнительные поля уходят в запрос', async () => {
+    const sig = { google: { thought_signature: 'sig-123' } }
+    const a = fakeFetch([
+      () => sse(textChunks('Ворота.')),
+      () => sse([
+        { choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'open_paragraph', arguments: '{"location_id":"zolotoy-gorod","n":1}' }, extra_content: sig }] } }] },
+        { choices: [], usage: { prompt_tokens: 1200, completion_tokens: 40 } },
+      ]),
+      (body) => {
+        const call = body.messages.find((m) => m.role === 'assistant' && 'tool_calls' in m) as unknown as { tool_calls: { extra_content?: unknown }[] }
+        expect(call.tool_calls[0].extra_content).toEqual(sig)
+        return sse(textChunks('Зомби у двери.'))
+      },
+    ])
+    const g = await room([[{ id: 'gem', label: 'Gemini', baseUrl: 'http://fake', model: 'm', usage: true, extraBody: { reasoning_effort: 'low' } }, a.f]])
+    await g.s.gm.idle()
+    await g.c.chat('Идём в помещение 1', true)
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.text === 'Зомби у двери.'))
+    const req = a.bodies[1] as { reasoning_effort?: string; stream_options?: unknown }
+    expect(req.reasoning_effort).toBe('low')
+    expect(req.stream_options).toEqual({ include_usage: true })
+  })
+
   it('первая модель на лимите — отвечает вторая; обе недоступны — сценарный ведущий', async () => {
     const limited = fakeFetch([
-      () => new Response('rate limit', { status: 429, headers: { 'retry-after': '5' } }),
+      () => new Response('rate limit', { status: 429, headers: { 'retry-after': '60' } }), // долгий лимит — ход уходит дальше
       () => new Response('rate limit', { status: 429 }),
     ])
     const backup = fakeFetch([
@@ -102,6 +126,17 @@ describe('цепочка моделей ведущего', () => {
     await g.c.chat('Идём в помещение 2', true)
     await g.s.gm.idle()
     await until(() => g.chat.some((m) => m.author === 'Ведущий · сценарий' && /помещение 2/.test(m.text)))
+  })
+
+  it('короткий лимит (429 с retry-after в пределах ожидания) — модель ждёт и отвечает сама', async () => {
+    const a = fakeFetch([
+      () => new Response('[{"error":{"code":429,"details":[{"retryDelay":"0.05s"}]}}]', { status: 429 }), // Gemini: время в теле
+      () => sse(textChunks('Ворота после паузы.')),
+    ])
+    const g = await room([[{ id: 'q', label: 'Groq', baseUrl: 'http://fake', model: 'm' }, a.f]])
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.author === 'Ведущий · Groq' && m.text === 'Ворота после паузы.'))
+    expect(a.bodies).toHaveLength(2)
   })
 
   it('окно истории начинается с реплики игрока; цепочка собирается из окружения', () => {
