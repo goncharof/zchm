@@ -88,7 +88,7 @@ export class NetClient {
   async loadState(state: GameState): Promise<void> { this.unwrap(await this.socket.emitWithAck('room:loadState', state)) }
   async claimHero(heroUid: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('hero:claim', heroUid)) }
   async releaseHero(heroUid: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('hero:release', heroUid)) }
-  async chat(text: string, toGm: boolean): Promise<void> { this.unwrap(await this.socket.emitWithAck('chat', { text, toGm })) }
+  async chat(text: string, toGm: boolean): Promise<boolean> { this.unwrap(await this.socket.emitWithAck('chat', { text, toGm })); return true }
   async choose(messageId: string, choiceId: string): Promise<void> { this.unwrap(await this.socket.emitWithAck('gm:choose', { messageId, choiceId })) }
 
   /** Выйти из комнаты (забыть сохранённый вход) */

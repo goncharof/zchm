@@ -21,7 +21,9 @@ async function send() {
   const t = text.value.trim()
   if (!t) return
   text.value = ''
-  await store.sendChat(t, ai.value && toGm.value)
+  const ok = await store.sendChat(t, ai.value && toGm.value)
+  // отказ сервера (слишком часто и т.п.) — вернуть текст в поле ввода
+  if (!ok && !text.value) text.value = t
 }
 </script>
 

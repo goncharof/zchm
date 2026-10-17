@@ -111,3 +111,35 @@ describe('сетевая игра', () => {
     expect(again.room.me.heroUids).toEqual([again.state.heroes[0].uid])
   })
 })
+
+describe('защита сервера', () => {
+  it('мусорные сообщения получают отказ, а не роняют сервер; события без подтверждения не ломают обработчик', async () => {
+    const s = await server()
+    const a = client(s)
+    await a.c.create('Аня', 'book')
+    const raw = a.c.socket
+    const bad = await raw.emitWithAck('cmd', null as never)
+    expect(bad).toEqual({ ok: false, error: 'Неверный запрос' })
+    const long = await raw.emitWithAck('chat', { text: 'x'.repeat(5000), toGm: false })
+    expect(long.ok).toBe(false)
+    const untyped = raw as unknown as { emit: (...a: unknown[]) => void }
+    untyped.emit('cmd', { name: 'note', args: ['без подтверждения'] })
+    untyped.emit('chat', 42)
+    await wait(80)
+    const ok = await raw.emitWithAck('cmd', { name: 'note', args: ['живой'] })
+    expect(ok.ok).toBe(true)
+  })
+
+  it('частота реплик ведущему ограничена для каждого игрока', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W, limits: { chat: [100, 100] } })
+    servers.push(s)
+    const a = client(s)
+    await a.c.create('Аня', 'script')
+    const results = []
+    for (let i = 0; i < 7; i++) results.push(await a.c.socket.emitWithAck('chat', { text: `Реплика ${i}`, toGm: true }))
+    expect(results.filter((r) => r.ok)).toHaveLength(4)
+    expect(results.at(-1)!.error).toMatch(/не больше 4 реплик/)
+    // реплики только игрокам не ограничены лимитом ведущего
+    expect((await a.c.socket.emitWithAck('chat', { text: 'Игрокам', toGm: false })).ok).toBe(true)
+  })
+})

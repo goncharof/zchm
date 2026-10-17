@@ -9,6 +9,7 @@ import type { GameState } from '@/engine/model'
 import { GameError, parseSave, runCommand, type CommandArgs, type CommandName } from '@/game/session'
 import { stateForClients, type Ack, type ClientToServer, type GmMode, type Joined, type ServerToClient } from '@/net/protocol'
 import { authorize, isCommand } from './permissions'
+import { Schemas, limit, makeLimiters, parse, type Limits } from './guard'
 import { Room, RoomStore, type Player } from './rooms'
 
 import { GmDirector } from './gm/ai'
@@ -25,6 +26,8 @@ export interface ServerOptions {
   world: WorldMap | null
   /** ведущий; по умолчанию — без моделей ИИ (ходы ведёт сценарный ведущий) */
   gm?: GmFactory
+  /** ограничения частоты запросов (по умолчанию — DEFAULT_LIMITS) */
+  limits?: Partial<Limits>
 }
 
 export interface GameServer {
@@ -84,7 +87,13 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
   const gm: GmDriver = opts.gm ? opts.gm(ctx) : new GmDirector(ctx, { providers: [] })
   void socketsOf
   const autoGm = (r: Room) => r.gm === 'ai' || r.gm === 'script'
+  const limiters = makeLimiters(opts.limits)
   const GM_TITLE: Record<GmMode, string> = { ai: 'ИИ (если модели недоступны — сценарный)', script: 'сценарный, без ИИ', human: 'хозяин комнаты', book: 'нет, читаем Книгу Жизни сами' }
+
+  /** клиент может не передать функцию подтверждения — тогда ответ просто не отправляется */
+  function safeAck(ack: unknown): (a: Ack) => void {
+    return typeof ack === 'function' ? (ack as (a: Ack) => void) : () => {}
+  }
 
   function fail(ack: (a: Ack) => void, e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -109,9 +118,12 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       ctx.roomChanged(r)
     }
 
-    socket.on('room:create', async (req, ack) => {
+    socket.on('room:create', async (raw, rawAck) => {
+      const ack = safeAck(rawAck)
       try {
-        const mode: GmMode = req.gm === 'ai' || req.gm === 'human' || req.gm === 'script' ? req.gm : 'book'
+        limit(limiters.room.take(socket.id), 'Слишком часто: подождите немного')
+        const req = parse(Schemas.create, raw)
+        const mode: GmMode = req.gm
         const state = req.state ? parseSave(JSON.stringify(req.state)) : undefined
         const r = await store.create(mode, state)
         const p = r.addPlayer(req.name, true)
@@ -122,8 +134,11 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       } catch (e) { fail(ack, e) }
     })
 
-    socket.on('room:join', async (req, ack) => {
+    socket.on('room:join', async (raw, rawAck) => {
+      const ack = safeAck(rawAck)
       try {
+        limit(limiters.room.take(socket.id), 'Слишком часто: подождите немного')
+        const req = parse(Schemas.join, raw)
         const r = await store.get(req.code)
         if (!r) throw new GameError('Комната не найдена')
         let p = req.token ? r.playerByToken(req.token) : undefined
@@ -137,11 +152,12 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       } catch (e) { fail(ack, e) }
     })
 
-    socket.on('room:setGm', (mode, ack) => {
+    socket.on('room:setGm', (raw, rawAck) => {
+      const ack = safeAck(rawAck)
       try {
+        const mode = parse(Schemas.gm, raw)
         if (!room || !player) throw new GameError('Вы не в комнате')
         if (!player.isHost) throw new GameError('Это может только хозяин комнаты')
-        if (!['ai', 'script', 'human', 'book'].includes(mode)) throw new GameError('Неизвестный режим')
         room.gm = mode
         ctx.chat(room, { from: 'system', author: 'Игра', text: `Режим ведущего: ${GM_TITLE[mode]}.` })
         ctx.roomChanged(room)
@@ -150,8 +166,10 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       } catch (e) { fail(ack, e) }
     })
 
-    socket.on('room:loadState', (state, ack) => {
+    socket.on('room:loadState', (raw, rawAck) => {
+      const ack = safeAck(rawAck)
       try {
+        const state = parse(Schemas.state, raw)
         if (!room || !player) throw new GameError('Вы не в комнате')
         if (!player.isHost) throw new GameError('Загружать сохранение может только хозяин комнаты')
         const g = parseSave(JSON.stringify(state))
@@ -164,8 +182,11 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       } catch (e) { fail(ack, e) }
     })
 
-    socket.on('hero:claim', (heroUid, ack) => {
+    socket.on('hero:claim', (raw, rawAck) => {
+      const ack = safeAck(rawAck)
       try {
+        const heroUid = parse(Schemas.heroUid, raw)
+        limit(limiters.cmd.take(socket.id), 'Слишком часто')
         if (!room || !player) throw new GameError('Вы не в комнате')
         if (!room.state.heroes.some((h) => h.uid === heroUid)) throw new GameError('Нет такого героя')
         const owner = room.ownerName(heroUid)
@@ -178,8 +199,10 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       } catch (e) { fail(ack, e) }
     })
 
-    socket.on('hero:release', (heroUid, ack) => {
+    socket.on('hero:release', (raw, rawAck) => {
+      const ack = safeAck(rawAck)
       try {
+        const heroUid = parse(Schemas.heroUid, raw)
         if (!room || !player) throw new GameError('Вы не в комнате')
         player.heroUids = player.heroUids.filter((u) => u !== heroUid)
         ctx.roomChanged(room)
@@ -188,12 +211,15 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       } catch (e) { fail(ack, e) }
     })
 
-    socket.on('cmd', (req, ack) => {
+    socket.on('cmd', (raw, rawAck) => {
+      const ack = safeAck(rawAck)
       try {
+        limit(limiters.cmd.take(socket.id), 'Слишком много действий подряд')
+        const req = parse(Schemas.cmd, raw)
         if (!room || !player) throw new GameError('Вы не в комнате')
         const r = room
         const p = player
-        const args = Array.isArray(req.args) ? req.args : []
+        const args = req.args
         const why = authorize(r.gm, p, req.name, args, (u) => r.heroOwned(u))
         if (why) throw new GameError(why)
         if (!isCommand(req.name)) throw new GameError('Неизвестная команда')
@@ -215,11 +241,15 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       } catch (e) { fail(ack, e) }
     })
 
-    socket.on('chat', (req, ack) => {
+    socket.on('chat', (raw, rawAck) => {
+      const ack = safeAck(rawAck)
       try {
+        const req = parse(Schemas.chat, raw)
         if (!room || !player) throw new GameError('Вы не в комнате')
-        const text = String(req.text ?? '').trim().slice(0, 1500)
+        const text = req.text.trim()
         if (!text) throw new GameError('Пустое сообщение')
+        limit(limiters.chat.take(socket.id), 'Не так быстро: одна реплика в пару секунд')
+        if (req.toGm && autoGm(room)) limit(limiters.toGm.take(`${room.code}:${player.id}`), 'Ведущий не успевает: не больше 4 реплик ведущему в минуту от игрока')
         const heroes = room.state.heroes.filter((h) => player!.heroUids.includes(h.uid)).map((h) => h.name)
         const author = heroes.length ? `${player.name} (${heroes.join(', ')})` : player.name
         const toGm = !!req.toGm && autoGm(room)
@@ -229,10 +259,13 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       } catch (e) { fail(ack, e) }
     })
 
-    socket.on('gm:choose', (req, ack) => {
+    socket.on('gm:choose', (raw, rawAck) => {
+      const ack = safeAck(rawAck)
       try {
+        const req = parse(Schemas.choose, raw)
         if (!room || !player) throw new GameError('Вы не в комнате')
-        gm.choose(room, player.id, String(req?.messageId ?? ''), String(req?.choiceId ?? ''))
+        limit(limiters.choose.take(socket.id), 'Слишком часто')
+        gm.choose(room, player.id, req.messageId, req.choiceId)
         ack({ ok: true })
       } catch (e) { fail(ack, e) }
     })
