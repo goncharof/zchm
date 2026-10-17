@@ -1,5 +1,5 @@
 // Офлайн-режим: страница — сначала сеть, потом кэш; ассеты и картинки — сначала кэш.
-const CACHE = 'zchm-v3'
+const CACHE = 'zchm-v4'
 
 self.addEventListener('install', (e) => {
   self.skipWaiting()

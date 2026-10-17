@@ -1,7 +1,7 @@
 {
   "name": "Заклятье Чёрного мага",
   "short_name": "Заклятье",
-  "description": "Браузерная версия настольной ролевой игры 1997 года",
+  "description": "Первая российская настольная ролевая игра (1997) в браузере: партия, бой, Книга Жизни и игра по сети с ИИ-ведущим",
   "lang": "ru",
   "start_url": "./",
   "scope": "./",
@@ -10,6 +10,7 @@
   "theme_color": "#070a09",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
