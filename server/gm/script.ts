@@ -57,17 +57,21 @@ const coinsWord = (n: number) => `${n} ${plural(n, 'монету', 'монеты
 /** Бутылки на продажу по тексту: «бутылку (5) за 15 монет», «за каждую просит 10 монет», «по 5 монет каждую», «бутылки (4)
  *  за 5 монет и (5) за 10 монет», «2 бутылки за 20 монет: (3), (3)». Пусто — монеты и бутылки в тексте не связаны покупкой
  *  (подарок и просьба о деньгах, награда в лодке, совет за плату). */
-export function bottleSales(text: string, h: ParagraphHints): { bottles: number[]; price: number }[] {
+export function bottleSales(text: string, h: ParagraphHints): { bottles: number[]; price: number; stock: number }[] {
   const prices = h.prices ?? [], bottles = h.bottles ?? []
   const t = text.toLowerCase().replace(/ё/g, 'е')
   if (!prices.length || !bottles.length || !/бутыл/.test(t)) return []
-  if (prices.length > 1) return prices.length === bottles.length ? bottles.map((n, i) => ({ bottles: [n], price: prices[i] })) : []
+  // запас: «(4) за 5 монет (у него 4 бутылки)», «у него целых 4 таких бутылки»; иначе — сколько бутылок названо
+  const stockOf = (n: number) => Number(new RegExp(`\\(${n}\\)[^()]*?\\(у него (\\d+) бутыл`).exec(t)?.[1] ?? 0) || bottles.filter((b) => b === n).length
+  if (prices.length > 1) return prices.length === bottles.length ? bottles.map((n, i) => ({ bottles: [n], price: prices[i], stock: stockOf(n) })) : []
   const price = prices[0]
   const each = /за кажд/.test(t) || new RegExp(`бутыл[^.]*по ${price} монет\\S* кажд`).test(t)
   if (!each && !new RegExp(`бутыл[^.]*за ${price} монет`).test(t)) return []
   // несколько бутылок за одну цену — одна покупка
-  if (!each && new RegExp(`(\\d+|две|три|четыре) бутыл\\S* за ${price} монет`).test(t)) return [{ bottles, price }]
-  return [...new Set(bottles)].map((n) => ({ bottles: [n], price }))
+  if (!each && new RegExp(`(\\d+|две|три|четыре) бутыл\\S* за ${price} монет`).test(t)) return [{ bottles, price, stock: 1 }]
+  const kinds = [...new Set(bottles)]
+  const total = Number(/у него (?:целых )?(\d+) (?:таких )?бутыл/.exec(t)?.[1] ?? 0)
+  return kinds.map((n) => ({ bottles: [n], price, stock: kinds.length === 1 && total ? total : stockOf(n) }))
 }
 
 function hintOffers(h: ParagraphHints | undefined, place?: Place, tag = 's', text = ''): Offer[] {
@@ -82,9 +86,10 @@ function hintOffers(h: ParagraphHints | undefined, place?: Place, tag = 's', tex
     out.push({ label: `⚔ Бой: ${specs.map((s) => `${idx.monster(s.monsterId).name}${s.count > 1 ? ` ×${s.count}` : ''}`).join(', ')}`, action: { t: 'fight', specs, ...(place ? { loc: place.loc, n: place.n } : {}) } })
   }
   for (const t of h.luck ?? []) out.push({ label: `🎲 Проверка удачи ${t}`, action: { t: 'luck', target: t, ...place } })
+  // покупка расходует запас торговца: по ключу на каждую бутылку, из них показывается первая не купленная (fresh)
   for (const sale of sales) {
     const what = sale.bottles.length > 1 ? `бутылки ${sale.bottles.map((n) => `(${n})`).join(', ')}` : `бутылку (${sale.bottles[0]})`
-    out.push({ label: `Купить ${what} за ${coinsWord(sale.price)}`, action: { t: 'buy', bottles: sale.bottles, price: sale.price } })
+    for (let k = 1; k <= sale.stock; k++) out.push({ label: `Купить ${what} за ${coinsWord(sale.price)}`, action: { t: 'buy', bottles: sale.bottles, price: sale.price, once: once(`buy:${sale.bottles.join('+')}#${k}`) } })
   }
   for (const c of h.prices ?? []) out.push({ label: `Заплатить ${coinsWord(c)}`, action: { t: 'pay', amount: c } })
   // одинаковые суммы — отдельные находки (вторая получает свой ключ: взяли одну — другая осталась)
@@ -119,7 +124,18 @@ function rollOffers(blocks: SegmentBlock[], loc: string, n: number, seg: number)
 /** Убрать уже сделанные одноразовые действия */
 function fresh(room: Room, offers: Offer[]): Offer[] {
   const taken = new Set(room.script.taken ?? [])
-  return offers.filter((o) => !o.action.once || !taken.has(o.action.once))
+  const left = offers.filter((o) => !o.action.once || !taken.has(o.action.once))
+  // покупки одной и той же бутылки — одна кнопка с остатком запаса
+  const stock = new Map<string, number>()
+  for (const o of left) if (o.action.t === 'buy') stock.set(o.label, (stock.get(o.label) ?? 0) + 1)
+  const shown = new Set<string>()
+  return left.flatMap((o) => {
+    if (o.action.t !== 'buy') return [o]
+    if (shown.has(o.label)) return []
+    shown.add(o.label)
+    const n = stock.get(o.label) ?? 1
+    return [n > 1 ? { ...o, label: `${o.label} (в запасе ${n})` } : o]
+  })
 }
 
 /** Номер помещения в реплике: «помещение 5», «№ 5», «в 5» или реплика из одного числа (а не «даю ему 5 монет») */

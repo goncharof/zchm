@@ -165,11 +165,11 @@ describe('сценарный ведущий', () => {
   })
 
   it('продажа бутылок распознаётся по тексту, подарок и плата за совет — нет', () => {
-    expect(bottleSales('Трактирщик предлагает бутылку (5) за 15 монет. У него целых 4 таких бутылки.', { prices: [15], bottles: [5] })).toEqual([{ bottles: [5], price: 15 }])
-    expect(bottleSales('Предлагает 2 бутылки за 20 монет: (3), (3).', { prices: [20], bottles: [3, 3] })).toEqual([{ bottles: [3, 3], price: 20 }])
-    expect(bottleSales('Предлагает две бутылки (5), (5). За каждую просит 10 монет.', { prices: [10], bottles: [5, 5] })).toEqual([{ bottles: [5], price: 10 }])
-    expect(bottleSales('продает бутылки (4) за 5 монет и (5) за 10 монет', { prices: [5, 10], bottles: [4, 5] })).toEqual([{ bottles: [4], price: 5 }, { bottles: [5], price: 10 }])
-    expect(bottleSales('На столе ряд бутылок. Торговец предлагает купить 2 бутылки по 5 монет каждую.', { prices: [5], bottles: [2, 6, 2] })).toEqual([{ bottles: [2], price: 5 }, { bottles: [6], price: 5 }])
+    expect(bottleSales('Трактирщик предлагает бутылку (5) за 15 монет. У него целых 4 таких бутылки.', { prices: [15], bottles: [5] })).toEqual([{ bottles: [5], price: 15, stock: 4 }])
+    expect(bottleSales('Предлагает 2 бутылки за 20 монет: (3), (3).', { prices: [20], bottles: [3, 3] })).toEqual([{ bottles: [3, 3], price: 20, stock: 1 }])
+    expect(bottleSales('Предлагает две бутылки (5), (5). За каждую просит 10 монет.', { prices: [10], bottles: [5, 5] })).toEqual([{ bottles: [5], price: 10, stock: 2 }])
+    expect(bottleSales('продает бутылки (4) за 5 монет (у него 4 бутылки) и (5) за 10 монет (у него 2 бутылки)', { prices: [5, 10], bottles: [4, 5] })).toEqual([{ bottles: [4], price: 5, stock: 4 }, { bottles: [5], price: 10, stock: 2 }])
+    expect(bottleSales('На столе ряд бутылок. Торговец предлагает купить 2 бутылки по 5 монет каждую.', { prices: [5], bottles: [2, 6, 2] })).toEqual([{ bottles: [2], price: 5, stock: 2 }, { bottles: [6], price: 5, stock: 1 }])
     expect(bottleSales('Дарит вам (3) и убегает. Падает на колени и просит 5 монет.', { prices: [5], bottles: [3] })).toEqual([])
     expect(bottleSales('Стражник говорит, что за 10 монет даст вам совет. А — 300 монет и (6).', { prices: [10], bottles: [6] })).toEqual([])
   })
@@ -185,7 +185,7 @@ describe('сценарный ведущий', () => {
     await until(() => /помещение 14/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
     const labels = scene.choices!.map((c) => c.label)
-    expect(labels).toContain('Купить бутылку (5) за 15 монет')
+    expect(labels).toContain('Купить бутылку (5) за 15 монет (в запасе 4)')
     expect(labels.some((l) => l.startsWith('Взять бутылку') || l.startsWith('Заплатить'))).toBe(false)
     const bottles = () => room.state.heroes[0].inventory.filter((e) => e.kind === 'bottle' && e.ref === '5').reduce((n, e) => n + e.qty, 0)
     const before = bottles()
@@ -193,6 +193,10 @@ describe('сценарный ведущий', () => {
     await until(() => /платит 15 монет и получает бутылку/.test(lastGm(g.chat).text))
     expect(room.state.heroes[0].money).toBe(25)
     expect(bottles()).toBe(before + 1)
+    // запас трактирщика убывает: при повторном входе бутылок осталось три
+    await g.c.chat('14', true)
+    await until(() => g.chat.filter((m) => m.from === 'gm' && /помещение 14/.test(m.text)).length === 2)
+    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('Купить бутылку (5) за 15 монет (в запасе 3)')
   })
 
   it('последствие провала берётся из текста книги', () => {
