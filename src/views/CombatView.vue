@@ -150,7 +150,8 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
         <div v-for="m in c.monsters" :key="m.uid" class="card tight foe" :class="{ 'hero-down': m.dead || m.fled }"
           :style="m.uid === target ? 'outline: 2px solid var(--accent)' : 'cursor:pointer'" @click="!m.dead && !m.fled && (target = m.uid)">
           <div class="monster-card">
-            <img :src="base + idx.monster(m.monsterId).image" :alt="m.name" loading="lazy" />
+            <img v-if="idx.monsterById.get(m.monsterId)?.image" :src="base + idx.monsterById.get(m.monsterId)!.image" :alt="m.name" loading="lazy" />
+            <div v-else class="foe-ph" :title="m.name" aria-hidden="true">✦</div>
             <div>
               <div class="row between"><b>{{ m.name }}<span v-if="m.uid === target" class="badge accent" style="margin-left:.4rem">цель</span></b><span class="small muted">ур. {{ m.level }} · защита {{ m.defense + m.defenseMod }}</span></div>
               <div class="bar" style="margin:.3rem 0" :class="{ danger: m.lives * 2 <= m.maxLives }"><i :style="{ width: pct(m.lives, m.maxLives) }" /></div>
