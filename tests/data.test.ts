@@ -113,9 +113,11 @@ describe('данные игры', () => {
       // разрезанная ветка: каждый кусок стал веткой со своим условием и дословным текстом
       for (const [name, pieces] of Object.entries(ov.split ?? {})) {
         for (const piece of pieces) {
-          const t = branch(piece.label[0].toUpperCase() + piece.label.slice(1))
-          expect(t, `${key} разрезание «${name}»: нет ветки «${piece.label}»`).toBeDefined()
-          expect(t!.blocks.map((b) => ('text' in b ? b.text : '')).join(' ').toLowerCase(), `${key} «${piece.label}»`).toContain(piece.text.slice(1, 40).toLowerCase())
+          // одинаковые условия возможны («Прямо» в двух развилках) — кусок должен найтись в одной из таких веток
+          const label = piece.label[0].toUpperCase() + piece.label.slice(1)
+          const same = p!.segments?.filter((g) => g.kind === 'branch' && g.label === label) ?? []
+          const texts = same.map((g) => g.blocks.map((b) => ('text' in b ? b.text : '')).join(' ').toLowerCase())
+          expect(texts.some((t) => t.includes(piece.text.slice(1, 40).toLowerCase())), `${key} разрезание «${name}»: нет ветки «${piece.label}» с этим текстом`).toBe(true)
         }
       }
       for (const [name, when] of Object.entries(ov.when ?? {})) {
