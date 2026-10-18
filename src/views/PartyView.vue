@@ -23,7 +23,6 @@ const canChooseStart = computed(() => !!store.game && store.game.day === 1 && Ob
 const startNodes = computed(() => store.world?.nodes.filter((n) => n.locationId && n.locationId !== 'zamok-chernogo-maga') ?? [])
 
 function add() {
-  if (store.heroes.length >= 6) { store.say('Не больше шести героев'); return }
   store.addHero(name.value, classId.value)
   name.value = ''
 }

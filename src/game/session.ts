@@ -127,6 +127,8 @@ export class GameSession {
   addHero(name: string, classId: string): Hero {
     const cls = idx.data.classes.find((c) => c.id === classId)
     if (!cls) throw new GameError('Нет такого класса')
+    // в правилах числа героев нет; шесть — предел интерфейса, проверяется здесь, чтобы его не обходили по сети
+    if (this.heroes.length >= 6) throw new GameError('Не больше шести героев в партии')
     // ХАУСРУЛ владельца: в одной команде классы не повторяются (погибшего можно заменить героем того же класса)
     if (!this.state.allowDuplicateClasses && this.heroes.some((h) => !h.status.dead && h.classId === classId)) {
       throw new GameError(`В команде уже есть ${cls.name.toLowerCase()}: в одной команде классы не повторяются`)
@@ -162,6 +164,9 @@ export class GameSession {
   }
   setStart(nodeId: string): void {
     if (this.state.day !== 1 || Object.keys(this.state.visited).length) throw new GameError('Стартовую точку выбирают до начала пути')
+    // команда приходит и по сети: начать можно в городе или крепости карты, но не в замке Чёрного мага
+    const node = this.world?.nodes.find((n) => n.id === nodeId)
+    if (this.world && (!node?.locationId || node.locationId === 'zamok-chernogo-maga')) throw new GameError('Начать можно в городе или крепости, но не в замке Чёрного мага')
     this.state.worldNodeId = nodeId
     this.state.startNodeId = nodeId
   }
@@ -318,8 +323,10 @@ export class GameSession {
   enterLocation(locationId: string): void {
     if (!idx.locationById.has(locationId)) throw new GameError('Нет такой локации')
     // войти можно туда, где стоит партия на карте (ведущий в одиночной игре — куда угодно)
-    const node = this.world && this.state.worldNodeId ? this.world.nodes.find((n) => n.id === this.state.worldNodeId) : null
-    if (node && node.locationId !== locationId && !this.state.gmMode) throw new GameError('Сначала дойдите до этой локации по карте')
+    if (this.world && this.state.worldNodeId && !this.state.gmMode) {
+      const node = this.world.nodes.find((n) => n.id === this.state.worldNodeId)
+      if (node?.locationId !== locationId) throw new GameError('Сначала дойдите до этой локации по карте')
+    }
     this.state.locationId = locationId
     this.log(`Партия входит: ${idx.locationById.get(locationId)?.name ?? locationId}.`)
   }

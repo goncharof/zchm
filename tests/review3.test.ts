@@ -89,6 +89,28 @@ describe('третье ревью', () => {
     expect(() => s.enterLocation('zamok-chernogo-maga')).toThrow(/по карте/)
   })
 
+  it('стартовая точка по сети: только город или крепость карты, не замок и не выдуманный узел', () => {
+    const s = new GameSession(blankGame(), W)
+    s.quickStart()
+    const castle = W.nodes.find((n) => n.locationId === 'zamok-chernogo-maga')!
+    expect(() => s.setStart('nowhere')).toThrow(/Начать можно/)
+    expect(() => s.setStart(castle.id)).toThrow(/Начать можно/)
+    expect(s.state.worldNodeId).toBe('zolotoy-gorod')
+    // партия на неизвестном узле (старое сохранение) не входит куда попало
+    s.state.worldNodeId = 'nowhere'
+    expect(() => s.enterLocation('zamok-chernogo-maga')).toThrow(/по карте/)
+    const fort = W.nodes.find((n) => n.locationId && n.locationId !== 'zamok-chernogo-maga' && n.id !== 'zolotoy-gorod')!
+    s.setStart(fort.id)
+    expect(s.state.startNodeId).toBe(fort.id)
+  })
+
+  it('больше шести героев не добавить и по сети', () => {
+    const s = new GameSession(blankGame(), W)
+    s.setAllowDuplicateClasses(true)
+    for (let i = 0; i < 6; i++) s.addHero(`Воин ${i}`, 'warrior')
+    expect(() => s.addHero('Седьмой', 'warrior')).toThrow(/шести/)
+  })
+
   it('отражённое «Удушье» не действует на монстра выше предела заклинания', () => {
     const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
     const m = state.monsters[0]
