@@ -174,6 +174,9 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         const mode: GmMode = req.gm
         const state = req.state ? parseSave(JSON.stringify(req.state)) : undefined
         const r = await store.create(mode, state)
+        // ИИ-ведущий отвечает, когда готовы все: при одном игроке — сразу, при нескольких — одним ходом на всех
+        // (бесплатные квоты моделей — десятки запросов в день)
+        if (mode === 'ai') r.turnMode = 'ready'
         const p = r.addPlayer(req.name, true)
         // герои из загруженного сохранения поначалу принадлежат хозяину
         p.heroUids = r.state.heroes.map((h) => h.uid)
