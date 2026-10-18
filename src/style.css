@@ -405,6 +405,20 @@ button.voted { outline: 2px solid var(--ok); outline-offset: 1px; }
 
 .onboarding { border-color: rgba(224, 51, 79, .45); background: linear-gradient(90deg, rgba(196, 30, 58, .1), transparent 60%), var(--surface); display: flex; flex-wrap: wrap; gap: .4rem .6rem; align-items: center; font-size: .9rem; }
 
+/* форма нового героя */
+details.add-hero { margin-top: .6rem; border-top: 1px solid var(--line); padding-top: .5rem; }
+details.add-hero > summary { cursor: pointer; font-weight: 600; color: var(--stone-hi); list-style: none; display: inline-flex; align-items: center; gap: .35rem; min-height: 32px; }
+details.add-hero > summary::before { content: '+'; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--line-2); }
+details.add-hero[open] > summary::before { content: '−'; }
+details.add-hero > summary::-webkit-details-marker { display: none; }
+
+/* переключатель героев на телефоне */
+.hero-switch { position: sticky; top: calc(var(--topbar-h) + 50px); z-index: 30; display: flex; gap: .3rem; overflow-x: auto; scrollbar-width: none; padding: .35rem; margin: 0 0 .8rem; background: rgba(11, 16, 14, .92); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 12px; }
+.hero-switch::-webkit-scrollbar { display: none; }
+.hero-switch button { flex: none; min-height: 34px; padding: .25rem .8rem; background: transparent; border-color: transparent; color: var(--muted); }
+.hero-switch button.active { background: var(--surface-3); border-color: var(--line-2); color: var(--ink); }
+.hero-switch button.down { text-decoration: line-through; }
+
 /* ---------- пульт живого ведущего ---------- */
 .gm-hero { display: flex; gap: .55rem; align-items: flex-start; padding: .45rem 0; border-top: 1px solid var(--line); }
 .gm-hero-main { flex: 1; min-width: 0; display: grid; gap: .3rem; }

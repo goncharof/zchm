@@ -30,7 +30,7 @@ async function run(label, viewport) {
   await page.getByRole('button', { name: 'Новая партия' }).click()
   for (const [name, cls] of [['Конан', 'warrior'], ['Мерлин', 'mage'], ['Брат Тук', 'priest'], ['Бильбо', 'thief']]) {
     await page.getByPlaceholder('Например, Конан').fill(name)
-    await page.locator('select').first().selectOption(cls)
+    await page.locator('details.add-hero select').first().selectOption(cls)
     await page.getByRole('button', { name: 'Добавить в партию' }).click()
   }
   await shot('02-party')
@@ -54,6 +54,9 @@ async function run(label, viewport) {
 
   // экипировка через лист персонажа
   await page.goto(BASE + '#/party')
+  // телефон: листы героев по одному — показать всех
+  const allTab = page.locator('.hero-switch button', { hasText: 'Все' })
+  if (await allTab.count()) await allTab.click()
   for (let i = 0; i < 12; i++) {
     const btn = page.getByRole('button', { name: 'Надеть', exact: true }).first()
     if (!(await btn.count())) break

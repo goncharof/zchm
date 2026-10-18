@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { gameData, idx } from '@/data'
 import { useGameStore } from '@/stores/game'
@@ -8,6 +8,8 @@ import HeroSheet from '@/components/HeroSheet.vue'
 const store = useGameStore()
 const router = useRouter()
 const name = ref('')
+/** форма нового героя раскрыта, пока партия пуста (или пока игрок сам её раскрыл) */
+const addOpen = ref(store.heroes.length === 0)
 const classId = ref('warrior')
 const cls = computed(() => gameData.classes.find((c) => c.id === classId.value)!)
 /** класс уже есть у живого героя команды (если повтор классов не разрешён) */
@@ -24,6 +26,18 @@ function add() {
   store.addHero(name.value, classId.value)
   name.value = ''
 }
+// телефон: переключатель героев вместо длинной ленты листов
+const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 900px)') : null
+const narrow = ref(!!mq?.matches)
+const onMq = (e: MediaQueryListEvent) => { narrow.value = e.matches }
+onMounted(() => mq?.addEventListener?.('change', onMq))
+onBeforeUnmount(() => mq?.removeEventListener?.('change', onMq))
+const shown = ref<string>('')
+watch(() => store.heroes.map((h) => h.uid).join(), () => {
+  if (shown.value === 'all' || store.heroes.some((h) => h.uid === shown.value)) return
+  shown.value = (store.heroes.find((h) => store.isMine(h.uid)) ?? store.heroes[0])?.uid ?? ''
+}, { immediate: true })
+const visibleHeroes = computed(() => (!narrow.value || shown.value === 'all' ? store.heroes : store.heroes.filter((h) => h.uid === shown.value)))
 </script>
 
 <template>
@@ -36,6 +50,12 @@ function add() {
         <button v-if="store.heroes.length" @click="router.push('/map')">На карту</button>
       </div>
     </div>
+    <div v-if="canChooseStart && startNodes.length && store.game" class="row" style="margin-top:.5rem">
+      <label>Стартовая точка</label>
+      <select :value="store.game.worldNodeId" @change="store.setStart(($event.target as HTMLSelectElement).value)"><option v-for="n in startNodes" :key="n.id" :value="n.id">{{ n.name }}</option></select>
+    </div>
+    <details class="add-hero" :open="addOpen" @toggle="addOpen = ($event.target as HTMLDetailsElement).open">
+    <summary>Добавить героя</summary>
     <div class="row" style="align-items:flex-end;margin-top:.5rem">
       <div><label>Имя героя</label><br /><input v-model="name" placeholder="Например, Конан" @keyup.enter="add" /></div>
       <div><label>Класс</label><br />
@@ -45,13 +65,10 @@ function add() {
       <label v-if="store.game && (!store.online || store.room?.me.isHost)" class="row small" style="gap:.3rem" title="По правилам этой версии в одной команде классы не повторяются">
         <input type="checkbox" :checked="!!store.game.allowDuplicateClasses" @change="store.setAllowDuplicateClasses(!store.game.allowDuplicateClasses)" /> разрешить повтор классов
       </label>
-      <div v-if="canChooseStart && startNodes.length && store.game">
-        <label>Стартовая точка</label><br />
-        <select :value="store.game.worldNodeId" @change="store.setStart(($event.target as HTMLSelectElement).value)"><option v-for="n in startNodes" :key="n.id" :value="n.id">{{ n.name }}</option></select>
-      </div>
     </div>
     <p class="small muted" style="margin-top:.6rem"><b>{{ cls.name }}.</b> {{ cls.description }} <i>Оружие: {{ cls.weaponRule }}. Метательное: {{ cls.rangedRule }}.</i>
       Жизни на старте {{ cls.levels[0].lives }}<template v-if="cls.levels[0].mana">, мана {{ cls.levels[0].mana }}</template>; 1-й уровень с {{ cls.levels[1].xp }} очков опыта.</p>
+    </details>
   </div>
   <div v-if="store.game?.companions.length" class="card">
     <h2>Спутники</h2>
@@ -69,5 +86,10 @@ function add() {
   </div>
   <p v-if="store.online && store.heroes.some(h => !store.ownerOf(h.uid))" class="card tight small">Нажмите «Взять героя» у того, кем будете играть, или создайте своего. Пока у героя нет игрока, им может управлять любой.</p>
   <p v-if="!store.heroes.length" class="muted">Добавьте героев. У каждого 40 монет, характеристики на старте равны нулю.</p>
-  <HeroSheet v-for="h in store.heroes" :key="h.uid" :hero="h" />
+  <!-- телефон: один лист героя за раз, переключатель сверху -->
+  <div v-if="narrow && store.heroes.length > 1" class="hero-switch" role="tablist" aria-label="Герой">
+    <button v-for="h in store.heroes" :key="h.uid" role="tab" :aria-selected="shown === h.uid" :class="{ active: shown === h.uid, down: h.status.dead }" @click="shown = h.uid">{{ h.name }}</button>
+    <button role="tab" :aria-selected="shown === 'all'" :class="{ active: shown === 'all' }" @click="shown = 'all'">Все</button>
+  </div>
+  <HeroSheet v-for="h in visibleHeroes" :key="h.uid" :hero="h" />
 </template>
