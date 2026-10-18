@@ -35,7 +35,9 @@ onBeforeUnmount(() => mq?.removeEventListener?.('change', onMq))
 const shown = ref<string>('')
 watch(() => store.heroes.map((h) => h.uid).join(), () => {
   if (shown.value === 'all' || store.heroes.some((h) => h.uid === shown.value)) return
-  shown.value = (store.heroes.find((h) => store.isMine(h.uid)) ?? store.heroes[0])?.uid ?? ''
+  // свой герой — его лист; в сети без своего героя — все листы, чтобы было из кого выбрать («Взять героя»)
+  const mine = store.heroes.find((h) => store.isMine(h.uid))
+  shown.value = mine?.uid ?? (store.online ? 'all' : store.heroes[0]?.uid ?? '')
 }, { immediate: true })
 const visibleHeroes = computed(() => (!narrow.value || shown.value === 'all' ? store.heroes : store.heroes.filter((h) => h.uid === shown.value)))
 </script>
