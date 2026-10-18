@@ -145,21 +145,24 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
 
     <div class="cols c11">
       <div>
-        <h3>Противники <span class="small muted">— щёлкните, чтобы выбрать цель</span></h3>
-        <div v-for="m in c.monsters" :key="m.uid" class="card tight" :class="{ 'hero-down': m.dead || m.fled }"
+        <h3>Противники <span class="small muted">— нажмите, чтобы выбрать цель</span></h3>
+        <div class="foes">
+        <div v-for="m in c.monsters" :key="m.uid" class="card tight foe" :class="{ 'hero-down': m.dead || m.fled }"
           :style="m.uid === target ? 'outline: 2px solid var(--accent)' : 'cursor:pointer'" @click="!m.dead && !m.fled && (target = m.uid)">
           <div class="monster-card">
             <img :src="base + idx.monster(m.monsterId).image" :alt="m.name" loading="lazy" />
             <div>
               <div class="row between"><b>{{ m.name }}<span v-if="m.uid === target" class="badge accent" style="margin-left:.4rem">цель</span></b><span class="small muted">ур. {{ m.level }} · защита {{ m.defense + m.defenseMod }}</span></div>
               <div class="bar" style="margin:.3rem 0" :class="{ danger: m.lives * 2 <= m.maxLives }"><i :style="{ width: pct(m.lives, m.maxLives) }" /></div>
-              <div class="small muted">жизни {{ Math.max(0, m.lives) }}/{{ m.maxLives }} · атаки {{ Array.isArray(m.attacks) ? m.attacks.join('-') : m.attacks === 'death' ? 'смерть' : m.attacks === 'magic' ? 'магия' : 'нет' }}<template v-if="m.courage !== null"> · храбрость {{ m.courage }}</template><template v-if="m.mana !== undefined"> · мана {{ m.mana }}</template>
+              <div class="small muted foe-hp">♥ {{ Math.max(0, m.lives) }}/{{ m.maxLives }} · защ. {{ m.defense + m.defenseMod }}</div>
+              <div class="small muted foe-stats">жизни {{ Math.max(0, m.lives) }}/{{ m.maxLives }} · атаки {{ Array.isArray(m.attacks) ? m.attacks.join('-') : m.attacks === 'death' ? 'смерть' : m.attacks === 'magic' ? 'магия' : 'нет' }}<template v-if="m.courage !== null"> · храбрость {{ m.courage }}</template><template v-if="m.mana !== undefined"> · мана {{ m.mana }}</template>
                 <template v-if="m.extraAttacks?.length"> · {{ m.extraAttacks.map(e => EXTRA[e.kind] + ' ' + e.threshold).join(', ') }}</template>
                 <template v-if="m.spells?.length"> · заклинания: {{ m.spells.join(', ') }}</template>
               </div>
               <div v-if="monsterState(m)" class="small" style="color:#d7c56a">{{ monsterState(m) }}</div>
             </div>
           </div>
+        </div>
         </div>
         <template v-if="c.allies.length">
           <h3>Союзники</h3>
