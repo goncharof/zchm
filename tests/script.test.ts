@@ -7,7 +7,7 @@ import { NetClient } from '@/net/client'
 import type { ChatMessage } from '@/net/protocol'
 import { seededRng, setRng } from '@/engine/dice'
 import { createGameServer, type GameServer } from '../server/app'
-import { luckPenalty } from '../server/gm/script'
+import { bottleSales, luckPenalty } from '../server/gm/script'
 import { checkEnd } from '@/engine/combat'
 
 let servers: GameServer[] = []
@@ -118,6 +118,36 @@ describe('сценарный ведущий', () => {
     await g.c.call('cast', [mage.uid, mage.spellbook[0], { targetUid: room.state.combat!.monsters[0].uid }])
     await wait(100)
     expect(g.chat.slice(before).some((m) => m.from === 'gm')).toBe(false)
+  })
+
+  it('продажа бутылок распознаётся по тексту, подарок и плата за совет — нет', () => {
+    expect(bottleSales('Трактирщик предлагает бутылку (5) за 15 монет. У него целых 4 таких бутылки.', { prices: [15], bottles: [5] })).toEqual([{ bottles: [5], price: 15 }])
+    expect(bottleSales('Предлагает 2 бутылки за 20 монет: (3), (3).', { prices: [20], bottles: [3, 3] })).toEqual([{ bottles: [3, 3], price: 20 }])
+    expect(bottleSales('Предлагает две бутылки (5), (5). За каждую просит 10 монет.', { prices: [10], bottles: [5, 5] })).toEqual([{ bottles: [5], price: 10 }])
+    expect(bottleSales('продает бутылки (4) за 5 монет и (5) за 10 монет', { prices: [5, 10], bottles: [4, 5] })).toEqual([{ bottles: [4], price: 5 }, { bottles: [5], price: 10 }])
+    expect(bottleSales('Дарит вам (3) и убегает. Падает на колени и просит 5 монет.', { prices: [5], bottles: [3] })).toEqual([])
+    expect(bottleSales('Стражник говорит, что за 10 монет даст вам совет. А — 300 монет и (6).', { prices: [10], bottles: [6] })).toEqual([])
+  })
+
+  it('в таверне бутылку покупают одной кнопкой: монеты списываются, бутылка выдаётся', async () => {
+    const g = await setup()
+    const room = (await g.s.store.get(g.j.code))!
+    const hero = room.state.heroes[0]
+    hero.money = 40
+    await g.c.claimHero(hero.uid)
+    await g.c.call('enterLocation', ['zolotoy-gorod'])
+    await g.c.chat('14', true)
+    await until(() => /помещение 14/.test(lastGm(g.chat)?.text ?? ''))
+    const scene = lastGm(g.chat)
+    const labels = scene.choices!.map((c) => c.label)
+    expect(labels).toContain('Купить бутылку (5) за 15 монет')
+    expect(labels.some((l) => l.startsWith('Взять бутылку') || l.startsWith('Заплатить'))).toBe(false)
+    const bottles = () => room.state.heroes[0].inventory.filter((e) => e.kind === 'bottle' && e.ref === '5').reduce((n, e) => n + e.qty, 0)
+    const before = bottles()
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label.startsWith('Купить'))!.id)
+    await until(() => /платит 15 монет и получает бутылку/.test(lastGm(g.chat).text))
+    expect(room.state.heroes[0].money).toBe(25)
+    expect(bottles()).toBe(before + 1)
   })
 
   it('последствие провала берётся из текста книги', () => {

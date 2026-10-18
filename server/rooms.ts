@@ -76,6 +76,7 @@ export type ScriptAction = (
   | { t: 'coins'; amount: number }
   | { t: 'pay'; amount: number }
   | { t: 'bottle'; n: number }
+  | { t: 'buy'; bottles: number[]; price: number }
   | { t: 'artifact' }
   | { t: 'scroll'; caster?: 'mage' | 'priest'; level?: number }
   | { t: 'rest' }

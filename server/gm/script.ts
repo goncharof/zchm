@@ -52,9 +52,29 @@ export function luckPenalty(text: string, target: number): LuckPenalty | null {
 
 /** Кнопки по подсказкам из текста. place — где в книге (для ключей одноразовых наград и привязки боя), tag — часть
  *  сегмента (сцена/ветка или исход броска), чтобы награды разных частей не путались */
-function hintOffers(h: ParagraphHints | undefined, place?: Place, tag = 's'): Offer[] {
+const coinsWord = (n: number) => `${n} ${plural(n, 'монету', 'монеты', 'монет')}`
+
+/** Бутылки на продажу по тексту: «бутылку (5) за 15 монет», «за каждую просит 10 монет», «бутылки (4) за 5 монет и (5)
+ *  за 10 монет», «2 бутылки за 20 монет: (3), (3)». Пусто — монеты и бутылки в тексте не связаны покупкой
+ *  (подарок и просьба о деньгах, награда в лодке, совет за плату). */
+export function bottleSales(text: string, h: ParagraphHints): { bottles: number[]; price: number }[] {
+  const prices = h.prices ?? [], bottles = h.bottles ?? []
+  const t = text.toLowerCase().replace(/ё/g, 'е')
+  if (!prices.length || !bottles.length || !/бутыл/.test(t)) return []
+  if (prices.length > 1) return prices.length === bottles.length ? bottles.map((n, i) => ({ bottles: [n], price: prices[i] })) : []
+  const price = prices[0]
+  const each = /за кажд/.test(t)
+  if (!each && !new RegExp(`бутыл[^.]*за ${price} монет`).test(t)) return []
+  // несколько бутылок за одну цену — одна покупка
+  if (!each && new RegExp(`(\\d+|две|три|четыре) бутыл\\S* за ${price} монет`).test(t)) return [{ bottles, price }]
+  return [...new Set(bottles)].map((n) => ({ bottles: [n], price }))
+}
+
+function hintOffers(h: ParagraphHints | undefined, place?: Place, tag = 's', text = ''): Offer[] {
   if (!h) return []
   const out: Offer[] = []
+  const sales = bottleSales(text, h)
+  if (sales.length) h = { ...h, prices: [], bottles: [] }
   const once = (what: string) => (place ? `${place.loc}:${place.n}:${place.seg}:${tag}:${what}` : undefined)
   const fightable = (h.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special)
   if (fightable.length) {
@@ -62,8 +82,12 @@ function hintOffers(h: ParagraphHints | undefined, place?: Place, tag = 's'): Of
     out.push({ label: `⚔ Бой: ${specs.map((s) => `${idx.monster(s.monsterId).name}${s.count > 1 ? ` ×${s.count}` : ''}`).join(', ')}`, action: { t: 'fight', specs, ...(place ? { loc: place.loc, n: place.n } : {}) } })
   }
   for (const t of h.luck ?? []) out.push({ label: `🎲 Проверка удачи ${t}`, action: { t: 'luck', target: t, ...place } })
-  for (const c of h.prices ?? []) out.push({ label: `Заплатить ${c} монет`, action: { t: 'pay', amount: c } })
-  for (const c of h.coins ?? []) out.push({ label: `Забрать ${c} монет`, action: { t: 'coins', amount: c, once: once(`coins:${c}`) } })
+  for (const sale of sales) {
+    const what = sale.bottles.length > 1 ? `бутылки ${sale.bottles.map((n) => `(${n})`).join(', ')}` : `бутылку (${sale.bottles[0]})`
+    out.push({ label: `Купить ${what} за ${coinsWord(sale.price)}`, action: { t: 'buy', bottles: sale.bottles, price: sale.price } })
+  }
+  for (const c of h.prices ?? []) out.push({ label: `Заплатить ${coinsWord(c)}`, action: { t: 'pay', amount: c } })
+  for (const c of h.coins ?? []) out.push({ label: `Забрать ${coinsWord(c)}`, action: { t: 'coins', amount: c, once: once(`coins:${c}`) } })
   for (const b of h.bottles ?? []) out.push({ label: `Взять бутылку (${b})`, action: { t: 'bottle', n: b, once: once(`bottle:${b}`) } })
   if (h.artifact) out.push({ label: 'Взять артефакт', action: { t: 'artifact', once: once('artifact') } })
   ;(h.scrolls ?? []).forEach((s, i) => out.push({ label: `Взять свиток${s.level !== undefined ? ` ${s.level} ур.` : ''}`, action: { t: 'scroll', caster: s.caster, level: s.level, once: once(`scroll:${i}`) } }))
@@ -148,7 +172,7 @@ export class ScriptedGm {
     const sceneText = scene.flatMap((g) => g.blocks.map(blockText)).join('\n')
     const offers: Offer[] = []
     segs.forEach((g, i) => {
-      if (g.kind === 'scene') offers.push(...fresh(room, [...hintOffers(g.hints, { loc: loc.id, n, seg: i }), ...rollOffers(g.blocks, loc.id, n, i)]))
+      if (g.kind === 'scene') offers.push(...fresh(room, [...hintOffers(g.hints, { loc: loc.id, n, seg: i }, 's', g.blocks.map(blockText).join('\n')), ...rollOffers(g.blocks, loc.id, n, i)]))
       else if (!g.blocks.length) return
       else offers.push({ label: `▸ ${g.label}`, action: { t: 'branch', loc: loc.id, n, seg: i } })
     })
@@ -227,7 +251,7 @@ export class ScriptedGm {
       case 'branch': {
         const seg = idx.locationById.get(a.loc)?.paragraphs.find((x) => x.n === a.n)?.segments?.[a.seg]
         if (!seg) throw new GameError('Вариант не найден')
-        const offers = [...fresh(room, [...hintOffers(seg.hints, { loc: a.loc, n: a.n, seg: a.seg }), ...rollOffers(seg.blocks, a.loc, a.n, a.seg)]), { label: 'Идти дальше', action: { t: 'next' } as ScriptAction }]
+        const offers = [...fresh(room, [...hintOffers(seg.hints, { loc: a.loc, n: a.n, seg: a.seg }, 's', seg.blocks.map(blockText).join('\n')), ...rollOffers(seg.blocks, a.loc, a.n, a.seg)]), { label: 'Идти дальше', action: { t: 'next' } as ScriptAction }]
         this.say(room, seg.blocks.map(blockText).join('\n'), offers)
         return
       }
@@ -238,7 +262,7 @@ export class ScriptedGm {
         const sides = Math.max(...block.roll.flatMap((o) => o.values)) > 6 ? 18 : 6
         const r = s.rollDie(sides, 'Бросок по списку')
         const hit = block.roll.find((o) => o.values.includes(r))
-        this.say(room, `Выпало ${r}: ${hit?.text ?? 'ничего не происходит'}`, hintOffers(hit?.hints, { loc: a.loc, n: a.n, seg: a.seg }, `r${a.block}`))
+        this.say(room, `Выпало ${r}: ${hit?.text ?? 'ничего не происходит'}`, hintOffers(hit?.hints, { loc: a.loc, n: a.n, seg: a.seg }, `r${a.block}`, hit?.text))
         return
       }
       case 'luck': {
@@ -275,13 +299,20 @@ export class ScriptedGm {
       case 'coins': {
         const h = needHero()
         s.adjustMoney(h.uid, a.amount)
-        this.say(room, `${h.name} забирает ${a.amount} монет.`)
+        this.say(room, `${h.name} забирает ${coinsWord(a.amount)}.`)
         return
       }
       case 'pay': {
         const h = needHero()
         s.adjustMoney(h.uid, -a.amount)
-        this.say(room, `${h.name} платит ${a.amount} монет.`)
+        this.say(room, `${h.name} платит ${coinsWord(a.amount)}.`)
+        return
+      }
+      case 'buy': {
+        const h = needHero()
+        s.adjustMoney(h.uid, -a.price)
+        for (const n of a.bottles) s.giveItem(h.uid, 'bottle', String(n), 1, false)
+        this.say(room, `${h.name} платит ${coinsWord(a.price)} и получает ${a.bottles.length > 1 ? `${a.bottles.length} бутылки без этикеток` : 'бутылку без этикетки'}.`)
         return
       }
       case 'bottle': {
