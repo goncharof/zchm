@@ -151,7 +151,8 @@ export function rollInitiative(state: CombatState, heroes: Hero[], idx?: DataInd
   const both = auto && caster ? `${auto.name} и ${caster.name} («Инициатива») готовы ударить первыми — решает бросок. ` : ''
   let h = k18()
   let m = k18()
-  while (h === m) {
+  // при равенстве переброс; предел — на случай подменённого генератора с одним и тем же числом (тесты)
+  for (let i = 0; h === m && i < 100; i++) {
     h = k18()
     m = k18()
   }
