@@ -263,7 +263,6 @@ export class GmDirector implements GmDriver {
           delta: (d) => this.ctx.delta(room, id, d),
           stateChanged: () => this.ctx.stateChanged(room),
         })
-        const msg = this.ctx.chat(room, { id, from: 'gm', author: `Ведущий · ${p.label}`, text })
         // ход разыгран: заранее открытые помещения и встречи пройдены, список выполненного больше не нужен
         const s = room.session()
         for (const w of [...opened.places, ...room.gmOpened]) { s.markVisited(w.loc, w.n); if (w.loc === 'doroga') s.dismissRoad(w.n) }
@@ -271,9 +270,11 @@ export class GmDirector implements GmDriver {
         room.gmOpened = []
         // исход боя описал ИИ — привязка боя к параграфу для сценарного ведущего больше не нужна
         if (events.some((e) => e.type === 'combatEnd')) delete room.script.fight
+        // состояние (пройденные помещения на плане) — раньше реплики: игрок видит рассказ и план согласованными
+        this.ctx.stateChanged(room)
+        const msg = this.ctx.chat(room, { id, from: 'gm', author: `Ведущий · ${p.label}`, text })
         this.ctx.done(room, id)
         room.gmSeen[p.id] = msg.id
-        this.ctx.stateChanged(room)
         this.ctx.persist(room)
         return
       } catch (e) {
