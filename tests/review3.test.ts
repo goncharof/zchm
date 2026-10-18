@@ -104,6 +104,18 @@ describe('третье ревью', () => {
     expect(s.state.startNodeId).toBe(fort.id)
   })
 
+  it('выдать можно только существующую вещь: бутылки 1–6, известные id', () => {
+    const s = new GameSession(blankGame(), W)
+    const h = s.addHero('Воин', 'warrior')
+    expect(() => s.giveItem(h.uid, 'bottle', '9')).toThrow(/Нет такой вещи/)
+    expect(() => s.giveItem(h.uid, 'weapon', 'lazernyy-mech')).toThrow(/Нет такой вещи/)
+    expect(() => s.giveItem(h.uid, 'trophy', 'constructor')).toThrow(/Нет такой вещи/)
+    expect(h.inventory).toHaveLength(0)
+    s.giveItem(h.uid, 'bottle', '3', 2, false)
+    s.giveItem(h.uid, 'weapon', 'kinzhal')
+    expect(h.inventory.map((e) => e.kind)).toEqual(['bottle', 'weapon'])
+  })
+
   it('больше шести героев не добавить и по сети', () => {
     const s = new GameSession(blankGame(), W)
     s.setAllowDuplicateClasses(true)

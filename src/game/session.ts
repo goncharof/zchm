@@ -13,7 +13,7 @@ import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
 import { makeAlly, cleanupAfterCombat, heroRoll, endHeroesTurn as endHeroesTurnEngine, closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
-import { takeLootItem } from '@/engine/loot'
+import { TROPHIES, takeLootItem } from '@/engine/loot'
 import { plural } from '@/ui/format'
 import { REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
 
@@ -203,6 +203,12 @@ export class GameSession {
   }
   giveItem(heroUid: string, kind: InventoryKind, ref: string, qty = 1, identified?: boolean): void {
     const h = this.hero(heroUid)
+    // команда приходит и по сети: несуществующая вещь в инвентаре ломает экраны и броски (бутылка (9), чужой id)
+    ref = String(ref)
+    const known = kind === 'weapon' ? idx.weaponById.has(ref) : kind === 'armor' ? idx.armorById.has(ref) : kind === 'item' ? idx.itemById.has(ref)
+      : kind === 'bottle' ? /^[1-6]$/.test(ref) : kind === 'scroll' ? idx.spellById.has(ref) : kind === 'trophy' ? Object.hasOwn(TROPHIES, ref)
+      : kind === 'artifact' ? idx.artifactByN.has(Number(ref)) : false
+    if (!known) throw new GameError(`Нет такой вещи: ${kind}/${ref}`)
     const e = inv.addToInventory(h, kind, ref, this.qty(qty), identified === undefined ? {} : { identified })
     this.log(`${h.name} получает: ${inv.entryName(e, idx)}${qty > 1 ? ` ×${qty}` : ''}.`)
   }
