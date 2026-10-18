@@ -122,6 +122,9 @@ export interface AllyInstance {
   decoy?: boolean
   dead?: boolean
   attackMultiplier: number
+  /** удача жертвы против атаки («Огненная ящерица»: выкинула 12 — только 1к6) */
+  saveLuck?: number
+  saveAttacks?: string
 }
 
 export interface MonsterInstance {
@@ -156,6 +159,10 @@ export interface MonsterInstance {
   buffed?: string[]
   /** призван заклинанием монстра: трофеев не оставляет */
   summoned?: boolean
+  /** ослабления героев, уже наложенные на монстра (id заклинаний): повторно не складываются */
+  debuffs?: string[]
+  /** «Землетрясение»: раундов, в которые ещё отнимается 1к18 */
+  quake?: number
   /** раундов паралича/сна/оледенения */
   disabled?: number
   disabledKind?: 'sleep' | 'paralysis' | 'freeze' | 'charm'
@@ -177,7 +184,7 @@ export interface MonsterInstance {
   /** «Несчастье»: бросает кубики дважды и берёт меньшее */
   cursed?: boolean
   /** кто наложил урон со временем — ему идёт опыт за отнятые жизни */
-  dotBy?: Partial<Record<'poison' | 'choke' | 'petrify' | 'paralysis', string>>
+  dotBy?: Partial<Record<'poison' | 'choke' | 'petrify' | 'paralysis' | 'quake', string>>
 }
 
 export interface LogEntry {

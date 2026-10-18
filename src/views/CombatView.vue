@@ -98,6 +98,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
   if (m.disabled) out.push(`${m.disabledKind === 'sleep' ? 'спит' : m.disabledKind === 'paralysis' ? 'парализован' : m.disabledKind === 'charm' ? 'заворожён' : 'вмёрз'} (${m.disabled})`)
   if (m.cursed) out.push('проклят')
   if (m.held) out.push('удержан'); if (m.choke) out.push(`задыхается (${m.choke})`); if (m.poison) out.push(`отравлен (${m.poison})`)
+  if (m.quake) out.push(`землетрясение (${m.quake})`)
   if (m.attackMod) out.push(`атаки ${m.attackMod > 0 ? '+' : ''}${m.attackMod}`); if (m.attackMultiplier !== 1) out.push(`атаки ×${m.attackMultiplier}`)
   if (m.hitMod) out.push(`попадание +${m.hitMod}`); if (m.prayer) out.push('молитва')
   for (const w of m.wards ?? []) out.push(w.kind === 'antimagic' ? `огненный щит${w.rounds > 0 ? ` (${w.rounds})` : ''}` : 'отражение магии')

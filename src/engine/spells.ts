@@ -48,20 +48,29 @@ export function resolveCost(spell: Spell, hero: Hero, param?: number): number {
   return Math.max(0, param ?? 0)
 }
 
-/** Заклинания, которые имеют смысл вне боя */
+/** Заклинания, которые имеют смысл вне боя. Усиления и защиты отмеряют раунды боя («лишь во время боя», «в мирное время…
+ *  ни к чему не приведет»): вне боя их время не идёт, и наложенные заранее не кончались бы. Исключения — «Удача» и «Молитва»,
+ *  они ждут следующего броска */
 export function usableOutOfCombat(spell: Spell): boolean {
-  const t = spell.effect.type
-  return ['heal', 'restore-all', 'cure', 'resurrect', 'identify', 'create-bottle', 'duplicate-bottle', 'restore-mana', 'initiative', 'manual', 'buff', 'ward'].includes(t)
+  const e = spell.effect
+  if (e.type === 'ward') return e.kind === 'luck' || e.kind === 'prayer'
+  return ['heal', 'restore-all', 'cure', 'resurrect', 'identify', 'create-bottle', 'duplicate-bottle', 'restore-mana', 'initiative', 'manual'].includes(e.type)
 }
 
 export function needsMonsterTarget(spell: Spell): boolean {
   const e = spell.effect
-  return (e.type === 'damage' && e.targets === 'one') || (e.type === 'debuff' && e.scope === 'one') || (e.type === 'control' && e.targets === 'one') || e.type === 'drain-mana'
+  return (e.type === 'damage' && e.targets === 'one') || (e.type === 'debuff' && e.scope === 'one') || (e.type === 'control' && e.targets === 'one') || e.type === 'drain-mana' || spell.id === BOULDERS
 }
+
+/** «Валуны»: до 8 уровня — один валун, с 8 — два, с 10 — три (первый — в выбранную цель) */
+const BOULDERS = 'mage-valuny'
+const boulderCount = (level: number) => (level >= 10 ? 3 : level >= 8 ? 2 : 1)
+/** «Трансформация энергии» — своя мана в свои жизни */
+const SELF_HEAL = 'mage-transformatsiya-energii'
 
 export function needsHeroTarget(spell: Spell): boolean {
   const e = spell.effect
-  return (e.type === 'summon' && e.kind === 'copy') || e.type === 'heal' || e.type === 'restore-all' || (e.type === 'buff' && e.scope === 'ally') || (e.type === 'ward' && e.scope === 'ally') || ['cure', 'resurrect', 'restore-mana', 'initiative', 'extra-action'].includes(e.type)
+  return (e.type === 'summon' && e.kind === 'copy') || (e.type === 'heal' && spell.id !== SELF_HEAL) || e.type === 'restore-all' || (e.type === 'buff' && e.scope === 'ally') || (e.type === 'ward' && e.scope === 'ally') || ['cure', 'resurrect', 'restore-mana', 'initiative', 'extra-action'].includes(e.type)
 }
 
 export function needsEntryTarget(spell: Spell): boolean {
@@ -75,6 +84,7 @@ export function needsParam(spell: Spell): boolean {
 export function canCast(hero: Hero, spell: Spell, idx: DataIndex, param?: number): string | null {
   const cls = idx.cls(hero.classId)
   if (!cls.caster) return `${cls.name} не владеет магией`
+  if (!isConscious(hero)) return `${hero.name} ${hero.status.dead ? 'погиб' : 'без сознания'} — колдовать некому`
   if (cls.caster !== spell.caster) return 'Заклинание другого класса'
   if (!hero.spellbook.includes(spell.id)) return 'Заклинания нет в книге'
   const cost = resolveCost(spell, hero, param)
@@ -201,6 +211,7 @@ export function castSpell(input: CastInput): CastResult {
   const entries: LogEntry[] = []
   const res: CastResult = { ok: false, log: entries, manaSpent: 0, xp: 0, damage: 0, levelUps: [] }
   const why = canCast(hero, spell, idx, input.param)
+  if (!why && !combat && !usableOutOfCombat(spell)) { log(entries, `${hero.name}: «${spell.name}» действует только в бою`, 'info'); return res }
   if (why) { log(entries, `${hero.name}: ${why}`, 'info'); return res }
   const cost = resolveCost(spell, hero, input.param)
   const effect = spell.effect ?? { type: 'manual' }
@@ -240,11 +251,16 @@ export function castSpell(input: CastInput): CastResult {
         const t = oneMonster()
         if (!t) return fail('Нужно выбрать цель')
         targets = [t]
+      } else if (spell.id === BOULDERS) {
+        const chosen = oneMonster()
+        targets = [...(chosen ? [chosen] : []), ...aliveMonsters().filter((m) => m !== chosen)].slice(0, boulderCount(hero.level))
       } else targets = aliveMonsters().slice(0, effect.targets === 'many' ? 10 : undefined)
       spend()
       const volleys = /за 1 стрел/.test(spell.costFormula ?? '') ? Math.min(3, Math.max(1, input.param ?? 1)) : 1
       for (const t of targets) {
         if (warded(t)) continue
+        // «Рука смерти» отнимает жизни «у любого живого создания» — мертвецов не берёт
+        if (spell.id === 'mage-ruka-smerti' && UNDEAD.has(t.monsterId)) { log(entries, `${t.name} — мертвец, Рука смерти бессильна.`); continue }
         for (let v = 0; v < volleys; v++) {
           if (t.dead) break
           let half = false
@@ -269,20 +285,27 @@ export function castSpell(input: CastInput): CastResult {
           res.damage += d.dealt
           measured.damageXp += d.dealt * t.points
           log(entries, `${t.name} теряет ${d.dealt} жизней (${dmg.detail}).${d.killed ? ` ${t.name} повержен!` : ` Осталось ${Math.max(0, t.lives)}.`}`, d.killed ? 'death' : 'damage')
+          // «Землетрясение»: 1к18 жизней «на 1к6 раундов» — первый удар сразу, остальные в начале хода монстров
+          if (spell.id === 'mage-zemletryasenie' && !d.killed) {
+            t.quake = Math.max(t.quake ?? 0, k6() - 1)
+            if (t.quake) { t.dotBy = { ...t.dotBy, quake: hero.uid }; log(entries, `Земля под ${t.name} дрожит ещё ${t.quake} раунд(ов).`) }
+          }
         }
       }
       break
     }
     case 'heal': {
-      const target = targetHero()
+      const target = spell.id === SELF_HEAL ? hero : targetHero()
       if (target.status.dead) return fail(`${target.name} мёртв — лечение не поможет`)
       const free = !!hasWard(hero, 'infinite-mana')
       const manaPerLife = Math.max(1, Math.round(1 / effect.perMana))
-      const want = Math.max(1, input.param ?? 1)
+      // «маны потратить» меньше цены одной жизни — округляется вверх до одной жизни
+      const want = Math.max(manaPerLife, input.param ?? 1)
       const missing = Math.max(0, target.maxLives - target.lives)
+      if (!missing) return fail(`${target.name} не нуждается в лечении`)
       let use = Math.min(want, free ? want : hero.mana, missing * manaPerLife)
       use -= use % manaPerLife
-      if (use <= 0) return fail(`${target.name} не нуждается в лечении`)
+      if (use <= 0) return fail(`Не хватает маны: жизнь стоит ${manaPerLife} маны`)
       if (!free) hero.mana -= use
       res.manaSpent = free ? 0 : use
       const healed = changeLives(target, Math.floor(use * effect.perMana))
@@ -293,6 +316,7 @@ export function castSpell(input: CastInput): CastResult {
     case 'restore-all': {
       const target = targetHero()
       if (target.status.dead) return fail(`${target.name} мёртв — восстановление не поможет`)
+      if (target.lives >= target.maxLives) return fail(`${target.name} не нуждается в восстановлении`)
       spend()
       const healed = changeLives(target, target.maxLives - target.lives)
       measured.healed = healed
@@ -304,7 +328,11 @@ export function castSpell(input: CastInput): CastResult {
       const { value, multiplier } = parseAmount(effect.amount, hero, effect.stat, effect.stat === 'defense' ? heroDefense(hero, idx) : undefined)
       const rounds = durationRounds(effect.duration ?? spell.duration, hero.level)
       const targets = effect.scope === 'party' ? heroes.filter((h) => !h.status.dead) : effect.scope === 'ally' ? [targetHero()] : [hero]
-      for (const t of targets) t.buffs.push({ source: spell.name, stat: effect.stat, amount: value, multiplier, rounds })
+      // повторное заклинание обновляет действие, а не складывается («Сила» дважды — не ×4)
+      for (const t of targets) {
+        t.buffs = t.buffs.filter((b) => b.source !== spell.name)
+        t.buffs.push({ source: spell.name, stat: effect.stat, amount: value, multiplier, rounds })
+      }
       log(entries, `${targets.map((t) => t.name).join(', ')}: ${statName(effect.stat)} ${multiplier ? `×${value}` : (value >= 0 ? '+' : '') + value}${rounds > 0 ? ` на ${rounds} раунд(ов)` : ' до конца боя'}.`)
       break
     }
@@ -314,13 +342,19 @@ export function castSpell(input: CastInput): CastResult {
       if (!targets.length) return fail('Нет цели')
       spend()
       const { value, multiplier } = parseAmount(effect.amount, hero, effect.stat)
+      const hit: MonsterInstance[] = []
       for (const t of targets) {
         if (warded(t)) continue
+        // то же ослабление второй раз не складывается
+        if (t.debuffs?.includes(spell.id)) { log(entries, `${t.name} уже под действием «${spell.name}».`); continue }
+        t.debuffs = [...(t.debuffs ?? []), spell.id]
         if (effect.stat === 'defense') t.defenseMod += value
         else if (multiplier) t.attackMultiplier *= value
         else t.attackMod += value
+        hit.push(t)
       }
-      log(entries, `${targets.map((t) => t.name).join(', ')}: ${statName(effect.stat)} ${multiplier ? `×${value}` : (value >= 0 ? '+' : '') + value}.`)
+      if (hit.length) log(entries, `${hit.map((t) => t.name).join(', ')}: ${statName(effect.stat)} ${multiplier ? `×${value}` : (value >= 0 ? '+' : '') + value}.`)
+      else effective = false
       break
     }
     case 'escape': {
@@ -444,6 +478,7 @@ export function castSpell(input: CastInput): CastResult {
       const t = oneMonster()
       if (!t) return fail('Нужно выбрать цель')
       if (!(t.mana ?? 0)) { spend(); log(entries, `У ${t.name} нет магической энергии — мана потрачена впустую.`); break }
+      if (warded(t)) { spend(); effective = false; break }
       if (monsterSaves(t, spell, entries)) { hero.mana -= cost; res.manaSpent = cost; effective = false; break }
       const use = Math.max(1, Math.min(input.param ?? 1, hero.mana))
       hero.mana -= use
@@ -493,12 +528,17 @@ export function castSpell(input: CastInput): CastResult {
       if (effect.kind === 'zombie' && !combat!.monsters.some((m) => m.dead && !m.raised)) return fail('Нужен мертвец: сначала одолейте кого-нибудь')
       spend()
       const ally = buildSummon(effect, hero, idx, entries, combat!, targetHero())
+      // «Огненная ящерица»: жертва, выкинувшая удачу 12, теряет только 1к6
+      if (ally && spell.id === 'mage-ognennaya-yascheritsa' && spell.luck) { ally.saveLuck = spell.luck; ally.saveAttacks = '1к6' }
       if (ally) combat!.allies.push(ally)
+      // демон вышел из-под контроля — заклинание не удалось, опыта нет
+      else effective = false
       break
     }
     case 'empower': {
       if (needCombat()) return res
-      const own = combat!.allies.filter((a) => a.ownerUid === hero.uid && !a.dead && !a.decoy)
+      // только существо, созданное магом: спутник партии не магическое создание
+      const own = combat!.allies.filter((a) => a.ownerUid === hero.uid && !a.dead && !a.decoy && !a.companionUid)
       const a = own[own.length - 1]
       if (!a) return fail('Нет созданного существа')
       spend()

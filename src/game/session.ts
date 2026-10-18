@@ -607,7 +607,7 @@ export class GameSession {
         this.log(`${c.name} пал в бою.`, 'death')
         continue
       }
-      c.lives = a.lives
+      c.lives = Math.min(c.maxLives, a.lives)
       c.battlesLeft -= 1
       if (c.battlesLeft <= 0) {
         this.state.companions = this.state.companions.filter((x) => x.uid !== c.uid)
@@ -624,7 +624,7 @@ export class GameSession {
       const c = a.companionUid ? this.state.companions.find((x) => x.uid === a.companionUid) : null
       if (!c) continue
       if (a.dead || a.lives <= 0) this.state.companions = this.state.companions.filter((x) => x.uid !== c.uid)
-      else c.lives = a.lives
+      else c.lives = Math.min(c.maxLives, a.lives)
     }
     cleanupAfterCombat(this.heroes)
     this.state.combat = null

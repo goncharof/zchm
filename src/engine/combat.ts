@@ -443,8 +443,12 @@ export function alliesTurn(state: CombatState, idx?: DataIndex): LogEntry[] {
       continue
     }
     let dmg: number
-    if (/^\d+(-\d+)+$/.test(a.attacks)) dmg = rollAttackTable(a.attacks.split('-').map(Number)).damage
-    else dmg = rollFormula(a.attacks).total
+    // удача жертвы против атаки союзника («Огненная ящерица»: выкинула удачу — урон по запасной формуле)
+    const saved = a.saveLuck !== undefined && !t.noSave && monsterRoll(t) >= a.saveLuck
+    if (saved) log.push(entry(`${t.name} выкидывает удачу ${a.saveLuck} — ${a.name} обжигает слабее (${a.saveAttacks}).`, 'luck'))
+    const formula = saved && a.saveAttacks ? a.saveAttacks : a.attacks
+    if (/^\d+(-\d+)+$/.test(formula)) dmg = rollAttackTable(formula.split('-').map(Number)).damage
+    else dmg = rollFormula(formula).total
     dmg = Math.floor(dmg * a.attackMultiplier)
     const d = damageMonster(t, dmg)
     log.push(entry(`${a.name} атакует ${t.name}: к18 = ${r} ≥ ${need} — ${t.name} теряет ${d.dealt} жизней.${d.killed ? ` ${t.name} повержен!` : ''}`, d.killed ? 'death' : 'damage'))
@@ -502,6 +506,13 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
       m.poison -= 1
       log.push(entry(`${m.name} страдает от яда: −${r.dealt} жизней.${r.killed ? ` ${m.name} погибает.` : ''}`, r.killed ? 'death' : 'damage'))
       dotXp(state, heroes, m, 'poison', r.dealt, idx, log)
+      if (r.killed) continue
+    }
+    if (m.quake && m.quake > 0) {
+      const r = damageMonster(m, rollFormula('1к18').total)
+      m.quake -= 1
+      log.push(entry(`Землетрясение: ${m.name} теряет ${r.dealt} жизней.${r.killed ? ` ${m.name} погибает.` : m.quake === 0 ? ' Земля успокаивается.' : ''}`, r.killed ? 'death' : 'damage'))
+      dotXp(state, heroes, m, 'quake', r.dealt, idx, log)
       if (r.killed) continue
     }
     if (m.choke && m.choke > 0) {
