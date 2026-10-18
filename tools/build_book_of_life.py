@@ -249,7 +249,7 @@ def apply_overrides(locations, issues):
         # монстры сцены и веток поправлены — общий список параграфа (полный текст, подсказки ИИ-ведущему) собирается
         # из них, если правка не задаёт его сама
         hints_ov = ov.get('hints', {})
-        if segs and 'paragraph' not in hints_ov and any(name != 'paragraph' and 'monsters' in f for name, f in hints_ov.items()):
+        if segs and 'monsters' not in hints_ov.get('paragraph', {}) and any(name != 'paragraph' and 'monsters' in f for name, f in hints_ov.items()):
             union = []
             for g in segs:
                 for mon in (g.get('hints') or {}).get('monsters', []):
