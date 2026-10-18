@@ -116,6 +116,23 @@ describe('третье ревью', () => {
     expect(h.inventory.map((e) => e.kind)).toEqual(['bottle', 'weapon'])
   })
 
+  it('числа и id в командах ведущего проверяются: строка вместо числа не делает жизни и монеты NaN', () => {
+    const s = new GameSession(blankGame(), W)
+    const h = s.addHero('Воин', 'warrior')
+    for (const bad of ['abc', undefined, Infinity]) {
+      expect(() => s.adjustMoney(h.uid, bad as unknown as number)).toThrow(/целое/)
+      expect(() => s.adjustLives(h.uid, bad as unknown as number)).toThrow(/целое/)
+      expect(() => s.giveXp(h.uid, bad as unknown as number)).toThrow(/целое/)
+    }
+    expect(Number.isFinite(h.money) && Number.isFinite(h.lives) && Number.isFinite(h.xp)).toBe(true)
+    s.giveXp(h.uid, -500)
+    expect(h.xp).toBe(0)
+    expect(() => s.markVisited('nowhere', 1)).toThrow(/помещения/)
+    expect(() => s.addCompanion('dragon-x', 3)).toThrow(/монстра/)
+    s.adjustMoney(h.uid, '15' as unknown as number)
+    expect(h.money).toBe(55)
+  })
+
   it('больше шести героев не добавить и по сети', () => {
     const s = new GameSession(blankGame(), W)
     s.setAllowDuplicateClasses(true)

@@ -181,6 +181,12 @@ export class GameSession {
     if (!Number.isInteger(v) || v < 1 || v > max) throw new GameError('Неверное количество')
     return v
   }
+  /** Целое из команды (команды приходят и по сети: строка вместо числа делала жизни, монеты и опыт NaN) */
+  private int(n: unknown, max = 100000): number {
+    const v = Math.trunc(Number(n))
+    if (!Number.isFinite(v) || Math.abs(v) > max) throw new GameError('Нужно целое число')
+    return v
+  }
   buyItem(heroUid: string, kind: 'weapon' | 'armor' | 'item', ref: string, qty = 1): void {
     const h = this.hero(heroUid)
     const e = inv.buy(h, kind, ref, idx, this.qty(qty, 99))
@@ -276,22 +282,26 @@ export class GameSession {
   }
   adjustLives(heroUid: string, delta: number): void {
     const h = this.hero(heroUid)
+    delta = this.int(delta, 1000)
     const before = h.lives
     changeLives(h, delta)
     this.log(`${h.name}: жизни ${before} → ${h.lives}.`, delta < 0 ? 'damage' : 'info')
   }
   adjustMana(heroUid: string, delta: number): void {
     const h = this.hero(heroUid)
+    delta = this.int(delta, 1000)
     h.mana = Math.max(0, Math.min(h.maxMana, h.mana + delta))
   }
   adjustMoney(heroUid: string, delta: number): void {
     const h = this.hero(heroUid)
+    delta = this.int(delta)
     if (delta < 0 && h.money + delta < 0) throw new GameError(`У ${h.name} не хватает монет`)
     h.money = Math.max(0, h.money + delta)
     this.log(`${h.name}: ${delta >= 0 ? '+' : ''}${delta} монет (всего ${h.money}).`)
   }
   giveXp(heroUid: string, amount: number): void {
     const h = this.hero(heroUid)
+    amount = Math.max(0, this.int(amount))
     this.announceLevelUps(gainXp(h, amount, idx))
     this.log(`${h.name} получает ${amount} очков опыта.`, 'xp')
   }
@@ -340,6 +350,8 @@ export class GameSession {
     this.state.locationId = null
   }
   markVisited(locationId: string, n: number): void {
+    if (!idx.locationById.get(locationId)?.paragraphs.some((p) => p.n === Number(n))) throw new GameError('Нет такого помещения')
+    n = Number(n)
     const arr = (this.state.visited[locationId] ??= [])
     if (!arr.includes(n)) arr.push(n)
   }
@@ -364,6 +376,7 @@ export class GameSession {
   }
   luckCheck(heroUid: string, target: number): { ok: boolean; roll: number; luck: number } {
     const h = this.hero(heroUid)
+    target = this.int(target, 100)
     const blessing = hasWard(h, 'luck')
     if (blessing) {
       h.buffs = h.buffs.filter((b) => b !== blessing)
@@ -452,6 +465,8 @@ export class GameSession {
 
   // ---------- спутники ----------
   addCompanion(monsterId: string, battles = 3): void {
+    if (!idx.monsterById.has(monsterId)) throw new GameError('Нет такого монстра')
+    battles = this.int(battles, 50)
     const m = idx.monster(monsterId)
     const sameKind = this.state.companions.filter((c) => c.monsterId === monsterId).length
     const c = { uid: uid('comp'), monsterId, name: sameKind ? `${m.name} ${sameKind + 1}` : m.name, lives: m.lives ?? 10, maxLives: m.lives ?? 10, battlesLeft: Math.max(1, Math.min(50, battles)) }
