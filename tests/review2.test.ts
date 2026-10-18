@@ -126,4 +126,13 @@ describe('второе ревью', () => {
     s.state.visited['krepost-korolya-nazgulov'] = [22]
     expect(() => s.drinkFountain()).not.toThrow()
   })
+
+  it('в команде классы не повторяются: живой воин уже есть — второго нельзя, погибшего можно заменить', () => {
+    const { s, a } = party()
+    expect(() => s.addHero('Боромир', 'warrior')).toThrow(/классы не повторяются/)
+    a.status.dead = true
+    expect(s.addHero('Боромир', 'warrior').classId).toBe('warrior')
+    s.setAllowDuplicateClasses(true)
+    expect(s.addHero('Фарамир', 'warrior').classId).toBe('warrior')
+  })
 })

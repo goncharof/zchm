@@ -64,7 +64,10 @@ describe('сетевая игра', () => {
     await expect(guest.c.claimHero(conan.uid)).rejects.toThrow(/управляет Иван/)
 
     await expect(guest.c.call('attack', [conan.uid, 'rightHand', 'x'])).rejects.toThrow(/не ваш герой/)
-    const mine = (await guest.c.call('addHero', ['Арагорн', 'warrior'])) as { uid: string }
+    // в одной команде классы не повторяются (ХАУСРУЛ владельца); разрешить повтор может только хозяин
+    await expect(guest.c.call('addHero', ['Боромир', 'warrior'])).rejects.toThrow(/классы не повторяются/)
+    await expect(guest.c.call('setAllowDuplicateClasses', [true])).rejects.toThrow(/хозяин/)
+    const mine = (await guest.c.call('addHero', ['Арагорн', 'barbarian'])) as { uid: string }
     await until(() => guest.room.me.heroUids.includes(mine.uid))
     await guest.c.call('buyItem', [mine.uid, 'weapon', 'mech-korotkiy', 1])
     await until(() => guest.state.heroes.find((h) => h.uid === mine.uid)!.money === 30)
@@ -72,6 +75,9 @@ describe('сетевая игра', () => {
     const r = (await guest.c.call('luckCheck', [mine.uid, 5])) as { ok: boolean }
     expect(typeof r.ok).toBe('boolean')
     await expect(guest.c.call('nope', [])).rejects.toThrow(/Неизвестная команда/)
+    await host.c.call('setAllowDuplicateClasses', [true])
+    await guest.c.call('addHero', ['Боромир', 'warrior'])
+    await until(() => guest.state.heroes.filter((h) => h.classId === 'warrior').length === 2)
   })
 
   it('режим живого ведущего: награды выдаёт только хозяин', async () => {

@@ -257,6 +257,7 @@ export const useGameStore = defineStore('game', () => {
     toMelee: () => cmd('toMelee'),
     monstersAct: () => cmd('monstersAct'),
     endCombat: () => cmd('endCombat'),
+    setAllowDuplicateClasses: (on: boolean) => cmd('setAllowDuplicateClasses', on),
     takeLoot: (heroUid: string, lootUid: string) => cmd('takeLoot', heroUid, lootUid),
     abortCombat: () => cmd('abortCombat'),
     endHeroesTurn: () => cmd('endHeroesTurn'),

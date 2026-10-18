@@ -219,6 +219,8 @@ export interface GameState {
   /** игровой день */
   day: number
   gmMode: boolean
+  /** разрешить в команде героев одного класса (ХАУСРУЛ владельца: по умолчанию классы не повторяются) */
+  allowDuplicateClasses?: boolean
   combat: CombatState | null
   log: LogEntry[]
   /** найденные артефакты (номера), чтобы не выпадали повторно */

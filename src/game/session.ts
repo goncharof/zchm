@@ -125,10 +125,21 @@ export class GameSession {
     this.log('Новая партия. Каждый герой получает 40 монет на снаряжение.')
   }
   addHero(name: string, classId: string): Hero {
+    const cls = idx.data.classes.find((c) => c.id === classId)
+    if (!cls) throw new GameError('Нет такого класса')
+    // ХАУСРУЛ владельца: в одной команде классы не повторяются (погибшего можно заменить героем того же класса)
+    if (!this.state.allowDuplicateClasses && this.heroes.some((h) => !h.status.dead && h.classId === classId)) {
+      throw new GameError(`В команде уже есть ${cls.name.toLowerCase()}: в одной команде классы не повторяются`)
+    }
     const h = createHero(String(name).slice(0, 40), classId, idx)
     this.heroes.push(h)
     this.log(`В команду вступает ${h.name} (${idx.cls(classId).name}).`)
     return h
+  }
+  /** Разрешить или запретить героев одного класса в команде */
+  setAllowDuplicateClasses(on: boolean): void {
+    this.state.allowDuplicateClasses = !!on
+    this.log(on ? 'Теперь в команде можно иметь героев одного класса.' : 'В команде снова только разные классы.')
   }
   quickStart(): void {
     this.newGame()
@@ -583,7 +594,7 @@ export type CommandRole =
   | 'host' // хозяин комнаты
 
 export const COMMANDS = {
-  note: 'party', setStart: 'party',
+  note: 'party', setAllowDuplicateClasses: 'host', setStart: 'party',
   addHero: 'party', removeHero: 'owner', renameHero: 'owner',
   newGame: 'host', quickStart: 'host', toggleGm: 'host',
   buyItem: 'owner', sellItem: 'owner', equipItem: 'owner', unequipItem: 'owner', dropItem: 'owner', transferItem: 'owner',
