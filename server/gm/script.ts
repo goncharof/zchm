@@ -87,8 +87,17 @@ function hintOffers(h: ParagraphHints | undefined, place?: Place, tag = 's', tex
     out.push({ label: `Купить ${what} за ${coinsWord(sale.price)}`, action: { t: 'buy', bottles: sale.bottles, price: sale.price } })
   }
   for (const c of h.prices ?? []) out.push({ label: `Заплатить ${coinsWord(c)}`, action: { t: 'pay', amount: c } })
-  for (const c of h.coins ?? []) out.push({ label: `Забрать ${coinsWord(c)}`, action: { t: 'coins', amount: c, once: once(`coins:${c}`) } })
-  for (const b of h.bottles ?? []) out.push({ label: `Взять бутылку (${b})`, action: { t: 'bottle', n: b, once: once(`bottle:${b}`) } })
+  // одинаковые суммы — отдельные находки (вторая получает свой ключ: взяли одну — другая осталась)
+  const seen = new Map<number, number>()
+  for (const c of h.coins ?? []) {
+    const k = (seen.get(c) ?? 0) + 1
+    seen.set(c, k)
+    out.push({ label: `Забрать ${coinsWord(c)}`, action: { t: 'coins', amount: c, once: once(k > 1 ? `coins:${c}#${k}` : `coins:${c}`) } })
+  }
+  // одинаковые бутылки — одной кнопкой («Взять 5 бутылок (4)»), раздать можно потом в разделе «Партия»
+  const bottles = new Map<number, number>()
+  for (const b of h.bottles ?? []) bottles.set(b, (bottles.get(b) ?? 0) + 1)
+  for (const [b, qty] of bottles) out.push({ label: qty > 1 ? `Взять ${qty} ${plural(qty, 'бутылку', 'бутылки', 'бутылок')} (${b})` : `Взять бутылку (${b})`, action: { t: 'bottle', n: b, ...(qty > 1 ? { qty } : {}), once: once(`bottle:${b}`) } })
   if (h.artifact) out.push({ label: 'Взять артефакт', action: { t: 'artifact', once: once('artifact') } })
   ;(h.scrolls ?? []).forEach((s, i) => out.push({ label: `Взять свиток${s.level !== undefined ? ` ${s.level} ур.` : ''}`, action: { t: 'scroll', caster: s.caster, level: s.level, once: once(`scroll:${i}`) } }))
   if (h.tavern) out.push({ label: 'Отдохнуть сутки (2 монеты)', action: { t: 'rest' } })
@@ -319,8 +328,9 @@ export class ScriptedGm {
       }
       case 'bottle': {
         const h = needHero()
-        s.giveItem(h.uid, 'bottle', String(a.n), 1, false)
-        this.say(room, `${h.name} забирает бутылку без этикетки.`)
+        const qty = a.qty ?? 1
+        s.giveItem(h.uid, 'bottle', String(a.n), qty, false)
+        this.say(room, qty > 1 ? `${h.name} забирает ${qty} ${plural(qty, 'бутылку', 'бутылки', 'бутылок')} без этикеток.` : `${h.name} забирает бутылку без этикетки.`)
         return
       }
       case 'artifact': {

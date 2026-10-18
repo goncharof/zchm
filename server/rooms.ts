@@ -75,7 +75,7 @@ export type ScriptAction = (
   | { t: 'fight'; specs: { monsterId: string; count: number }[]; loc?: string; n?: number }
   | { t: 'coins'; amount: number }
   | { t: 'pay'; amount: number }
-  | { t: 'bottle'; n: number }
+  | { t: 'bottle'; n: number; qty?: number }
   | { t: 'buy'; bottles: number[]; price: number }
   | { t: 'artifact' }
   | { t: 'scroll'; caster?: 'mage' | 'priest'; level?: number }

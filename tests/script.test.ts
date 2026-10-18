@@ -134,6 +134,24 @@ describe('сценарный ведущий', () => {
     expect(labels).toContain('Взять бутылку (6)')
   })
 
+  it('одинаковые бутылки в сцене берутся одной кнопкой', async () => {
+    const g = await setup()
+    const room = (await g.s.store.get(g.j.code))!
+    const hero = room.state.heroes[0]
+    await g.c.claimHero(hero.uid)
+    await goTo(g, 'runnoe-more')
+    await g.c.call('enterLocation', ['runnoe-more'])
+    await g.c.chat('11', true)
+    await until(() => /помещение 11/.test(lastGm(g.chat)?.text ?? ''))
+    const scene = lastGm(g.chat)
+    const take = scene.choices!.find((c) => c.label === 'Взять 5 бутылок (4)')!
+    expect(take).toBeDefined()
+    expect(scene.choices!.filter((c) => c.label.includes('(4)'))).toHaveLength(1)
+    await g.c.choose(scene.id, take.id)
+    await until(() => /забирает 5 бутылок без этикеток/.test(lastGm(g.chat).text))
+    expect(room.state.heroes[0].inventory.filter((e) => e.kind === 'bottle' && e.ref === '4').reduce((n, e) => n + e.qty, 0)).toBe(5)
+  })
+
   it('продажа бутылок распознаётся по тексту, подарок и плата за совет — нет', () => {
     expect(bottleSales('Трактирщик предлагает бутылку (5) за 15 монет. У него целых 4 таких бутылки.', { prices: [15], bottles: [5] })).toEqual([{ bottles: [5], price: 15 }])
     expect(bottleSales('Предлагает 2 бутылки за 20 монет: (3), (3).', { prices: [20], bottles: [3, 3] })).toEqual([{ bottles: [3, 3], price: 20 }])
