@@ -120,6 +120,20 @@ describe('сценарный ведущий', () => {
     expect(g.chat.slice(before).some((m) => m.from === 'gm')).toBe(false)
   })
 
+  it('ветка-исход боя не предлагает второй бой с теми же монстрами', async () => {
+    const g = await setup()
+    await g.c.call('enterLocation', ['zolotoy-gorod'])
+    await g.c.chat('24', true)
+    await until(() => /помещение 24/.test(lastGm(g.chat)?.text ?? ''))
+    const scene = lastGm(g.chat)
+    expect(scene.choices!.some((c) => c.label === '⚔ Бой: Драконид')).toBe(true)
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '▸ Если убиваете драконида')!.id)
+    await until(() => /Короля Золотого города/i.test(lastGm(g.chat).text))
+    const labels = lastGm(g.chat).choices!.map((c) => c.label)
+    expect(labels.some((l) => l.startsWith('⚔'))).toBe(false)
+    expect(labels).toContain('Взять бутылку (6)')
+  })
+
   it('продажа бутылок распознаётся по тексту, подарок и плата за совет — нет', () => {
     expect(bottleSales('Трактирщик предлагает бутылку (5) за 15 монет. У него целых 4 таких бутылки.', { prices: [15], bottles: [5] })).toEqual([{ bottles: [5], price: 15 }])
     expect(bottleSales('Предлагает 2 бутылки за 20 монет: (3), (3).', { prices: [20], bottles: [3, 3] })).toEqual([{ bottles: [3, 3], price: 20 }])
