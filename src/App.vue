@@ -23,15 +23,15 @@ const chatOpen = ref(false)
 const base = import.meta.env.BASE_URL
 
 // возврат за стол после обновления страницы: пока не вошли — экран ожидания, а не чужое одиночное сохранение
-const rejoining = ref(!!savedSession())
+const pendingRejoin = ref(!!savedSession())
 onMounted(async () => {
   await store.rejoin()
-  rejoining.value = false
+  pendingRejoin.value = false
 })
 
 const locationLink = computed(() => (store.location ? `/location/${store.location.id}` : null))
 const onTable = computed(() => route.path === '/table')
-watch(() => route.fullPath, () => { more.value = false; refMenu.value = false })
+watch(() => route.fullPath, () => { more.value = false; refMenu.value = false; if (route.path === '/table') chatOpen.value = false })
 // меню «Справочник» и плавающий чат закрываются щелчком мимо и клавишей Esc
 const moreRef = ref<HTMLElement | null>(null)
 function onDocClick(e: MouseEvent) { if (refMenu.value && moreRef.value && !moreRef.value.contains(e.target as Node)) refMenu.value = false }
@@ -39,12 +39,8 @@ function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { refMenu.value = fal
 onMounted(() => { document.addEventListener('click', onDocClick); document.addEventListener('keydown', onKey) })
 onBeforeUnmount(() => { document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onKey) })
 
-// чат: непрочитанные — пришедшие после последнего просмотра (не свои и не служебные)
-const seenCount = ref(0)
-const myName = computed(() => store.room?.me.name ?? '')
-const unread = computed(() => store.chat.slice(seenCount.value).filter((m) => m.from !== 'system' && !(m.from === 'player' && m.author.startsWith(myName.value))).length)
-watch([() => store.chat.length, chatOpen, onTable], () => { if (chatOpen.value || onTable.value) seenCount.value = store.chat.length }, { immediate: true })
-watch(() => store.chat, (list, old) => { if (list !== old) seenCount.value = chatOpen.value || onTable.value ? list.length : Math.min(seenCount.value, list.length) })
+// чат: непрочитанные считает стор (по времени последнего просмотренного; любой открытый чат отмечает прочитанное)
+const unread = computed(() => store.unread)
 watch(() => store.online, (on) => { if (!on) chatOpen.value = false })
 
 // озвучка новых реплик ведущего на любом экране; история чата (вход в комнату) не читается
@@ -77,14 +73,14 @@ const onlineCount = computed(() => store.room?.players.filter((p) => p.online).l
         <img :src="`${base}img/brand/logo-sm.png`" alt="Заклятье Чёрного мага" width="520" height="90" />
       </router-link>
       <nav class="nav-desktop" aria-label="Разделы">
-        <router-link v-if="store.online" to="/table" class="nav-link hot-online"><MessagesSquare :size="17" /><span>Стол</span><span v-if="store.room?.gm === 'ai' && store.room?.gmBusy"> ✎</span></router-link>
-        <router-link to="/party" class="nav-link"><Users :size="17" /><span>Партия</span></router-link>
-        <router-link to="/map" class="nav-link"><MapIcon :size="17" /><span>Карта</span></router-link>
-        <router-link v-if="locationLink" :to="locationLink" class="nav-link"><Castle :size="17" /><span class="lbl">{{ store.location?.name }}</span></router-link>
-        <router-link v-if="inCombat" to="/combat" class="nav-link hot"><Swords :size="17" /><span>Бой</span></router-link>
-        <router-link to="/shop" class="nav-link"><Store :size="17" /><span class="lbl-opt">Лавка</span></router-link>
+        <router-link v-if="store.online" to="/table" class="nav-link hot-online" title="Стол" aria-label="Стол"><MessagesSquare :size="17" /><span>Стол</span><span v-if="store.room?.gm === 'ai' && store.room?.gmBusy"> ✎</span></router-link>
+        <router-link to="/party" class="nav-link" title="Партия" aria-label="Партия"><Users :size="17" /><span>Партия</span></router-link>
+        <router-link to="/map" class="nav-link" title="Карта" aria-label="Карта"><MapIcon :size="17" /><span>Карта</span></router-link>
+        <router-link v-if="locationLink" :to="locationLink" class="nav-link" :title="store.location?.name" :aria-label="store.location?.name"><Castle :size="17" /><span class="lbl">{{ store.location?.name }}</span></router-link>
+        <router-link v-if="inCombat" to="/combat" class="nav-link hot" title="Бой" aria-label="Бой"><Swords :size="17" /><span>Бой</span></router-link>
+        <router-link to="/shop" class="nav-link" title="Лавка" aria-label="Лавка"><Store :size="17" /><span class="lbl-opt">Лавка</span></router-link>
         <div ref="moreRef" class="nav-more">
-          <button class="nav-link" :class="{ active: refActive }" :aria-expanded="refMenu" @click="refMenu = !refMenu"><BookOpen :size="17" /><span>Справочник</span></button>
+          <button class="nav-link" :class="{ active: refActive }" :aria-expanded="refMenu" title="Справочник" aria-label="Справочник" @click="refMenu = !refMenu"><BookOpen :size="17" /><span>Справочник</span></button>
           <div v-if="refMenu" class="menu" @click="refMenu = false">
             <router-link v-for="r in reference" :key="r.to" :to="r.to" class="nav-link"><component :is="r.icon" :size="17" />{{ r.label }}</router-link>
           </div>
@@ -113,8 +109,8 @@ const onlineCount = computed(() => store.room?.players.filter((p) => p.online).l
         </router-link>
       </div>
     </div>
+    <div v-if="store.online && store.netStatus === 'reconnecting'" class="net-banner">Связь с сервером потеряна — возвращаемся за стол…</div>
   </header>
-  <div v-if="store.online && store.netStatus === 'reconnecting'" class="net-banner">Связь с сервером потеряна — возвращаемся за стол…</div>
 
   <main class="page">
     <router-view />
@@ -148,7 +144,7 @@ const onlineCount = computed(() => store.room?.players.filter((p) => p.online).l
   <button v-if="store.online && !onTable && !chatOpen" class="chat-fab icon-btn" title="Чат" aria-label="Открыть чат" @click="chatOpen = true">
     <MessageCircle :size="24" /><span v-if="unread" class="count">{{ unread > 99 ? '99+' : unread }}</span>
   </button>
-  <section v-if="chatOpen && store.online" class="chat-panel" aria-label="Чат">
+  <section v-if="chatOpen && store.online && !onTable" class="chat-panel" aria-label="Чат">
     <header>
       <h3>Чат стола</h3>
       <button class="icon ghost" aria-label="Закрыть чат" @click="chatOpen = false"><X :size="20" /></button>
@@ -158,9 +154,11 @@ const onlineCount = computed(() => store.room?.players.filter((p) => p.online).l
 
   <div v-if="store.notice" class="notice" role="status">{{ store.notice }}</div>
   <DiceTray v-if="dice" @close="dice = false" />
-  <div v-if="rejoining && store.connecting && !store.room" class="overlay">
+  <div v-if="!store.room && (store.rejoinState !== 'idle' || (pendingRejoin && store.connecting))" class="overlay" role="status">
     <img :src="`${base}img/brand/logo.png`" alt="" />
     <div class="spinner" />
-    <div>Возвращаемся за стол…</div>
+    <div v-if="store.rejoinState === 'waiting'" style="text-align:center;padding:0 16px">Сервер недоступен — вернёмся за стол, как только появится связь.</div>
+    <div v-else>Возвращаемся за стол…</div>
+    <button v-if="store.rejoinState === 'waiting'" class="small" @click="store.abandonRejoin()">Играть без сети</button>
   </div>
 </template>

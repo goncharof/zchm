@@ -199,7 +199,7 @@ describe('цепочка моделей ведущего', () => {
       },
     ])
     const g = await room([
-      [{ id: 'a', label: 'Первая', baseUrl: 'http://a', model: 'm' }, a.f],
+      [{ id: 'a', label: 'Первая', baseUrl: 'http://a', model: 'm', transientRetryMs: 10 }, a.f],
       [{ id: 'b', label: 'Вторая', baseUrl: 'http://b', model: 'm' }, b.f],
     ])
     await g.s.gm.idle()

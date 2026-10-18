@@ -38,6 +38,20 @@ export const useGameStore = defineStore('game', () => {
   const streaming = ref<Record<string, string>>({})
   /** связь с сервером сетевой игры */
   const netStatus = ref<NetStatus>('connecting')
+  /** возврат за стол после обновления страницы: joining — входим, waiting — сервер недоступен, ждём связи */
+  const rejoinState = ref<'idle' | 'joining' | 'waiting'>('idle')
+
+  // непрочитанное в чате: время последнего просмотренного сообщения, отдельно для каждой комнаты (переживает обновление)
+  const chatSeenT = ref(0)
+  const seenKey = (code: string) => `zchm.chat.seen.${code}`
+  const isMine = (m: ChatMessage) => m.from === 'player' && !!room.value && m.playerId === room.value.me.id
+  const unread = computed(() => chat.value.filter((m) => m.t > chatSeenT.value && m.from !== 'system' && !isMine(m)).length)
+  function markChatSeen(): void {
+    const last = chat.value.reduce((t, m) => Math.max(t, m.t), 0)
+    if (last <= chatSeenT.value) return
+    chatSeenT.value = last
+    try { if (room.value) localStorage.setItem(seenKey(room.value.code), String(last)) } catch { /* нет хранилища */ }
+  }
   const connecting = ref(false)
   loadWorld().then((w) => { world.value = w })
 
@@ -62,7 +76,7 @@ export const useGameStore = defineStore('game', () => {
   })
   const canControl = (heroUid: string) => myHeroUids.value.includes(heroUid)
   /** Герой закреплён за мной (сетевая игра) */
-  const isMine = (heroUid: string) => !!room.value?.me.heroUids.includes(heroUid)
+  const isMineHero = (heroUid: string) => !!room.value?.me.heroUids.includes(heroUid)
 
   // автосохранение — только для одиночной игры (сетевую хранит сервер)
   watch(game, (g) => {
@@ -105,7 +119,14 @@ export const useGameStore = defineStore('game', () => {
     client.onLost((why) => { say(`Не удалось вернуться за стол: ${why}`); detachNet() })
     // история приходит при входе: недописанный текст ведущего сервер пришлёт заново целиком
     client.onChatHistory((ms) => { chat.value = ms; streaming.value = {} })
-    client.onRoom(() => { netStatus.value = 'online' })
+    client.onRoom((r) => {
+      netStatus.value = 'online'
+      rejoinState.value = 'idle'
+      // впервые в этой комнате — история считается прочитанной; после возвращения — непрочитанным остаётся пропущенное
+      let seen: number | null = null
+      try { const v = localStorage.getItem(seenKey(r.code)); seen = v ? Number(v) : null } catch { /* нет хранилища */ }
+      if (seen === null) { chatSeenT.value = 0; markChatSeen() } else chatSeenT.value = Math.max(chatSeenT.value, seen)
+    })
     client.onChat((m) => {
       chat.value.push(m)
       if (chat.value.length > 300) chat.value.splice(0, chat.value.length - 300)
@@ -143,15 +164,33 @@ export const useGameStore = defineStore('game', () => {
   /** Создать комнату; withParty — взять с собой текущую одиночную партию */
   const createRoom = (name: string, gm: GmMode, withParty: boolean) => netAction((c) => c.create(name, gm, withParty && game.value ? JSON.parse(JSON.stringify(game.value)) : undefined))
   const joinRoom = (code: string, name: string) => netAction((c) => c.join(code, name))
-  /** Вернуться в комнату после перезагрузки страницы */
+  /** Вернуться в комнату после перезагрузки страницы. Сервер недоступен — ждать связи, а не забывать вход */
   async function rejoin(): Promise<void> {
     const s = savedSession()
     if (!s || net.value) return
-    await netAction((c) => c.join(s.code, s.name, s.token), s.url)
+    const c = ensureNet(s.url)
+    rejoinState.value = 'joining'
+    connecting.value = true
+    try {
+      await c.join(s.code, s.name, s.token)
+    } catch (e) {
+      const msg = (e as Error).message
+      if (/не найдена/.test(msg)) { say(`Комнаты ${s.code} больше нет`); rejoinState.value = 'idle'; detachNet() }
+      else if (net.value) { rejoinState.value = 'waiting'; c.waitRejoin(s) }
+    } finally {
+      connecting.value = false
+    }
+  }
+  /** Не ждать сервер: играть без сети (вход в комнату забывается) */
+  function abandonRejoin(): void {
+    net.value?.forget()
+    rejoinState.value = 'idle'
+    detachNet()
   }
   function leaveRoom(): void {
     const c = net.value
     if (c) void c.leave().catch(() => {})
+    rejoinState.value = 'idle'
     detachNet()
   }
   const sendChat = (text: string, toGm: boolean, asGm = false) => netAction((c) => c.chat(text, toGm, asGm))
@@ -174,10 +213,12 @@ export const useGameStore = defineStore('game', () => {
   function exportSave(): string {
     return JSON.stringify(game.value, null, 1)
   }
-  function importSave(text: string): void {
+  /** Загрузить сохранение; в сетевой игре — на сервер (может только хозяин), успех — после ответа сервера */
+  async function importSave(text: string): Promise<boolean> {
     const g = parseSave(text)
-    if (online.value) { void net.value!.loadState(g); return }
+    if (online.value) return (await netAction(async (c) => { await c.loadState(g); return true })) ?? false
     game.value = g
+    return true
   }
   const SLOT_KEY = (n: number) => `zchm.slot.${n}`
   function slotInfo(n: number): { day: number; heroes: string; savedAt: number } | null {
@@ -198,8 +239,7 @@ export const useGameStore = defineStore('game', () => {
   function loadSlot(n: number): void {
     const raw = localStorage.getItem(SLOT_KEY(n))
     if (!raw) { say('Слот пуст'); return }
-    importSave(raw)
-    say(`Загружен слот ${n}`)
+    void importSave(raw).then((ok) => { if (ok) say(`Загружен слот ${n}`) })
   }
   function clearSlot(n: number): void {
     localStorage.removeItem(SLOT_KEY(n))
@@ -265,7 +305,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   return {
-    game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, isMine, chat, netStatus, streaming, connecting,
+    game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, isMine: isMineHero, chat, netStatus, rejoinState, abandonRejoin, unread, markChatSeen, isMineMsg: isMine, streaming, connecting,
     createRoom, joinRoom, rejoin, leaveRoom, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, setReady, turnGo, ownerOf,
     heroes, combat, location, worldNode, started,
     say, hero, cmd, attachNet, detachNet,

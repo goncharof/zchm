@@ -50,7 +50,8 @@ const step = (heroUid: string, kind: 'lives' | 'money' | 'xp', d: number) => {
         <input v-model.number="luckTarget" type="number" min="2" max="20" style="width:4rem" aria-label="Порог удачи" />
       </label>
       <button class="small" :disabled="!luckHero" @click="store.luckCheck(luckHero, luckTarget)"><Dices :size="15" />Проверить</button>
-      <button class="small" @click="picker = true"><Swords :size="15" />Начать бой</button>
+      <button v-if="!store.combat || store.combat.finished" class="small" @click="picker = true"><Swords :size="15" />Начать бой</button>
+      <router-link v-else class="btn small" to="/combat"><Swords :size="15" />К бою</router-link>
     </div>
     <MonsterPicker v-if="picker" @close="picker = false" @start="(s) => { picker = false; store.startEncounter(s) }" />
   </div>

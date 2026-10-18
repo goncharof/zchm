@@ -43,6 +43,7 @@ export class NetClient {
   /** открыт, когда клиент в комнате; после обрыва закрывается до повторного входа — команды ждут, а не получают «Вы не в комнате» */
   private gate: Promise<void> = Promise.resolve()
   private openGate: (() => void) | null = null
+  private retryTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(url?: string) {
     // по умолчанию — тот же адрес, что у страницы (в dev Vite проксирует /socket.io на сервер)
@@ -57,25 +58,50 @@ export class NetClient {
     this.socket.on('gm:done', (d) => this.doneCbs.forEach((cb) => cb(d)))
     this.socket.on('disconnect', () => {
       if (!this.joined) return
-      if (!this.openGate) this.gate = new Promise((resolve) => { this.openGate = resolve })
+      this.closeGate()
       this.statusCbs.forEach((cb) => cb('reconnecting'))
     })
     // после обрыва связи — вернуться в комнату под тем же игроком, затем пропустить накопившиеся команды
-    this.socket.on('connect', () => {
-      const s = this.joined
-      if (!s || !this.openGate) return
-      void this.joinRaw(s.code, s.name, s.token).then((a) => {
-        if (!a.ok) {
-          // комнаты больше нет (или сервер её не принял) — не пытаться снова при каждом обновлении страницы
-          this.joined = null
-          saveSession(null)
-          this.lostCbs.forEach((cb) => cb(a.error ?? 'Комната недоступна'))
-        } else {
-          this.statusCbs.forEach((cb) => cb('online'))
-        }
-        this.openGate?.(); this.openGate = null
-      })
-    })
+    this.socket.on('connect', () => { if (this.joined && this.openGate) void this.rejoinNow() })
+  }
+
+  private closeGate(): void {
+    if (!this.openGate) this.gate = new Promise((resolve) => { this.openGate = resolve })
+  }
+  private releaseGate(): void {
+    this.openGate?.()
+    this.openGate = null
+  }
+
+  /** Повторный вход под сохранённым игроком. Забыть вход — только если сервер сказал, что комнаты нет;
+   *  ошибка связи (ещё один обрыв, таймаут) — вход сохраняется, попытка повторится */
+  private async rejoinNow(): Promise<void> {
+    const s = this.joined
+    if (!s) return
+    const a = await this.joinRaw(s.code, s.name, s.token)
+    if (!this.joined) return
+    if (a.ok) {
+      this.statusCbs.forEach((cb) => cb('online'))
+      this.releaseGate()
+      return
+    }
+    if (/не найдена/.test(a.error ?? '')) {
+      this.joined = null
+      saveSession(null)
+      this.releaseGate()
+      this.lostCbs.forEach((cb) => cb(a.error ?? 'Комната недоступна'))
+      return
+    }
+    if (this.retryTimer) clearTimeout(this.retryTimer)
+    if (this.socket.connected) this.retryTimer = setTimeout(() => { if (this.joined && this.openGate && this.socket.connected) void this.rejoinNow() }, 3000)
+  }
+
+  /** Сервер недоступен при обновлении страницы: ждать связи и вернуться за стол под сохранённым игроком */
+  waitRejoin(s: SavedSession): void {
+    this.joined = s
+    this.closeGate()
+    this.statusCbs.forEach((cb) => cb('reconnecting'))
+    if (this.socket.connected) void this.rejoinNow()
   }
 
   onStatus(cb: (s: NetStatus) => void) { this.statusCbs.push(cb) }
@@ -95,9 +121,15 @@ export class NetClient {
     try { return await p } catch { return { ok: false, error: 'Нет связи с сервером' } }
   }
 
-  /** Дождаться повторного входа после обрыва (не дольше таймаута) */
-  private async ready(): Promise<void> {
-    await Promise.race([this.gate, new Promise((r) => setTimeout(r, TIMEOUT_MS))])
+  /** Дождаться повторного входа после обрыва (не дольше таймаута); без связи — false, команда не отправляется:
+   *  иначе socket.io отправит её из буфера раньше повторного входа и сервер ответит «Вы не в комнате» */
+  private async ready(): Promise<boolean> {
+    const ok = await Promise.race([this.gate.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), TIMEOUT_MS))])
+    return ok && this.socket.connected
+  }
+  private async send<T = unknown>(fn: () => Promise<Ack<T>>): Promise<T> {
+    if (!(await this.ready())) return this.unwrap<T>({ ok: false, error: 'Нет связи с сервером' })
+    return this.unwrap<T>(await this.ask(fn()))
   }
 
   private joinRaw(code: string, name: string, token?: string): Promise<Ack> {
@@ -124,34 +156,41 @@ export class NetClient {
     // комнаты больше нет — забыть сохранённый вход, чтобы обновление страницы не пыталось снова
     if (!a.ok && /не найдена/.test(a.error ?? '')) saveSession(null)
     const j = this.unwrap(a) as Joined
+    this.releaseGate()
     this.joined = { code: j.code, token: j.token, name }
     saveSession(this.joined)
     return j
   }
   async call(name: string, args: unknown[]): Promise<unknown> {
-    await this.ready()
-    return this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('cmd', { name, args })))
+    return this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('cmd', { name, args }))
   }
-  async setGm(gm: GmMode): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:setGm', gm))) }
-  async loadState(state: GameState): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:loadState', state))) }
-  async claimHero(heroUid: string): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('hero:claim', heroUid))) }
-  async releaseHero(heroUid: string): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('hero:release', heroUid))) }
-  async chat(text: string, toGm: boolean, asGm = false): Promise<boolean> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('chat', { text, toGm, ...(asGm ? { asGm } : {}) }))); return true }
-  async choose(messageId: string, choiceId: string): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('gm:choose', { messageId, choiceId }))) }
-  async setTurnMode(mode: TurnMode): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:turnMode', mode))) }
-  async setReady(ready: boolean): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:ready', ready))) }
-  async turnGo(): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:go'))) }
+  async setGm(gm: GmMode): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('room:setGm', gm)) }
+  async loadState(state: GameState): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('room:loadState', state)) }
+  async claimHero(heroUid: string): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('hero:claim', heroUid)) }
+  async releaseHero(heroUid: string): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('hero:release', heroUid)) }
+  async chat(text: string, toGm: boolean, asGm = false): Promise<boolean> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('chat', { text, toGm, ...(asGm ? { asGm } : {}) })); return true }
+  async choose(messageId: string, choiceId: string): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('gm:choose', { messageId, choiceId })) }
+  async setTurnMode(mode: TurnMode): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('room:turnMode', mode)) }
+  async setReady(ready: boolean): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:ready', ready)) }
+  async turnGo(): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:go')) }
 
-  /** Выйти из комнаты: сервер освобождает героев (иначе за столом остаётся «призрак») */
+  /** Выйти из комнаты: сервер освобождает героев (иначе за столом остаётся «призрак»), вход забывается */
   async leave(): Promise<void> {
     if (this.joined && this.socket.connected) await this.ask(this.socket.timeout(3000).emitWithAck('room:leave'))
+    this.forget()
     this.close()
   }
 
-  /** Отключиться (забыть сохранённый вход) */
+  /** Забыть сохранённый вход (обновление страницы больше не вернёт в комнату) */
+  forget(): void {
+    saveSession(null)
+  }
+
+  /** Отключиться; сохранённый вход остаётся — при обновлении страницы игрок вернётся за стол */
   close(): void {
     this.joined = null
-    saveSession(null)
+    if (this.retryTimer) clearTimeout(this.retryTimer)
+    this.releaseGate()
     this.socket.close()
   }
 }

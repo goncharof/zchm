@@ -371,7 +371,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         const heroes = room.state.heroes.filter((h) => player!.heroUids.includes(h.uid)).map((h) => h.name)
         const author = heroes.length ? `${player.name} (${heroes.join(', ')})` : player.name
         const toGm = !!req.toGm && autoGm(room)
-        const msg = ctx.chat(room, { from: 'player', author, text, toGm })
+        const msg = ctx.chat(room, { from: 'player', author, text, toGm, playerId: player.id })
         if (toGm && room.turnMode === 'ready') {
           // реплика = заявка героя: игрок готов; ход — когда готовы все
           room.held.push({ author, text, playerId: player.id, chatId: msg.id })

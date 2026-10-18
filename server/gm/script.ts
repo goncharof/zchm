@@ -185,7 +185,7 @@ export class ScriptedGm {
     this.ctx.updateChat(room, msg)
     const label = msg.choices?.find((c) => c.id === choiceId)?.label ?? ''
     const who = room.players.get(playerId)?.name ?? 'Игрок'
-    this.ctx.chat(room, { from: 'player', author: who, text: `Выбор: ${label.replace(/^[▸⚔🎲]\s*/u, '')}`, toGm: true })
+    this.ctx.chat(room, { from: 'player', author: who, text: `Выбор: ${label.replace(/^[▸⚔🎲]\s*/u, '')}`, toGm: true, playerId })
     try {
       const once = rec.action.once
       if (once && room.script.taken?.includes(once)) throw new GameError('Это уже сделано')

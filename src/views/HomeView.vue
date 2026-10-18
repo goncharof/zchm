@@ -7,6 +7,8 @@ import LogPanel from '@/components/LogPanel.vue'
 import OnlinePanel from '@/components/OnlinePanel.vue'
 
 const store = useGameStore()
+/** загружать сохранения в сетевой игре может только хозяин комнаты */
+const canLoad = computed(() => !store.online || !!store.room?.me.isHost)
 const base = import.meta.env.BASE_URL
 // абсолютный адрес: url() в CSS-переменной считается от файла стилей (assets/), а не от страницы
 const bannerUrl = new URL(`${base}img/brand/banner.jpg`, document.baseURI).href
@@ -47,7 +49,7 @@ function exportSave() {
 async function importSave(ev: Event) {
   const f = (ev.target as HTMLInputElement).files?.[0]
   if (!f) return
-  try { store.importSave(await f.text()); store.say('Сохранение загружено'); continueGame() } catch (e) { store.say((e as Error).message) }
+  try { if (await store.importSave(await f.text())) { store.say('Сохранение загружено'); continueGame() } } catch (e) { store.say((e as Error).message) }
 }
 async function quick() {
   if (store.started && !confirm(store.online ? 'Партия комнаты будет заменена. Начать заново?' : 'Текущая партия будет удалена. Начать заново?')) return
@@ -114,7 +116,7 @@ async function newGame() {
               </td>
               <td style="text-align:right;white-space:nowrap">
                 <button class="small" :disabled="!store.started" @click="save(n)">Сохранить</button>
-                <button class="small" :disabled="!slots[n - 1]" @click="load(n)">Загрузить</button>
+                <button v-if="canLoad" class="small" :disabled="!slots[n - 1]" @click="load(n)">Загрузить</button>
                 <button class="small" :disabled="!slots[n - 1]" title="Удалить слот" @click="clear(n)">✕</button>
               </td>
             </tr>
@@ -122,7 +124,7 @@ async function newGame() {
         </table>
         <div class="row" style="margin-top:.6rem">
           <button v-if="store.started" class="small" @click="exportSave">Экспорт сохранения</button>
-          <button class="small" @click="fileInput?.click()">Импорт сохранения</button>
+          <button v-if="canLoad" class="small" @click="fileInput?.click()">Импорт сохранения</button>
           <input ref="fileInput" type="file" accept="application/json" style="display:none" @change="importSave" />
         </div>
       </div>

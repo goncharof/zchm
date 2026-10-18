@@ -20,6 +20,8 @@ const items = computed(() => store.chat.slice(-120))
 watch(() => [store.chat.length, JSON.stringify(store.streaming).length], async () => {
   await nextTick()
   if (box.value) box.value.scrollTop = box.value.scrollHeight
+  // чат на экране — сообщения прочитаны
+  store.markChatSeen()
 }, { immediate: true })
 
 // озвучка: голоса приходят асинхронно
@@ -76,7 +78,7 @@ async function send() {
   <div class="gm-chat">
     <div ref="box" class="gm-chat-log" :style="{ height: props.height }">
       <div v-if="!items.length && !live.length" class="muted small">Здесь будет рассказ ведущего и реплики игроков.</div>
-      <div v-for="m in items" :key="m.id" class="gm-msg" :class="[m.from, { mine: m.from === 'player' && !!store.room && m.author.startsWith(store.room.me.name) }]">
+      <div v-for="m in items" :key="m.id" class="gm-msg" :class="[m.from, { mine: store.isMineMsg(m) }]">
         <div class="gm-author">{{ m.author }}<span v-if="m.from === 'player' && ai && !m.toGm" class="muted"> · игрокам</span></div>
         <div class="gm-text">{{ m.text }}</div>
         <div v-if="m.choices?.length" class="row" style="margin-top:.35rem">
