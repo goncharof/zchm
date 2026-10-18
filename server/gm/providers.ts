@@ -11,7 +11,7 @@
  *   Модели по умолчанию проверены 2026-10-17; список бесплатных моделей OpenRouter: https://openrouter.ai/api/v1/models
  *   LLM_BASE_URL + LLM_MODEL [LLM_API_KEY, LLM_LABEL] — любая OpenAI-совместимая модель (например, Ollama: http://localhost:11434/v1)
  *   ANTHROPIC_API_KEY   [GM_MODEL=claude-opus-5-5, GM_EFFORT=medium]     — Claude API, платный
- *   GM_CHAIN=gemini,groq,cerebras,openrouter,custom,claude               — порядок; если не ответил никто — сценарный ведущий
+ *   GM_CHAIN=gemini,cerebras,openrouter,groq,custom,claude               — порядок; если не ответил никто — сценарный ведущий
  */
 import { AnthropicProvider } from './ai'
 import { OpenAiCompatProvider } from './openai'
@@ -19,7 +19,9 @@ import type { LlmProvider } from './types'
 
 type Env = Record<string, string | undefined>
 
-export const DEFAULT_CHAIN = ['gemini', 'groq', 'cerebras', 'openrouter', 'custom', 'claude']
+// порядок по живому прогону: Gemini лучше всех, но 20 запросов в день на модель; OpenRouter (Nemotron) держит правила;
+// Groq упирается в лимит токенов в минуту (~ход в минуту) — ближе к концу
+export const DEFAULT_CHAIN = ['gemini', 'cerebras', 'openrouter', 'groq', 'custom', 'claude']
 
 export function buildProvidersFromEnv(env: Env = process.env): LlmProvider[] {
   // у каждой модели Gemini своя бесплатная квота (у gemini-3.5-flash — 5 запросов в минуту): GEMINI_MODEL можно

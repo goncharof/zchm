@@ -89,5 +89,5 @@ fly deploy
 | `CEREBRAS_API_KEY`, `CEREBRAS_MODEL` | `gpt-oss-120b` | Cerebras (не проверено) |
 | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | — | любая OpenAI-совместимая модель, например Ollama |
 | `ANTHROPIC_API_KEY`, `GM_MODEL`, `GM_EFFORT` | `claude-opus-5-5`, `medium` | Claude (платно) |
-| `GM_CHAIN` | `gemini,groq,cerebras,openrouter,custom,claude` | порядок моделей |
+| `GM_CHAIN` | `gemini,cerebras,openrouter,groq,custom,claude` | порядок моделей |
 | `GM_HISTORY_CHARS` | `300000` | когда начинать разговор Claude заново с кратким содержанием |

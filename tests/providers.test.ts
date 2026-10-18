@@ -230,7 +230,7 @@ describe('цепочка моделей ведущего', () => {
     ] as Parameters<typeof windowHistory>[0]
     expect(windowHistory(hist, 4)[0]).toEqual({ role: 'user', content: '2' })
     expect(buildProvidersFromEnv({}).map((p) => p.id)).toEqual([])
-    expect(buildProvidersFromEnv({ GROQ_API_KEY: 'x', GEMINI_API_KEY: 'y' }).map((p) => p.id)).toEqual(['gemini', 'groq'])
+    expect(buildProvidersFromEnv({ GROQ_API_KEY: 'x', GEMINI_API_KEY: 'y', OPENROUTER_API_KEY: 'z' }).map((p) => p.id)).toEqual(['gemini', 'openrouter', 'groq'])
     expect(buildProvidersFromEnv({ GROQ_API_KEY: 'x', GEMINI_API_KEY: 'y', GM_CHAIN: 'groq' }).map((p) => p.label)).toEqual(['Groq'])
     expect(buildProvidersFromEnv({ LLM_BASE_URL: 'http://localhost:11434/v1', LLM_MODEL: 'qwen3', LLM_LABEL: 'Ollama' }).map((p) => p.label)).toEqual(['Ollama'])
     // несколько моделей Gemini — своя квота у каждой
