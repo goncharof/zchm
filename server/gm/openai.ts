@@ -89,7 +89,8 @@ export class OpenAiCompatProvider implements LlmProvider {
           let args: unknown
           try { args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {} } catch { args = undefined }
           const out = args === undefined ? { content: 'INVALID_JSON: аргументы не разобраны, повтори вызов', isError: true } : executeGmTool(room, tc.function.name, args)
-          if (!out.isError) { const d = describeTool(tc.function.name, args); done.push(d); room.gmDone.push(d) }
+          const d = out.isError ? null : describeTool(tc.function.name, args, out.content)
+          if (d) { done.push(d); room.gmDone.push(d) }
           if (out.endsTurn && !out.isError) ends = true
           hist.push({ role: 'tool', tool_call_id: tc.id, content: out.isError ? `Ошибка: ${out.content}` : out.content })
         }

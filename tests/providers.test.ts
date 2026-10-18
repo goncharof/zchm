@@ -210,6 +210,34 @@ describe('цепочка моделей ведущего', () => {
     expect(g.state.heroes.find((h) => h.name === 'Конан')!.money).toBe(money + 50)
   })
 
+  it('прерванный ход: следующая модель видит итог броска удачи, а открытый параграф может открыть заново', async () => {
+    const a = fakeFetch([
+      () => sse(textChunks('Ворота.')),
+      () => sse([{ choices: [{ delta: { tool_calls: [
+        { index: 0, id: 'c1', function: { name: 'open_paragraph', arguments: '{"location_id":"zolotoy-gorod","n":1}' } },
+        { index: 1, id: 'c2', function: { name: 'roll_luck', arguments: '{"hero":"Конан","target":12}' } },
+      ] } }] }]),
+      () => new Response('boom', { status: 503 }),
+    ])
+    let carried = ''
+    const b = fakeFetch([
+      (body) => {
+        carried = String(body.messages.filter((m) => m.role === 'user').at(-1)!.content)
+        return sse(textChunks('Дверь не поддаётся.'))
+      },
+    ])
+    const g = await room([
+      [{ id: 'a', label: 'Первая', baseUrl: 'http://a', model: 'm', transientRetryMs: 10 }, a.f],
+      [{ id: 'b', label: 'Вторая', baseUrl: 'http://b', model: 'm' }, b.f],
+    ])
+    await g.s.gm.idle()
+    await g.c.chat('Пробуем открыть дверь', true)
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.author === 'Ведущий · Вторая'))
+    expect(carried).toMatch(/roll_luck \{[^}]*\} → \{"герой":"Конан","ok":(true|false)/)
+    expect(carried).not.toContain('open_paragraph')
+  })
+
   it('модель выполнила действие, но не дописала рассказ — ход засчитан, а не отдан другой модели', async () => {
     const a = fakeFetch([
       () => sse(textChunks('Ворота.')),

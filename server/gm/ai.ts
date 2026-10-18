@@ -131,7 +131,8 @@ export class AnthropicProvider implements LlmProvider {
         let ends = false
         const results: Anthropic.Beta.BetaToolResultBlockParam[] = uses.map((u) => {
           const out = executeGmTool(room, u.name, u.input)
-          if (!out.isError) { const d = describeTool(u.name, u.input); done.push(d); room.gmDone.push(d) }
+          const d = out.isError ? null : describeTool(u.name, u.input, out.content)
+          if (d) { done.push(d); room.gmDone.push(d) }
           if (out.endsTurn && !out.isError) ends = true
           return { type: 'tool_result', tool_use_id: u.id, content: out.content, ...(out.isError ? { is_error: true } : {}) }
         })
@@ -239,6 +240,8 @@ export class GmDirector implements GmDriver {
     // ведёт живой ведущий или никто (режим сменили, пока вход ждал в очереди) — ИИ не отвечает
     if (room.gm !== 'ai' && room.gm !== 'script') { room.gmDone = []; return }
     if (room.gm === 'script' || !this.opts.providers.length) {
+      // ход прерванной модели доигрывает сценарный ведущий: список выполненного ей больше не нужен
+      room.gmDone = []
       this.script.handle(room, events, texts)
       return
     }

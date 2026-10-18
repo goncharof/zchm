@@ -65,7 +65,9 @@ export class ProviderError extends Error {
   }
 }
 
-/** Краткая запись выполненного инструмента — для следующей модели, чтобы она не повторила действие */
-export function describeTool(name: string, input: unknown): string {
-  return `${name} ${JSON.stringify(input ?? {}).slice(0, 160)}`
+/** Краткая запись выполненного инструмента с итогом — следующая модель не повторит действие и узнает, чем оно кончилось
+ *  (бросок удачи, кубики). open_paragraph не записывается: он только читает книгу, а следующей модели нужен сам текст */
+export function describeTool(name: string, input: unknown, result: string): string | null {
+  if (name === 'open_paragraph') return null
+  return `${name} ${JSON.stringify(input ?? {}).slice(0, 160)} → ${result.replace(/\s+/g, ' ').slice(0, 240)}`
 }
