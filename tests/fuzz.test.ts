@@ -5,7 +5,7 @@ import { gameData, idx } from '@/data'
 import { createHero, gainXp, heroWeapons, isActive } from '@/engine/character'
 import { addToInventory, buy, equip } from '@/engine/inventory'
 import { roll, seededRng, setRng } from '@/engine/dice'
-import { endHeroesTurn, finishCombat, heroAttack, heroFlee, monstersTurn, startCombat } from '@/engine/combat'
+import { closeToMelee, endHeroesTurn, finishCombat, heroAttack, heroFlee, monstersTurn, startCombat } from '@/engine/combat'
 import { canCast, castSpell, needsEntryTarget, needsHeroTarget, needsMonsterTarget } from '@/engine/spells'
 import type { Hero } from '@/engine/model'
 
@@ -80,4 +80,33 @@ describe('фазз-тест боя против всего бестиария', 
       expect(stuck.filter((s) => !/не закончился/.test(s)), stuck.join("\n")).toEqual([])
     }, 20000)
   }
+
+  it('партия 1 уровня против очаровывания, несчастья и инициативы: бои кончаются, статусы не остаются после боя', () => {
+    setRng(seededRng(3))
+    let charmed = 0, cursed = 0
+    for (const [monsterId, count] of [['furiya', 5], ['gurr', 4], ['chernyy-elf', 1]] as const) {
+      for (let i = 0; i < 20; i++) {
+        const heroes = [createHero('Воин', 'warrior', idx), createHero('Вор', 'thief', idx), createHero('Маг', 'mage', idx)]
+        const { state } = startCombat([{ monsterId, count }], idx)
+        closeToMelee(state, heroes, idx)
+        let steps = 0
+        while (!state.finished && steps++ < 400) {
+          if (state.turn === 'heroes') {
+            const h = heroes.find((x) => isActive(x) && !state.acted.includes(x.uid) && !state.escaped.includes(x.uid))
+            const m = state.monsters.find((x) => !x.dead && !x.fled)
+            if (h && m) heroAttack(state, h, heroes, 'unarmed', m.uid, idx)
+            else endHeroesTurn(state, heroes, idx)
+          } else monstersTurn(state, heroes, idx)
+          if (heroes.some((h) => h.status.charmed)) charmed++
+          if (heroes.some((h) => h.status.cursed)) cursed++
+          for (const h of heroes) expect(Number.isFinite(h.lives)).toBe(true)
+        }
+        expect(state.finished, `${monsterId}: бой не закончился`).toBeTruthy()
+        finishCombat(state, heroes, idx)
+        expect(heroes.some((h) => h.status.charmed || h.status.cursed)).toBe(false)
+      }
+    }
+    expect(charmed).toBeGreaterThan(0)
+    expect(cursed).toBeGreaterThan(0)
+  })
 })
