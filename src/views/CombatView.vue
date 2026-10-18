@@ -56,8 +56,10 @@ function heroState(h: Hero) {
   if (h.status.petrified) return 'окаменел'
   if (h.status.paralysis) return `паралич (${h.status.paralysis})`
   if (h.status.freeze) return `обездвижен (${h.status.freeze})`
-  if (c.value.acted.includes(h.uid)) return 'сходил'
-  return ''
+  if (h.status.charmed) return 'очарован'
+  const marks = [h.status.choke ? `задыхается (${h.status.choke})` : '', h.status.cursed ? 'проклят' : ''].filter(Boolean)
+  if (c.value.acted.includes(h.uid)) marks.unshift('сходил')
+  return marks.join(', ')
 }
 function needRoll(h: Hero, slot: string) {
   if (!targetMonster.value) return ''
@@ -93,7 +95,8 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
   const out: string[] = []
   if (m.dead) out.push('убит'); else if (m.fled) out.push('выбыл')
   if (m.petrified) out.push('окаменел')
-  if (m.disabled) out.push(`${m.disabledKind === 'sleep' ? 'спит' : m.disabledKind === 'paralysis' ? 'парализован' : 'вмёрз'} (${m.disabled})`)
+  if (m.disabled) out.push(`${m.disabledKind === 'sleep' ? 'спит' : m.disabledKind === 'paralysis' ? 'парализован' : m.disabledKind === 'charm' ? 'заворожён' : 'вмёрз'} (${m.disabled})`)
+  if (m.cursed) out.push('проклят')
   if (m.held) out.push('удержан'); if (m.choke) out.push(`задыхается (${m.choke})`); if (m.poison) out.push(`отравлен (${m.poison})`)
   if (m.attackMod) out.push(`атаки ${m.attackMod > 0 ? '+' : ''}${m.attackMod}`); if (m.attackMultiplier !== 1) out.push(`атаки ×${m.attackMultiplier}`)
   if (m.hitMod) out.push(`попадание +${m.hitMod}`); if (m.prayer) out.push('молитва')

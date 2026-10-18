@@ -301,7 +301,7 @@ export function changeLives(hero: Hero, delta: number): number {
 }
 
 export function isActive(hero: Hero): boolean {
-  return !hero.status.dead && !hero.status.unconscious && !hero.status.petrified && !(hero.status.paralysis && hero.status.paralysis > 0) && !(hero.status.freeze && hero.status.freeze > 0)
+  return !hero.status.dead && !hero.status.unconscious && !hero.status.petrified && !(hero.status.paralysis && hero.status.paralysis > 0) && !(hero.status.freeze && hero.status.freeze > 0) && !hero.status.charmed
 }
 
 export function isConscious(hero: Hero): boolean {

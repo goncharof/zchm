@@ -56,6 +56,7 @@ const statusText = computed(() => {
   const out: string[] = []
   if (s.dead) out.push('мёртв'); else if (s.unconscious) out.push('без сознания')
   if (s.poison) out.push('отравлен'); if (s.paralysis) out.push(`паралич ${s.paralysis}`); if (s.freeze) out.push(`оледенение ${s.freeze}`); if (s.petrified) out.push('окаменел')
+  if (s.choke) out.push(`удушье ${s.choke}`); if (s.charmed) out.push('очарован'); if (s.cursed) out.push('проклят')
   return out.join(', ')
 })
 </script>

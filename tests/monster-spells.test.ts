@@ -1,8 +1,9 @@
-// Заклинания монстров: лечение своих, усиления и щиты на себя, контроль и ослабление героев, призыв.
+// Заклинания монстров: лечение своих, усиления и щиты на себя, контроль и ослабление героев, призыв,
+// очаровывание, несчастье и инициатива.
 import { afterEach, describe, expect, it } from 'vitest'
 import { idx } from '@/data'
-import { createHero, gainXp } from '@/engine/character'
-import { monsterCast, startCombat, tickHeroStatus as tickCombat } from '@/engine/combat'
+import { createHero, gainXp, isActive } from '@/engine/character'
+import { cleanupAfterCombat, closeToMelee, heroRoll, monsterAttack, monsterCast, monstersTurn, startCombat, tickHeroStatus as tickCombat } from '@/engine/combat'
 import { castSpell } from '@/engine/spells'
 import { collectLoot } from '@/engine/loot'
 import { seededRng, setRng } from '@/engine/dice'
@@ -64,14 +65,105 @@ describe('заклинания монстров', () => {
     expect(w.status.choke).toBe(2)
   })
 
-  it('паутина не держит героя выше 3 уровня', () => {
+  it('паутина не держит героя выше 3 уровня: на такую партию монстр ману не тратит', () => {
     const { st, m } = caster(['Паутина'], 30)
     const w = createHero('Воин', 'warrior', idx)
     gainXp(w, 30000, idx)
     lowRolls()
-    const log = monsterCast(st, m, [w], idx)!
-    expect(log.map((e) => e.text).join(' ')).toContain('слишком силён')
+    expect(monsterCast(st, m, [w], idx)).toBeNull()
     expect(w.status.freeze).toBeUndefined()
+    expect(m.mana).toBe(30)
+  })
+
+  it('паутина накрывает всех героев до 3 уровня, а не одного', () => {
+    const { st, m } = caster(['Паутина'], 30)
+    const a = createHero('Воин', 'warrior', idx)
+    const b = createHero('Варвар', 'barbarian', idx)
+    const strong = createHero('Маг', 'mage', idx)
+    gainXp(strong, 30000, idx)
+    lowRolls()
+    monsterCast(st, m, [a, b, strong], idx)
+    expect(a.status.freeze).toBe(1)
+    expect(b.status.freeze).toBe(1)
+    expect(strong.status.freeze).toBeUndefined()
+  })
+
+  it('очаровывание фурии: герой до 2 уровня не действует, чары спадают на 1 к6 или со смертью фурии', () => {
+    const st = fight('furiya')
+    const f = st.monsters[0]
+    const w = createHero('Воин', 'warrior', idx)
+    lowRolls()
+    const log = monsterCast(st, f, [w], idx)!
+    expect(log.map((e) => e.text).join(' ')).toContain('очарован')
+    expect(w.status.charmed).toBe(f.uid)
+    expect(isActive(w)).toBe(false)
+    // очарованного второй раз не очаровывают: фурия просто бьёт
+    expect(monsterCast(st, f, [w], idx)).toBeNull()
+    f.hitMod = -100 // фурия промахивается, чтобы чары не снял удар
+    setRng(() => 0.99) // к6 = 6: чары держатся
+    monstersTurn(st, [w], idx)
+    expect(w.status.charmed).toBe(f.uid)
+    lowRolls() // к6 = 1: герой стряхивает чары
+    const freed = monstersTurn(st, [w], idx).map((e) => e.text).join(' ')
+    expect(freed).toContain('стряхивает чары')
+    expect(isActive(w)).toBe(true)
+    // заклинатель погиб — чары рассеиваются в начале раунда
+    const st2 = fight('furiya', 2)
+    w.status.charmed = st2.monsters[0].uid
+    st2.monsters[0].dead = true
+    st2.monsters[1].hitMod = -100
+    setRng(() => 0.99)
+    expect(monstersTurn(st2, [w], idx).map((e) => e.text).join(' ')).toContain('Чары рассеиваются')
+    expect(w.status.charmed).toBeUndefined()
+  })
+
+  it('удар, отнявший жизни, снимает чары с героя', () => {
+    const st = fight('furiya')
+    const f = st.monsters[0]
+    const w = createHero('Воин', 'warrior', idx)
+    w.status.charmed = f.uid
+    setRng(() => 0.99) // к18 = 18 — попадание
+    const log = monsterAttack(f, w, idx).map((e) => e.text).join(' ')
+    expect(w.lives).toBeLessThan(w.maxLives)
+    expect(log).toContain('чары спадают')
+    expect(w.status.charmed).toBeUndefined()
+  })
+
+  it('фурия не тратит ману на очаровывание героя выше 2 уровня', () => {
+    const st = fight('furiya')
+    const w = createHero('Воин', 'warrior', idx)
+    gainXp(w, 30000, idx)
+    expect(w.level).toBeGreaterThan(2)
+    lowRolls()
+    expect(monsterCast(st, st.monsters[0], [w], idx)).toBeNull()
+    expect(st.monsters[0].mana).toBe(12)
+  })
+
+  it('несчастье: до конца боя герой бросает дважды и берёт меньшее', () => {
+    const { st, m } = caster(['Несчастье'], 30)
+    const w = createHero('Воин', 'warrior', idx)
+    lowRolls()
+    monsterCast(st, m, [w], idx)
+    expect(w.status.cursed).toBe(true)
+    const seq = [0.9, 0.1]
+    setRng(() => seq.shift() ?? 0.5)
+    expect(heroRoll(w)).toBe(2) // 17 и 2 — берётся меньшее
+    cleanupAfterCombat([w])
+    expect(w.status.cursed).toBeUndefined()
+  })
+
+  it('инициатива гурра: монстры бьют первыми; если она есть и у героев — решает бросок', () => {
+    const st = fight('gurr')
+    const w = createHero('Воин', 'warrior', idx)
+    const e = closeToMelee(st, [w], idx)
+    expect(e.text).toContain('«Инициатива»')
+    expect(st.turn).toBe('monsters')
+    expect(st.monsters[0].mana).toBe(7)
+    const st2 = fight('gurr')
+    w.status.initiative = true
+    setRng(seededRng(5))
+    expect(closeToMelee(st2, [w], idx).text).toContain('решает бросок')
+    expect(w.status.initiative).toBeUndefined()
   })
 
   it('усиления на себя: огненный меч и молитва; повторно не накладываются', () => {

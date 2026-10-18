@@ -37,6 +37,10 @@ export interface HeroStatus {
   choke?: number
   /** статусы, наложенные в этот ход монстров: первый отсчёт пропускается, чтобы герой пропустил полные N раундов */
   fresh?: ('paralysis' | 'freeze')[]
+  /** «Несчастье» монстра: до конца боя кубики бросаются дважды, берётся меньшее */
+  cursed?: boolean
+  /** «Очаровывание» монстра: uid заклинателя; герой не действует, пока чары не спадут */
+  charmed?: string
 }
 
 export interface Hero {
@@ -151,7 +155,7 @@ export interface MonsterInstance {
   summoned?: boolean
   /** раундов паралича/сна/оледенения */
   disabled?: number
-  disabledKind?: 'sleep' | 'paralysis' | 'freeze'
+  disabledKind?: 'sleep' | 'paralysis' | 'freeze' | 'charm'
   petrified?: boolean
   /** временные модификаторы от заклинаний */
   defenseMod: number

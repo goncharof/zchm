@@ -11,7 +11,7 @@ import { changeLives, consumePrayer, createHero, gainXp, hasWard, heroLuck, isCo
 import * as inv from '@/engine/inventory'
 import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
-import { makeAlly, cleanupAfterCombat, endHeroesTurn as endHeroesTurnEngine, closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
+import { makeAlly, cleanupAfterCombat, heroRoll, endHeroesTurn as endHeroesTurnEngine, closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
 import { takeLootItem } from '@/engine/loot'
 import { plural } from '@/ui/format'
@@ -358,7 +358,7 @@ export class GameSession {
       return { ok: true, roll: 18, luck: heroLuck(h, idx) }
     }
     const prayer = consumePrayer(h)
-    const r = k18() + prayer
+    const r = heroRoll(h) + prayer
     const luck = heroLuck(h, idx)
     const ok = r + luck >= target
     this.log(`${h.name} бросает удачу ${target}: к18 = ${r}${luck ? ` + ${luck}` : ''} — ${ok ? 'удача!' : 'неудача'}.`, 'luck')

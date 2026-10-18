@@ -103,8 +103,9 @@ describe('регрессии ревью движка', () => {
     const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
     const mage = makeMonsterInstance(idx.monster('ork'), 0)
     mage.attacks = 'magic'; mage.mana = 100; mage.spells = ['огненное копье']
-    const log = monsterCast(state, mage, [w], idx)!
-    expect(log.some((e) => /цели не видно/.test(e.text))).toBe(true)
+    // цели не видно — монстр не колдует и ману не тратит
+    expect(monsterCast(state, mage, [w], idx)).toBeNull()
+    expect(mage.mana).toBe(100)
     expect(w.lives).toBe(w.maxLives)
   })
 
