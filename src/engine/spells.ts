@@ -216,6 +216,21 @@ export function castSpell(input: CastInput): CastResult {
     const t = aliveMonsters().find((m) => m.uid === input.targetUid)
     return t ?? null
   }
+  /** Щит монстра от заклинаний: Огненный щит поглощает, Отражение магии возвращает урон заклинателю (ХАУСРУЛ:
+   *  отражённое не урон рассеивается). true — заклинание до цели не дошло */
+  const warded = (t: MonsterInstance): boolean => {
+    const anti = t.wards?.find((w) => w.kind === 'antimagic')
+    if (anti) { log(entries, `${anti.source} ${t.name} поглощает «${spell.name}».`, 'spell'); return true }
+    const refl = t.wards?.find((w) => w.kind === 'reflect' && spell.level <= w.level)
+    if (!refl) return false
+    t.wards = t.wards!.filter((w) => w !== refl)
+    if (effect.type === 'damage') {
+      const dmg = rollSpellDamage(effect, hero.level, hero.lives)
+      const lost = -changeLives(hero, -dmg.total)
+      log(entries, `${t.name} отражает «${spell.name}» — заклинание бьёт по ${hero.name}: −${lost} жизней (${dmg.detail}).`, 'damage')
+    } else log(entries, `${t.name} отражает «${spell.name}», и заклинание рассеивается.`, 'spell')
+    return true
+  }
 
   switch (effect.type) {
     case 'damage': {
@@ -229,6 +244,7 @@ export function castSpell(input: CastInput): CastResult {
       spend()
       const volleys = /за 1 стрел/.test(spell.costFormula ?? '') ? Math.min(3, Math.max(1, input.param ?? 1)) : 1
       for (const t of targets) {
+        if (warded(t)) continue
         for (let v = 0; v < volleys; v++) {
           if (t.dead) break
           let half = false
@@ -299,6 +315,7 @@ export function castSpell(input: CastInput): CastResult {
       spend()
       const { value, multiplier } = parseAmount(effect.amount, hero, effect.stat)
       for (const t of targets) {
+        if (warded(t)) continue
         if (effect.stat === 'defense') t.defenseMod += value
         else if (multiplier) t.attackMultiplier *= value
         else t.attackMod += value
@@ -337,6 +354,7 @@ export function castSpell(input: CastInput): CastResult {
       for (const t of targets) {
         if (effect.maxLevel !== undefined && t.level > effect.maxLevel) { log(entries, `${t.name} слишком силён (уровень ${t.level} > ${effect.maxLevel}) — заклинание не действует.`); continue }
         if (effect.kind === 'slay-undead' && !UNDEAD.has(t.monsterId)) { log(entries, `${t.name} — не мертвец, заклинание бессильно.`); continue }
+        if (warded(t)) continue
         if (monsterSaves(t, spell, entries)) continue
         applyControl(effect.kind, t, hero, spell, combat!, effect.duration, entries, measured)
         affected++

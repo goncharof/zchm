@@ -33,6 +33,8 @@ export interface HeroStatus {
   dead?: boolean
   /** заклинание «Инициатива»: в ближайшем бою герои атакуют первыми */
   initiative?: boolean
+  /** раундов удушья (заклинание монстра): −1к3 жизней за раунд */
+  choke?: number
   /** статусы, наложенные в этот ход монстров: первый отсчёт пропускается, чтобы герой пропустил полные N раундов */
   fresh?: ('paralysis' | 'freeze')[]
 }
@@ -137,6 +139,16 @@ export interface MonsterInstance {
   dead: boolean
   /** тело уже поднято «Оживлением мертвеца» */
   raised?: boolean
+  /** защиты от заклинаний героев: Огненный щит поглощает, Отражение магии возвращает заклинание (rounds −1 — до конца боя) */
+  wards?: { kind: 'antimagic' | 'reflect'; level: number; rounds: number; source: string }[]
+  /** бонус к броску попадания (Ловкость, Огненный меч) */
+  hitMod?: number
+  /** Молитва: прибавка к следующему броску попадания */
+  prayer?: number
+  /** заклинания-усиления, уже наложенные монстром в этом бою (не повторяет) */
+  buffed?: string[]
+  /** призван заклинанием монстра: трофеев не оставляет */
+  summoned?: boolean
   /** раундов паралича/сна/оледенения */
   disabled?: number
   disabledKind?: 'sleep' | 'paralysis' | 'freeze'

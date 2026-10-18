@@ -54,7 +54,7 @@ export const MONSTER_LOOT: Record<string, { kind: LootKind; ref: string }[]> = {
 /** Трофеи с убитых монстров (сбежавшие и окаменевшие ничего не оставляют) */
 export function collectLoot(monsters: MonsterInstance[]): LootItem[] {
   return monsters
-    .filter((m) => m.dead && !m.petrified)
+    .filter((m) => m.dead && !m.petrified && !m.summoned)
     .flatMap((m) => (MONSTER_LOOT[m.monsterId] ?? []).map((it) => ({ uid: uid('loot'), ...it, from: m.name })))
 }
 

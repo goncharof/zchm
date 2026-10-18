@@ -454,6 +454,13 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
   checkEnd(state, heroes)
   if (state.finished) return log
   for (const m of aliveMonsters(state)) {
+    // щиты от заклинаний истекают
+    if (m.wards?.length) {
+      for (const w of m.wards) if (w.rounds > 0) w.rounds -= 1
+      const gone = m.wards.filter((w) => w.rounds === 0)
+      m.wards = m.wards.filter((w) => w.rounds !== 0)
+      for (const w of gone) log.push(entry(`${w.source} у ${m.name} гаснет.`, 'spell'))
+    }
     // статусы монстра
     if (m.poison && m.poison > 0) {
       const r = damageMonster(m, rollFormula('1к6').total)
@@ -546,6 +553,22 @@ function normName(s: string): string {
 }
 
 /** Заклинания, которые монстры применяют сами: урон и контроль */
+/** Какие заклинания монстр умеет применить: по героям (урон, контроль, ослабление), на себя (усиления, щиты),
+ *  лечение своих и призыв элементаля. ХАУСРУЛ: «Очаровывание», «Несчастье» и «Инициативу» монстры не применяют. */
+const MONSTER_CONTROL = ['sleep', 'paralysis', 'petrify', 'freeze', 'web', 'hold', 'choke']
+type MonsterSpellUse = 'attack' | 'self' | 'heal' | 'summon'
+function monsterSpellUse(s: Spell): MonsterSpellUse | null {
+  const e = s.effect
+  if (e.type === 'damage') return 'attack'
+  if (e.type === 'control') return MONSTER_CONTROL.includes(e.kind) ? 'attack' : null
+  if (e.type === 'debuff') return e.scope === 'one' ? 'attack' : null
+  if (e.type === 'heal') return 'heal'
+  if (e.type === 'summon') return e.kind === 'elemental' ? 'summon' : null
+  if (e.type === 'buff') return e.stat === 'dexterity' || e.stat === 'attacks' ? 'self' : null
+  if (e.type === 'ward') return e.kind === 'antimagic' || e.kind === 'reflect' || e.kind === 'prayer' ? 'self' : null
+  if (e.type === 'weapon') return 'self'
+  return null
+}
 function monsterSpellOptions(m: MonsterInstance, idx: DataIndex): Spell[] {
   if (!m.spells?.length || !(m.mana ?? 0)) return []
   const byName = new Map<string, Spell>()
@@ -553,14 +576,74 @@ function monsterSpellOptions(m: MonsterInstance, idx: DataIndex): Spell[] {
   const out: Spell[] = []
   for (const n of m.spells) {
     const s = byName.get(normName(n))
-    if (!s) continue
-    const e = s.effect
-    const usable = e.type === 'damage' || (e.type === 'control' && ['sleep', 'paralysis', 'petrify', 'freeze'].includes(e.kind))
-    if (!usable) continue
-    const cost = typeof s.cost === 'number' ? s.cost : m.level
+    if (!s || !monsterSpellUse(s)) continue
+    const cost = s.effect.type === 'heal' ? 1 : typeof s.cost === 'number' ? s.cost : m.level
     if (cost <= (m.mana ?? 0)) out.push(s)
   }
   return out
+}
+
+/** Выбор заклинания по обстановке: раненый союзник — лечение, неналоженное усиление — иногда, иначе атака */
+function pickMonsterSpell(state: CombatState, m: MonsterInstance, options: Spell[]): Spell | null {
+  const wounded = aliveMonsters(state).some((x) => x.lives * 2 < x.maxLives)
+  const heal = options.find((s) => monsterSpellUse(s) === 'heal')
+  if (heal && wounded) return heal
+  const fresh = options.filter((s) => { const u = monsterSpellUse(s); return (u === 'self' || u === 'summon') && !(m.buffed ?? []).includes(s.id) })
+  const attack = options.filter((s) => monsterSpellUse(s) === 'attack')
+  if (fresh.length && (!attack.length || k6() <= 3)) return fresh[roll(fresh.length) - 1]
+  return attack.length ? attack[roll(attack.length) - 1] : null
+}
+
+/** Элементал, призванный монстром: к6 (1–4) — воздушный, водный, земной, огненный; таблица атак по силе (ХАУСРУЛ) */
+function summonMonsterElemental(state: CombatState, m: MonsterInstance): LogEntry {
+  let r = k6()
+  while (r > 4) r = k6()
+  const kinds = [
+    { name: 'Воздушный элементал', defense: 12, attacks: [1, 2, 3, 4, 5, 6], lives: 10 },
+    { name: 'Водный элементал', defense: 13, attacks: [3, 5, 6, 7, 9, 11], lives: 15 },
+    { name: 'Земной элементал', defense: 14, attacks: [6, 8, 10, 11, 13, 15], lives: 20 },
+    { name: 'Огненный элементал', defense: 15, attacks: [9, 12, 13, 15, 16, 19], lives: 25 },
+  ]
+  const k = kinds[r - 1]
+  state.monsters.push({
+    uid: uid('mon'), monsterId: 'elemental', name: k.name, level: r + 2, lives: k.lives, maxLives: k.lives, defense: k.defense,
+    attacks: k.attacks, courage: null, points: 5 * r, courageChecked: true, fled: false, dead: false,
+    defenseMod: 0, attackMod: 0, attackMultiplier: 1, summoned: true,
+  })
+  return entry(`к6 = ${r}: ${m.name} призывает — является ${k.name} (защита ${k.defense}, жизни ${k.lives}).`, 'spell')
+}
+
+/** Заклинание монстра на себя или своих: усиление, щит, лечение, призыв */
+function monsterSelfCast(state: CombatState, m: MonsterInstance, spell: Spell, log: LogEntry[]): void {
+  const e = spell.effect
+  m.buffed = [...(m.buffed ?? []), spell.id]
+  if (e.type === 'heal') {
+    const target = [...aliveMonsters(state)].sort((a, b) => a.lives / a.maxLives - b.lives / b.maxLives)[0]
+    const amount = Math.min(Math.max(0, (m.mana ?? 0) + 1), target.maxLives - target.lives)
+    m.mana = (m.mana ?? 0) + 1 - amount // стоимость 1 уже списана при выборе
+    target.lives += amount
+    log.push(entry(`${target.name} восстанавливает ${amount} жизней (${target.lives}/${target.maxLives}).`, 'spell'))
+  } else if (e.type === 'summon') {
+    log.push(summonMonsterElemental(state, m))
+  } else if (e.type === 'buff') {
+    if (e.stat === 'dexterity') { m.hitMod = (m.hitMod ?? 0) + Number(e.amount); log.push(entry(`${m.name}: попадание +${e.amount} до конца боя.`, 'spell')) }
+    else { m.attackMod += Number(e.amount); log.push(entry(`${m.name}: атаки +${e.amount} до конца боя.`, 'spell')) }
+  } else if (e.type === 'weapon') {
+    // ХАУСРУЛ: «Огненный меч» у монстра — атаки +4 и попадание +ловкость меча до конца боя
+    m.attackMod += 4
+    m.hitMod = (m.hitMod ?? 0) + (e.dexterityBonus ?? 0)
+    log.push(entry(`В руках ${m.name} вспыхивает ${e.name}: атаки +4${e.dexterityBonus ? `, попадание +${e.dexterityBonus}` : ''}.`, 'spell'))
+  } else if (e.type === 'ward') {
+    if (e.kind === 'prayer') { m.prayer = 3; log.push(entry(`${m.name} молится: +3 к следующему броску.`, 'spell')) }
+    else if (e.kind === 'antimagic') {
+      const rounds = Math.max(1, Math.ceil(m.level / 2))
+      m.wards = [...(m.wards ?? []), { kind: 'antimagic', level: spell.level, rounds, source: spell.name }]
+      log.push(entry(`${m.name} окружает себя огненным щитом: заклинания героев не действуют на него ${rounds} раунд(ов).`, 'spell'))
+    } else {
+      m.wards = [...(m.wards ?? []), { kind: 'reflect', level: m.level, rounds: -1, source: spell.name }]
+      log.push(entry(`${m.name} готов отразить заклинание до ${m.level} уровня.`, 'spell'))
+    }
+  }
 }
 
 export function monsterCast(state: CombatState, m: MonsterInstance, heroes: Hero[], idx: DataIndex): LogEntry[] | null {
@@ -568,10 +651,13 @@ export function monsterCast(state: CombatState, m: MonsterInstance, heroes: Hero
   if (!options.length) return null
   const always = m.attacks === 'magic' || m.attacks === 'none'
   if (!always && k6() > 3) return null
-  const spell = options[roll(options.length) - 1]
-  const cost = typeof spell.cost === 'number' ? spell.cost : m.level
+  const spell = pickMonsterSpell(state, m, options)
+  if (!spell) return null
+  const cost = spell.effect.type === 'heal' ? 1 : typeof spell.cost === 'number' ? spell.cost : m.level
   m.mana = (m.mana ?? 0) - cost
   const log: LogEntry[] = [entry(`${m.name} произносит «${spell.name}».`, 'spell')]
+  const use = monsterSpellUse(spell)
+  if (use !== 'attack') { monsterSelfCast(state, m, spell, log); return log }
   const candidates = targetableHeroes(state, heroes, m)
   if (!candidates.length) return [...log, entry('Заклинание уходит в пустоту — цели не видно.')]
   const effect = spell.effect
@@ -629,8 +715,26 @@ export function monsterCast(state: CombatState, m: MonsterInstance, heroes: Hero
       if (target.status.dead) log.push(entry(`${target.name} погибает.`, 'death'))
       else if (target.status.unconscious) log.push(entry(`${target.name} теряет сознание.`, 'death'))
     } else if (effect.type === 'control') {
+      if (effect.maxLevel !== undefined && target.level > effect.maxLevel) { log.push(entry(`${target.name} слишком силён для «${spell.name}».`)); continue }
       const kind = effect.kind === 'sleep' ? 'freeze' : effect.kind
       if (kind === 'freeze' || kind === 'paralysis' || kind === 'petrify') applyExtraAttack(target, kind, log, effect.kind === 'sleep')
+      else if (kind === 'web') {
+        target.status.freeze = Math.max(target.status.freeze ?? 0, 1)
+        markFresh(target, 'freeze')
+        log.push(entry(`${target.name} опутан паутиной и пропускает раунд.`, 'damage'))
+      } else if (kind === 'hold') {
+        target.buffs.push({ source: spell.name, stat: 'defense', amount: -2, rounds: -1 }, { source: spell.name, stat: 'attacks', amount: 0.5, multiplier: true, rounds: -1 })
+        log.push(entry(`${target.name} схвачен магической рукой: защита −2, атаки вдвое слабее до конца боя.`, 'damage'))
+      } else if (kind === 'choke') {
+        const rounds = Math.max(1, Math.ceil(m.level / 2))
+        target.status.choke = Math.max(target.status.choke ?? 0, rounds)
+        target.buffs.push({ source: spell.name, stat: 'defense', amount: -4, rounds }, { source: spell.name, stat: 'attacks', amount: 0.5, multiplier: true, rounds })
+        log.push(entry(`${target.name} задыхается: защита −4, атаки вдвое, −1к3 жизней за раунд (${rounds} раунд(ов)).`, 'damage'))
+      }
+    } else if (effect.type === 'debuff') {
+      // «Слабость» по герою: атаки вдвое слабее до конца боя
+      target.buffs.push({ source: spell.name, stat: 'attacks', amount: 0.5, multiplier: true, rounds: -1 })
+      log.push(entry(`${target.name} слабеет: атаки вдвое до конца боя.`, 'damage'))
     }
   }
   return log
@@ -643,7 +747,7 @@ function spendPool(heroes: Hero[], ward: Buff, amount: number): void {
 }
 
 export function monsterAttackAlly(m: MonsterInstance, a: AllyInstance): LogEntry[] {
-  const r = k18()
+  const r = monsterHitRoll(m)
   if (r < a.defense) return [entry(`${m.name} атакует ${a.name}: к18 = ${r} против защиты ${a.defense} — промах.`, 'miss')]
   if (a.decoy) {
     a.dead = true
@@ -664,11 +768,17 @@ export function monsterAttackAlly(m: MonsterInstance, a: AllyInstance): LogEntry
 function monsterRoll(m: MonsterInstance): number {
   return m.cursed ? Math.min(k18(), k18()) : k18()
 }
+/** Бросок попадания монстра: с бонусами «Ловкости», «Огненного меча» и разовой «Молитвой» */
+function monsterHitRoll(m: MonsterInstance): number {
+  let r = monsterRoll(m) + (m.hitMod ?? 0)
+  if (m.prayer) { r += m.prayer; m.prayer = 0 }
+  return r
+}
 
 export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex): LogEntry[] {
   const log: LogEntry[] = []
   const def = heroDefense(target, idx)
-  const r = monsterRoll(m)
+  const r = monsterHitRoll(m)
   if (r < def) {
     log.push(entry(`${m.name} атакует ${target.name}: к18 = ${r} против защиты ${def} — промах.`, 'miss'))
     return log
@@ -805,6 +915,13 @@ export function tickHeroStatus(h: Hero): LogEntry[] {
     const lost = -limitedLoss(h, d.total)
     log.push(entry(`${h.name} окаменел: −${lost} жизней.`, 'damage'))
   }
+  if (h.status.choke && h.status.choke > 0) {
+    const d = rollFormula('1к3')
+    const lost = -limitedLoss(h, d.total)
+    h.status.choke -= 1
+    log.push(entry(`${h.name} задыхается: −${lost} жизней${h.status.choke ? `, ещё ${h.status.choke} раунд(ов)` : ', дыхание возвращается'}.`, 'damage'))
+    if (!h.status.choke) delete h.status.choke
+  }
   if (h.status.poison === -1 && h.lives > 0) {
     const lost = -limitedLoss(h, 1)
     log.push(entry(`${h.name} страдает от яда: −${lost} жизнь.`, 'damage'))
@@ -819,6 +936,7 @@ export function cleanupAfterCombat(heroes: Hero[]): void {
     delete h.status.petrified
     delete h.status.freeze
     delete h.status.paralysis
+    delete h.status.choke
     delete h.status.fresh
   }
 }
