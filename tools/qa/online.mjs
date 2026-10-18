@@ -71,5 +71,25 @@ await host.shot('04-table')
 // текст книги игрокам не показывается
 const leaked = await guest.page.evaluate(() => document.body.innerText.includes('§ 1'))
 if (leaked) problems.push('[guest] виден номер параграфа с текстом книги')
+
+// чат с любого экрана: гость на карте видит счётчик непрочитанного и открывает панель чата
+await guest.page.goto(BASE + '#/map')
+await host.page.locator('textarea').fill('Пётр, ты где?')
+await host.page.locator('.composer .seg button', { hasText: 'Игрокам' }).click().catch(() => {})
+await host.page.getByRole('button', { name: 'Отправить' }).click()
+await guest.page.waitForTimeout(600)
+const badge = await guest.page.locator('.tabbar .count, .icon-btn .count').first().textContent().catch(() => null)
+if (!badge) problems.push('[guest] нет счётчика непрочитанного в чате')
+await guest.page.getByRole('button', { name: 'Чат' }).first().click()
+await guest.page.waitForSelector('.chat-panel .gm-chat-log')
+if (!(await guest.page.locator('.chat-panel').innerText()).includes('Пётр, ты где?')) problems.push('[guest] реплика не видна в панели чата')
+await guest.shot('05-chat-panel')
+
+// обновление страницы: гость возвращается в ту же комнату
+await guest.page.goto(BASE + '#/party')
+await guest.page.reload()
+await guest.page.waitForSelector('.room-chip', { timeout: 8000 }).catch(() => problems.push('[guest] после обновления страницы не вернулся в комнату'))
+const chip = await guest.page.locator('.room-chip').first().textContent().catch(() => '')
+if (chip && !chip.includes(code)) problems.push(`[guest] после обновления страницы другая комната: ${chip}`)
 await browser.close()
 console.log(problems.length ? problems.join('\n') : `Проблем не найдено (комната ${code})`)
