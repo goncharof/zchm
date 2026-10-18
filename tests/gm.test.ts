@@ -142,6 +142,21 @@ describe('ИИ-ведущий', () => {
     expect(last.messages.length).toBeLessThanOrEqual(2)
   })
 
+  it('заклинание, которое движок не отыгрывает, уходит модели событием с текстом заклинания', async () => {
+    const g = await setup([{ text: 'Боги шепчут: идите на восток.' }])
+    const room = (await g.s.store.get(g.j.code))!
+    const priest = room.state.heroes.find((h) => h.classId === 'priest')!
+    priest.mana = priest.maxMana = 20
+    priest.spellbook.push('priest-ozarenie')
+    await g.c.claimHero(priest.uid)
+    await g.c.call('cast', [priest.uid, 'priest-ozarenie', {}])
+    await until(() => g.chat.some((m) => m.from === 'gm' && m.text.includes('идите на восток')))
+    expect(g.model.calls).toHaveLength(1)
+    const sent = JSON.stringify(g.model.calls[0])
+    expect(sent).toContain('произносит «Озарение»')
+    expect(sent).toContain('Движок это заклинание не отыгрывает')
+  })
+
   it('пачка реплик (ход по готовности) уходит модели одним запросом', async () => {
     const g = await setup([{ text: 'Отвечаю обоим.' }])
     const room = (await g.s.store.get(g.j.code))!
