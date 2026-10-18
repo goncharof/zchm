@@ -45,30 +45,33 @@ function usable(wId: string) {
       <button :class="{ active: tab === 'tavern' }" @click="tab = 'tavern'">Трактир</button>
     </div>
 
-    <table v-if="tab === 'weapons' && allowed" class="list stack">
-      <thead><tr><th>Оружие</th><th>Атаки (к6)</th><th>Рука</th><th>Цена</th><th></th></tr></thead>
+    <table v-if="tab === 'weapons' && allowed" class="list shop">
+      <thead><tr><th>Оружие</th><th class="wide-only">Атаки (к6)</th><th class="wide-only">Рука</th><th class="wide-only">Цена</th><th></th></tr></thead>
       <tbody>
         <tr v-for="w in weapons" :key="w.id" :class="{ muted: !usable(w.id) }">
-          <td data-label="Оружие">{{ w.name }} <span v-if="w.ranged" class="badge">метательное</span><span v-if="w.throwable" class="badge">можно метать</span><span v-if="w.accuracyBonus" class="badge">меткость +{{ w.accuracyBonus }}</span></td>
-          <td data-label="Атаки (к6)">{{ attacksStr(w.attacks) }}</td><td data-label="Рука" class="small">{{ w.hand ? HAND_NAMES[w.hand] : '' }}</td><td data-label="Цена">{{ w.price }}</td>
+          <td><b>{{ w.name }}</b> <span v-if="w.ranged" class="badge">метательное</span><span v-if="w.throwable" class="badge">можно метать</span><span v-if="w.accuracyBonus" class="badge">меткость +{{ w.accuracyBonus }}</span><span v-if="!usable(w.id)" class="badge">не для класса</span>
+            <div class="shop-meta">атаки {{ attacksStr(w.attacks) }}{{ w.hand ? ` · ${HAND_NAMES[w.hand]}` : '' }} · <b>{{ w.price }} м</b></div></td>
+          <td class="wide-only">{{ attacksStr(w.attacks) }}</td><td class="wide-only small">{{ w.hand ? HAND_NAMES[w.hand] : '' }}</td><td class="wide-only">{{ w.price }}</td>
           <td><button class="small" :disabled="!buyer || buyer.money < w.price" :title="usable(w.id) ? '' : 'Класс не может этим пользоваться, но купить можно'" @click="buy('weapon', w.id)">Купить</button><button v-if="STACKS.includes(w.id)" class="small" :disabled="!buyer || buyer.money < w.price * 10" @click="buy('weapon', w.id, 10)">×10</button></td>
         </tr>
       </tbody>
     </table>
-    <table v-if="tab === 'armor' && allowed" class="list stack">
-      <thead><tr><th>Доспех</th><th>Защита</th><th>Цена</th><th></th></tr></thead>
+    <table v-if="tab === 'armor' && allowed" class="list shop">
+      <thead><tr><th>Доспех</th><th class="wide-only">Защита</th><th class="wide-only">Цена</th><th></th></tr></thead>
       <tbody>
         <tr v-for="a in gameData.armor.filter(x => x.price > 0)" :key="a.id">
-          <td data-label="Доспех">{{ a.name }}</td><td data-label="Защита">{{ a.defense ?? (a.defenseBonus ? `+${a.defenseBonus}` : a.strengthBonus ? `сила +${a.strengthBonus}` : '') }}</td><td data-label="Цена">{{ a.price }}</td>
+          <td><b>{{ a.name }}</b><div class="shop-meta">защита {{ a.defense ?? (a.defenseBonus ? `+${a.defenseBonus}` : a.strengthBonus ? `сила +${a.strengthBonus}` : '—') }} · <b>{{ a.price }} м</b></div></td>
+          <td class="wide-only">{{ a.defense ?? (a.defenseBonus ? `+${a.defenseBonus}` : a.strengthBonus ? `сила +${a.strengthBonus}` : '') }}</td><td class="wide-only">{{ a.price }}</td>
           <td><button class="small" :disabled="!buyer || buyer.money < a.price" @click="buy('armor', a.id)">Купить</button></td>
         </tr>
       </tbody>
     </table>
-    <table v-if="tab === 'items' && allowed" class="list stack">
-      <thead><tr><th>Вещь</th><th>Описание</th><th>Цена</th><th></th></tr></thead>
+    <table v-if="tab === 'items' && allowed" class="list shop">
+      <thead><tr><th>Вещь</th><th class="wide-only">Описание</th><th class="wide-only">Цена</th><th></th></tr></thead>
       <tbody>
         <tr v-for="i in gameData.items" :key="i.id">
-          <td data-label="Вещь">{{ i.name }}</td><td data-label="Описание" class="small muted">{{ i.description }}</td><td data-label="Цена">{{ i.price }}</td>
+          <td><b>{{ i.name }}</b><div class="shop-meta"><b>{{ i.price }} м</b> · {{ i.description }}</div></td>
+          <td class="wide-only small muted">{{ i.description }}</td><td class="wide-only">{{ i.price }}</td>
           <td><button class="small" :disabled="!buyer || buyer.money < i.price" @click="buy('item', i.id)">Купить</button></td>
         </tr>
       </tbody>

@@ -156,6 +156,18 @@ table.list th, table.list td { text-align: left; padding: .45rem .4rem; border-b
 table.list th { color: var(--muted); font-weight: 550; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
 table.list tr:last-child td { border-bottom: none; }
 
+/* ---------- лавка ---------- */
+table.shop td:last-child { text-align: right; white-space: nowrap; }
+table.shop td:last-child button + button { margin-left: .3rem; }
+.shop-meta { display: none; font-size: .82rem; color: var(--muted); margin-top: .15rem; }
+.shop-meta b { color: var(--brass); }
+@media (max-width: 640px) {
+  table.shop thead { display: none; }
+  table.shop .wide-only { display: none; }
+  table.shop td { padding: .55rem .2rem; vertical-align: middle; }
+  .shop-meta { display: block; }
+}
+
 /* ---------- вкладки (сегменты) ---------- */
 .tabs { display: flex; gap: .25rem; flex-wrap: wrap; margin-bottom: .85rem; padding: .25rem; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; width: fit-content; max-width: 100%; }
 .tabs button { background: transparent; border-color: transparent; min-height: 34px; }
