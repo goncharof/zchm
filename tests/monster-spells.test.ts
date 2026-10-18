@@ -7,6 +7,7 @@ import { cleanupAfterCombat, closeToMelee, heroRoll, monsterAttack, monsterCast,
 import { castSpell } from '@/engine/spells'
 import { collectLoot } from '@/engine/loot'
 import { seededRng, setRng } from '@/engine/dice'
+import { GameSession, blankGame } from '@/game/session'
 
 afterEach(() => setRng(seededRng(1)))
 const lowRolls = () => setRng(() => 0) // к6 = 1, к18 = 1, выбор — первый вариант
@@ -115,6 +116,39 @@ describe('заклинания монстров', () => {
     setRng(() => 0.99)
     expect(monstersTurn(st2, [w], idx).map((e) => e.text).join(' ')).toContain('Чары рассеиваются')
     expect(w.status.charmed).toBeUndefined()
+  })
+
+  it('очарованный герой не бежит и не колдует и по сети; чары спадают сразу, как только фурию убили', () => {
+    const g = new GameSession(blankGame(), null)
+    const mage = g.addHero('Маг', 'mage')
+    const warrior = g.addHero('Воин', 'warrior')
+    g.startEncounter([{ monsterId: 'furiya', count: 1 }, { monsterId: 'ork', count: 1 }])
+    const c = g.state.combat!
+    c.phase = 'melee'; c.turn = 'heroes'
+    const fury = c.monsters[0]
+    mage.status.charmed = fury.uid
+    expect(() => g.flee(mage.uid)).toThrow(/не может действовать/)
+    expect(() => g.cast(mage.uid, mage.spellbook[0], { targetUid: fury.uid })).toThrow(/не может действовать/)
+    // воин добивает фурию — маг тут же приходит в себя и ходит в этом же раунде
+    fury.lives = 1
+    setRng(() => 0.99)
+    g.attack(warrior.uid, 'unarmed', fury.uid)
+    expect(fury.dead).toBe(true)
+    expect(mage.status.charmed).toBeUndefined()
+    expect(c.turn).toBe('heroes')
+    expect(g.state.log.some((e) => e.text.includes('Чары рассеиваются'))).toBe(true)
+  })
+
+  it('«Удушье» не складывается на герое, и монстр не тратит ману на задыхающегося', () => {
+    const { st, m } = caster(['Удушье'], 30)
+    m.level = 6
+    const w = createHero('Воин', 'warrior', idx)
+    lowRolls()
+    monsterCast(st, m, [w], idx)
+    expect(monsterCast(st, m, [w], idx)).toBeNull()
+    // даже если наложить ещё раз (другой монстр с тем же заклинанием) — защита −4 одна
+    monsterCast(st, Object.assign(st.monsters[1], { spells: ['Удушье'], mana: 30, level: 6 }), [w, createHero('Вор', 'thief', idx)], idx)
+    expect(w.buffs.filter((b) => b.stat === 'defense')).toHaveLength(1)
   })
 
   it('удар, отнявший жизни, снимает чары с героя', () => {

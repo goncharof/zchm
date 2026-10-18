@@ -7,7 +7,7 @@ import type { Caster, WorldMap } from '@/types'
 import { gameData, idx } from '@/data'
 import type { CombatState, EquipSlot, GameState, Hero, InventoryKind, LogEntry } from '@/engine/model'
 import { SAVE_VERSION, uid } from '@/engine/model'
-import { changeLives, consumePrayer, createHero, gainXp, hasWard, heroLuck, isConscious, rest, type LevelUp } from '@/engine/character'
+import { changeLives, consumePrayer, createHero, gainXp, hasWard, heroLuck, isActive, isConscious, rest, type LevelUp } from '@/engine/character'
 import * as inv from '@/engine/inventory'
 import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
@@ -503,6 +503,8 @@ export class GameSession {
     if (c.turn !== 'heroes') throw new GameError('Сейчас ход монстров')
     if (c.escaped.includes(h.uid)) throw new GameError(`${h.name} уже покинул поле боя`)
     if (c.acted.includes(h.uid)) throw new GameError(`${h.name} уже сходил в этом раунде`)
+    // без сознания, парализован, обездвижен, окаменел или очарован — ни удара, ни бегства, ни заклинания (команды и по сети)
+    if (!isActive(h)) throw new GameError(`${h.name} сейчас не может действовать`)
     return c
   }
   attack(heroUid: string, slot: EquipSlot | 'unarmed' | 'spell', targetUid: string): void {

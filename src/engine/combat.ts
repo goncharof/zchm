@@ -349,15 +349,28 @@ export function markActed(state: CombatState, hero: Hero, heroes: Hero[], idx: D
   return advanceIfDone(state, heroes, idx)
 }
 
+/** Чары очаровавшего монстра спадают, как только он погиб или бежал */
+function releaseCharms(state: CombatState, heroes: Hero[]): LogEntry[] {
+  const log: LogEntry[] = []
+  for (const h of heroes) {
+    if (!h.status.charmed || aliveMonsters(state).some((x) => x.uid === h.status.charmed)) continue
+    delete h.status.charmed
+    if (isConscious(h)) log.push(entry(`Чары рассеиваются — ${h.name} снова в бою.`))
+  }
+  return log
+}
+
 /** Если все способные действовать герои сходили — переход в ближний бой или ход монстров */
 export function advanceIfDone(state: CombatState, heroes: Hero[], idx: DataIndex): LogEntry[] {
   checkEnd(state, heroes)
   if (state.finished || state.turn !== 'heroes') return []
+  // заклинатель пал от руки героя — очарованный ещё может сходить в этом раунде
+  const freed = releaseCharms(state, heroes)
   const pending = activeHeroes(heroes, state).filter((h) => !state.acted.includes(h.uid))
-  if (pending.length > 0) return []
-  if (state.phase === 'ranged') return [closeToMelee(state, heroes, idx)]
+  if (pending.length > 0) return freed
+  if (state.phase === 'ranged') return [...freed, closeToMelee(state, heroes, idx)]
   state.turn = 'monsters'
-  return []
+  return freed
 }
 
 /** Принудительно закончить ход героев (запасной выход, если кто-то не может или не хочет действовать) */
@@ -557,11 +570,11 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
   for (const h of heroes) {
     h.buffs = h.buffs.filter((b) => b.rounds === -1 || --b.rounds > 0)
     log.push(...tickHeroStatus(h))
-    if (h.status.charmed && isConscious(h)) {
-      const caster = aliveMonsters(state).find((x) => x.uid === h.status.charmed)
-      if (!caster) { delete h.status.charmed; log.push(entry(`Чары рассеиваются — ${h.name} снова в бою.`)) }
-      else if (k6() === 1) { delete h.status.charmed; log.push(entry(`${h.name} стряхивает чары ${caster.name} (к6 = 1).`)) }
-    }
+  }
+  log.push(...releaseCharms(state, heroes))
+  for (const h of heroes) {
+    const caster = h.status.charmed && isConscious(h) ? aliveMonsters(state).find((x) => x.uid === h.status.charmed) : undefined
+    if (caster && k6() === 1) { delete h.status.charmed; log.push(entry(`${h.name} стряхивает чары ${caster.name} (к6 = 1).`)) }
   }
   for (const a of state.allies) {
     if (!a.dead && a.rounds > 0 && --a.rounds === 0) { a.dead = true; log.push(entry(`${a.name} исчезает.`)) }
@@ -614,7 +627,9 @@ function monsterSpellOptions(m: MonsterInstance, idx: DataIndex): Spell[] {
 function spellEligible(spell: Spell, heroes: Hero[]): Hero[] {
   const e = spell.effect
   if (e.type !== 'control') return heroes
-  return heroes.filter((h) => (e.maxLevel === undefined || h.level <= e.maxLevel) && !(e.kind === 'charm' && h.status.charmed) && !(e.kind === 'curse' && h.status.cursed))
+  const already = (h: Hero) => (e.kind === 'charm' && !!h.status.charmed) || (e.kind === 'curse' && !!h.status.cursed)
+    || (e.kind === 'choke' && !!h.status.choke) || (e.kind === 'hold' && h.buffs.some((b) => b.source === spell.name))
+  return heroes.filter((h) => (e.maxLevel === undefined || h.level <= e.maxLevel) && !already(h))
 }
 
 /** Выбор заклинания по обстановке: раненый союзник — лечение, неналоженное усиление — иногда, иначе атака */
@@ -774,12 +789,16 @@ export function monsterCast(state: CombatState, m: MonsterInstance, heroes: Hero
         markFresh(target, 'freeze')
         log.push(entry(`${target.name} опутан паутиной и пропускает раунд.`, 'damage'))
       } else if (kind === 'hold') {
-        target.buffs.push({ source: spell.name, stat: 'defense', amount: -2, rounds: -1 }, { source: spell.name, stat: 'attacks', amount: 0.5, multiplier: true, rounds: -1 })
+        // повторная «Рука» не складывается с уже схватившей
+        if (!target.buffs.some((b) => b.source === spell.name)) target.buffs.push({ source: spell.name, stat: 'defense', amount: -2, rounds: -1 }, { source: spell.name, stat: 'attacks', amount: 0.5, multiplier: true, rounds: -1 })
         log.push(entry(`${target.name} схвачен магической рукой: защита −2, атаки вдвое слабее до конца боя.`, 'damage'))
       } else if (kind === 'choke') {
         const rounds = Math.max(1, Math.ceil(m.level / 2))
         target.status.choke = Math.max(target.status.choke ?? 0, rounds)
-        target.buffs.push({ source: spell.name, stat: 'defense', amount: -4, rounds }, { source: spell.name, stat: 'attacks', amount: 0.5, multiplier: true, rounds })
+        // повторное «Удушье» продлевает действие, а не складывает защиту −4 и атаки вдвое
+        const held = target.buffs.filter((b) => b.source === spell.name)
+        if (held.length) for (const b of held) b.rounds = Math.max(b.rounds, rounds)
+        else target.buffs.push({ source: spell.name, stat: 'defense', amount: -4, rounds }, { source: spell.name, stat: 'attacks', amount: 0.5, multiplier: true, rounds })
         log.push(entry(`${target.name} задыхается: защита −4, атаки вдвое, −1к3 жизней за раунд (${rounds} раунд(ов)).`, 'damage'))
       } else if (kind === 'charm') {
         // ХАУСРУЛ: очарованный герой не действует; каждый раунд к6 = 1 — приходит в себя (вероятность 1/6 из описания),
