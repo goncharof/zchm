@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { idx } from '@/data'
 import type { EquipSlot, Hero, InventoryEntry } from '@/engine/model'
-import { artifactSlot, heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, levelRow } from '@/engine/character'
+import { BOW_GROUPS, artifactSlot, heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, levelRow } from '@/engine/character'
 import { artifactGroup, entryName, salePrice } from '@/engine/inventory'
 import { useGameStore } from '@/stores/game'
 import { SLOT_NAMES, attacksStr, classArt, pct } from '@/ui/format'
@@ -41,11 +41,12 @@ function detail(e: InventoryEntry): string {
 /** Ядом смазывают оружие, кроме палиц (и палицы-артефакта) */
 function canPoison(e: InventoryEntry): boolean {
   if (e.poisoned) return false
-  if (e.kind === 'weapon') return idx.weapon(e.ref).group !== 'mace' && idx.weapon(e.ref).group !== 'ammo'
+  // палицы не смазывают; лук и арбалет тоже — смазывают стрелы (10 за порцию)
+  if (e.kind === 'weapon') return idx.weapon(e.ref).group !== 'mace' && !BOW_GROUPS.includes(idx.weapon(e.ref).group)
   if (e.kind !== 'artifact') return false
   const a = idx.artifact(parseInt(e.ref, 10))
   const slot = artifactSlot(a.n)
-  return (slot === 'melee' || slot === 'ranged') && artifactGroup(a) !== 'mace'
+  return slot === 'melee' && artifactGroup(a) !== 'mace'
 }
 function isEquipped(e: InventoryEntry) { return Object.values(props.hero.equipment).includes(e.uid) }
 function canEquip(e: InventoryEntry) { return e.kind === 'weapon' ? idx.weapon(e.ref).group !== 'ammo' : e.kind === 'armor' || e.kind === 'artifact' }

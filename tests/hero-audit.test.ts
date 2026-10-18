@@ -2,7 +2,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { idx } from '@/data'
 import { createHero, gainXp, heroDefense, heroLuck } from '@/engine/character'
-import { addToInventory, buy, equip, entryName } from '@/engine/inventory'
+import { addToInventory, buy, equip, entryName, poisonWeapon } from '@/engine/inventory'
+import { heroAttack, startCombat } from '@/engine/combat'
 import { seededRng, setRng } from '@/engine/dice'
 import { GameSession, blankGame, migrate } from '@/game/session'
 
@@ -104,6 +105,40 @@ describe('аудит героев', () => {
     expect(p.buffs.some((b) => b.ward === 'prayer')).toBe(true)
     expect(p.inventory.some((e) => e.kind === 'scroll')).toBe(false)
     expect(s.state.log.some((e) => e.text.includes('Свиток рассыпается'))).toBe(true)
+  })
+
+  it('порцией яда смазывают 10 стрел, у каждой свой яд; лук не смазывают; клинок отравлен до первого попадания', () => {
+    const t = createHero('Вор', 'thief', idx)
+    t.money = 1000
+    equip(t, buy(t, 'weapon', 'korotkiy-luk', idx).uid, idx)
+    const arrows = buy(t, 'weapon', 'strela', idx, 20)
+    buy(t, 'item', 'yad', idx, 2)
+    const bow = t.inventory.find((e) => e.ref === 'korotkiy-luk')!
+    expect(() => poisonWeapon(t, bow.uid, idx)).toThrow(/стрелы, а не лук/)
+    poisonWeapon(t, arrows.uid, idx)
+    const stacks = t.inventory.filter((e) => e.ref === 'strela')
+    expect(stacks.map((e) => [e.qty, !!e.poisoned]).sort()).toEqual([[10, false], [10, true]])
+    const { state } = startCombat([{ monsterId: 'troll', count: 1 }], idx)
+    const troll = state.monsters[0]
+    troll.lives = troll.maxLives = 500
+    setRng(() => 0.99)
+    heroAttack(state, t, [t], 'ranged', troll.uid, idx)
+    expect(troll.poison).toBeGreaterThan(0)
+    const left = t.inventory.find((e) => e.ref === 'strela' && e.poisoned)!
+    expect(left.qty).toBe(9)
+    // меч: яд до первого попадания
+    const w = createHero('Воин', 'warrior', idx)
+    w.money = 1000
+    const sword = buy(w, 'weapon', 'mech-korotkiy', idx)
+    equip(w, sword.uid, idx)
+    buy(w, 'item', 'yad', idx)
+    poisonWeapon(w, sword.uid, idx)
+    const melee = startCombat([{ monsterId: 'troll', count: 1 }], idx).state
+    melee.phase = 'melee'; melee.turn = 'heroes'
+    melee.monsters[0].lives = melee.monsters[0].maxLives = 500
+    heroAttack(melee, w, [w], 'rightHand', melee.monsters[0].uid, idx)
+    expect(melee.monsters[0].poison).toBeGreaterThan(0)
+    expect(sword.poisoned).toBe(false)
   })
 
   it('в книгу записывается только заклинание своего класса', () => {

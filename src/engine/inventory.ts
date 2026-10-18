@@ -3,7 +3,7 @@ import type { Artifact, Weapon } from '@/types'
 import type { DataIndex } from './data'
 import type { EquipSlot, Hero, InventoryEntry, InventoryKind } from './model'
 import { uid } from './model'
-import { artifactSlot, canUseWeapon, changeLives, entryByUid, heroLuck } from './character'
+import { BOW_GROUPS, artifactSlot, canUseWeapon, changeLives, entryByUid, heroLuck } from './character'
 import { k18, rollFormula } from './dice'
 import { BOTTLES, DEAD_AT } from './rules'
 import { TROPHIES } from './loot'
@@ -252,12 +252,22 @@ export function poisonWeapon(hero: Hero, weaponUid: string, idx: DataIndex): voi
   const w = entryByUid(hero, weaponUid)
   if (!w || (w.kind !== 'weapon' && w.kind !== 'artifact')) throw new Error('Это не оружие')
   if (w.kind === 'weapon' && idx.weapon(w.ref).group === 'mace') throw new Error('Палицы ядом не смазывают')
+  if (w.kind === 'weapon' && BOW_GROUPS.includes(idx.weapon(w.ref).group)) throw new Error('Ядом смазывают стрелы, а не лук')
   if (w.kind === 'artifact') {
     const a = idx.artifact(parseInt(w.ref, 10))
     const slot = artifactSlot(a.n)
     if (slot !== 'melee' && slot !== 'ranged') throw new Error('Это не оружие')
     if (artifactGroup(a) === 'mace') throw new Error('Палицы ядом не смазывают')
+    if (a.kind === 'ranged') throw new Error('Ядом смазывают стрелы, а не лук')
   }
+  if (w.poisoned) throw new Error('Уже смазано ядом')
   removeFromInventory(hero, poison.uid, 1)
+  // «одной порцией яда можно смазать 10 стрел» (стр. 22): в стопке стрел или дротиков отравляются 10 штук (эта стопка
+  // остаётся надетой), остальные ложатся отдельно
   w.poisoned = true
+  if (w.kind === 'weapon' && w.qty > 10) {
+    const rest = w.qty - 10
+    w.qty = 10
+    addToInventory(hero, 'weapon', w.ref, rest)
+  }
 }

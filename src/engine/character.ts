@@ -146,14 +146,17 @@ export interface HandWeapon {
   thrown?: boolean
 }
 
-const BOW_GROUPS = ['bow', 'crossbow']
+export const BOW_GROUPS = ['bow', 'crossbow']
 /** ХАУСРУЛ: эльфийские стрелы расходуются первыми (меткость +3); арбалет стреляет теми же стрелами */
 export const AMMO_ORDER = ['elfiyskaya-strela', 'strela']
 
+/** Стрела для выстрела: сначала отравленные, затем лучшие (эльфийские) */
 export function pickAmmo(hero: Hero): InventoryEntry | undefined {
-  for (const ref of AMMO_ORDER) {
-    const e = hero.inventory.find((x) => x.kind === 'weapon' && x.ref === ref && x.qty > 0)
-    if (e) return e
+  for (const poisoned of [true, false]) {
+    for (const ref of AMMO_ORDER) {
+      const e = hero.inventory.find((x) => x.kind === 'weapon' && x.ref === ref && x.qty > 0 && !!x.poisoned === poisoned)
+      if (e) return e
+    }
   }
   return undefined
 }
@@ -194,7 +197,7 @@ export function heroWeapons(hero: Hero, idx: DataIndex): HandWeapon[] {
       const ammoBonus = ammo ? idx.weapon(ammo.ref).accuracyBonus ?? 0 : 0
       out.push({
         slot, entry: e, name: w.name, attacks: w.attacks, ranged: !!w.ranged || thrown, hand: w.hand,
-        accuracyBonus: (w.accuracyBonus ?? 0) + ammoBonus, poisoned: e.poisoned,
+        accuracyBonus: (w.accuracyBonus ?? 0) + ammoBonus, poisoned: needsAmmo ? !!ammo?.poisoned : e.poisoned,
         needsAmmo, ammoEntry: ammo, thrown, ammoLeft: needsAmmo ? arrowsLeft(hero) : thrown ? e.qty : undefined,
       })
     } else if (e.kind === 'artifact') {
@@ -209,7 +212,7 @@ export function heroWeapons(hero: Hero, idx: DataIndex): HandWeapon[] {
         needsAmmo: bow, ammoEntry: ammo, ammoLeft: bow ? arrowsLeft(hero) : undefined,
         alwaysHits: /всегда попадает/.test(special),
         doubleDamage: /раздваива/.test(special),
-        poisoned: e.poisoned,
+        poisoned: bow ? !!ammo?.poisoned : e.poisoned,
       })
     }
   }

@@ -238,6 +238,8 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
   for (let swing = 0; swing < swings; swing++) {
     // расход боеприпасов: стрела улетает, дротик или копьё ложится на поле боя
     let arrowRef: string | undefined
+    // отравлена ли эта стрела (дротик, клинок): яд на стреле — свой у каждой, на клинке — до первого попадания
+    const poisonedShot = w?.needsAmmo ? !!w.ammoEntry?.poisoned : !!w?.poisoned
     if (w?.needsAmmo && w.ammoEntry) {
       arrowRef = w.ammoEntry.ref
       removeFromInventory(hero, w.ammoEntry.uid, 1)
@@ -281,13 +283,14 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
       if (b.multiplier) { total = Math.floor(total * b.amount); parts.push(`${b.source} ×${b.amount}`) }
       else { total += b.amount; parts.push(`${b.source} ${b.amount >= 0 ? '+' : ''}${b.amount}`) }
     }
-    if (w?.poisoned && w.entry) {
+    if (poisonedShot) {
       const p = rollFormula('1к18')
       total += p.total
       const rounds = k6()
       target.poison = (target.poison ?? 0) + rounds
       target.dotBy = { ...target.dotBy, poison: hero.uid }
-      w.entry.poisoned = false
+      // клинок отравлен до первого попадания; у стопки стрел и дротиков отравлена каждая
+      if (w?.entry && !w.needsAmmo && !w.thrown) w.entry.poisoned = false
       parts.push(`яд +${p.total}, действует ${rounds} раунд(ов)`)
     }
     const d = damageMonster(target, total)
