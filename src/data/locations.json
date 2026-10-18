@@ -14184,7 +14184,10 @@
      "monsters": [
       "dvarf",
       "sablezubyy-tigr"
-     ]
+     ],
+     "monsterCounts": {
+      "sablezubyy-tigr": 2
+     }
     },
     "segments": [
      {

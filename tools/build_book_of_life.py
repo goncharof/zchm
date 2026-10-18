@@ -262,10 +262,16 @@ def apply_overrides(locations, issues):
                 ph['monsters'] = mons
             else:
                 ph.pop('monsters', None)
-            if 'monsterCounts' in ph:
-                ph['monsterCounts'] = {x: c for x, c in ph['monsterCounts'].items() if x in mons}
-                if not ph['monsterCounts']:
-                    del ph['monsterCounts']
+            # число монстров — из параграфа, а если там его нет — наибольшее по сегментам («тигры ×2» знает только ветка)
+            counts = {x: c for x, c in ph.get('monsterCounts', {}).items() if x in mons}
+            for g in segs:
+                for x, c in ((g.get('hints') or {}).get('monsterCounts') or {}).items():
+                    if x in mons and x not in ph.get('monsterCounts', {}):
+                        counts[x] = max(counts.get(x, 0), c)
+            if counts:
+                ph['monsterCounts'] = counts
+            else:
+                ph.pop('monsterCounts', None)
             if not ph:
                 del p['hints']
         for name, when in ov.get('when', {}).items():
