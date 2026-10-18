@@ -13,7 +13,7 @@ export const Schemas = {
   ready: z.boolean(),
   heroUid: id,
   cmd: z.object({ name: z.string().min(1).max(40), args: z.array(z.unknown()).max(8) }),
-  chat: z.object({ text: z.string().max(1500), toGm: z.boolean() }),
+  chat: z.object({ text: z.string().max(1500), toGm: z.boolean(), asGm: z.boolean().optional() }),
   choose: z.object({ messageId: id, choiceId: id }),
   state: z.record(z.string(), z.unknown()),
 }

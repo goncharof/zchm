@@ -136,7 +136,7 @@ export class NetClient {
   async loadState(state: GameState): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:loadState', state))) }
   async claimHero(heroUid: string): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('hero:claim', heroUid))) }
   async releaseHero(heroUid: string): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('hero:release', heroUid))) }
-  async chat(text: string, toGm: boolean): Promise<boolean> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('chat', { text, toGm }))); return true }
+  async chat(text: string, toGm: boolean, asGm = false): Promise<boolean> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('chat', { text, toGm, ...(asGm ? { asGm } : {}) }))); return true }
   async choose(messageId: string, choiceId: string): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('gm:choose', { messageId, choiceId }))) }
   async setTurnMode(mode: TurnMode): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:turnMode', mode))) }
   async setReady(ready: boolean): Promise<void> { await this.ready(); this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:ready', ready))) }

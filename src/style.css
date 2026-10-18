@@ -365,6 +365,13 @@ button.voted { outline: 2px solid var(--ok); outline-offset: 1px; }
 .chat-panel header h3 { margin: 0; font-family: var(--font-title); font-weight: 400; font-size: 1.25rem; }
 @keyframes rise-r { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 
+/* ---------- пульт живого ведущего ---------- */
+.gm-hero { display: flex; gap: .55rem; align-items: flex-start; padding: .45rem 0; border-top: 1px solid var(--line); }
+.gm-hero-main { flex: 1; min-width: 0; display: grid; gap: .3rem; }
+.gm-steps { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; }
+.gm-steps .lbl { font-size: .78rem; color: var(--muted); min-width: 3.6rem; font-variant-numeric: tabular-nums; }
+.gm-steps button.small { min-height: 30px; padding: .15rem .5rem; }
+
 /* ---------- связь ---------- */
 .net-banner { position: sticky; top: var(--topbar-h); z-index: 39; text-align: center; font-size: .85rem; font-weight: 600; color: #fff; background: linear-gradient(90deg, #7a1022, var(--blood), #7a1022); padding: .35rem 1rem; }
 .overlay { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: rgba(7, 10, 9, .92); backdrop-filter: blur(4px); color: var(--muted); }

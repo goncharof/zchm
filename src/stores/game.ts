@@ -154,7 +154,7 @@ export const useGameStore = defineStore('game', () => {
     if (c) void c.leave().catch(() => {})
     detachNet()
   }
-  const sendChat = (text: string, toGm: boolean) => netAction((c) => c.chat(text, toGm))
+  const sendChat = (text: string, toGm: boolean, asGm = false) => netAction((c) => c.chat(text, toGm, asGm))
   const choose = (messageId: string, choiceId: string) => netAction((c) => c.choose(messageId, choiceId))
   const claimHero = (heroUid: string) => netAction((c) => c.claimHero(heroUid))
   const releaseHero = (heroUid: string) => netAction((c) => c.releaseHero(heroUid))

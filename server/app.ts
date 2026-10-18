@@ -358,6 +358,13 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!text) throw new GameError('Пустое сообщение')
         limit(limiters.chat.take(socket.id), 'Не так быстро: одна реплика в пару секунд')
         if (req.toGm && autoGm(room)) limit(limiters.toGm.take(`${room.code}:${player.id}`), 'Ведущий не успевает: не больше 4 реплик ведущему в минуту от игрока')
+        // живой ведущий рассказывает от имени ведущего
+        if (req.asGm) {
+          if (room.gm !== 'human' || !player.isHost) throw new GameError('Говорить за ведущего может только живой ведущий')
+          ctx.chat(room, { from: 'gm', author: `Ведущий · ${player.name}`, text })
+          ack({ ok: true })
+          return
+        }
         const heroes = room.state.heroes.filter((h) => player!.heroUids.includes(h.uid)).map((h) => h.name)
         const author = heroes.length ? `${player.name} (${heroes.join(', ')})` : player.name
         const toGm = !!req.toGm && autoGm(room)

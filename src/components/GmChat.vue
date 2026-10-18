@@ -9,6 +9,9 @@ const props = withDefaults(defineProps<{ height?: string }>(), { height: '60vh' 
 const store = useGameStore()
 const text = ref('')
 const toGm = ref(true)
+/** хозяин в режиме живого ведущего пишет от имени ведущего (по умолчанию) или как игрок */
+const liveGm = computed(() => store.room?.gm === 'human' && !!store.room?.me.isHost)
+const asGm = ref(true)
 const box = ref<HTMLElement | null>(null)
 const ai = computed(() => store.room?.gm === 'ai' || store.room?.gm === 'script')
 const live = computed(() => Object.entries(store.streaming).filter(([, t]) => t))
@@ -63,7 +66,7 @@ async function send() {
   const t = text.value.trim()
   if (!t) return
   text.value = ''
-  const ok = await store.sendChat(t, ai.value && toGm.value)
+  const ok = await store.sendChat(t, ai.value && toGm.value, liveGm.value && asGm.value)
   // отказ сервера (слишком часто и т.п.) — вернуть текст в поле ввода
   if (!ok && !text.value) text.value = t
 }
@@ -97,12 +100,16 @@ async function send() {
       <button v-if="store.room?.me.isHost" class="small" title="Не ждать остальных" @click="store.turnGo()">Ход ведущего</button>
     </div>
     <form class="composer" @submit.prevent="send">
+      <div v-if="liveGm" class="seg" role="group" aria-label="От чьего имени">
+        <button type="button" :class="{ active: asGm }" :aria-pressed="asGm" @click="asGm = true">Как ведущий</button>
+        <button type="button" :class="{ active: !asGm }" :aria-pressed="!asGm" @click="asGm = false">Как игрок</button>
+      </div>
       <div v-if="ai" class="seg" role="group" aria-label="Кому">
         <button type="button" :class="{ active: toGm }" :aria-pressed="toGm" @click="toGm = true">Ведущему</button>
         <button type="button" :class="{ active: !toGm }" :aria-pressed="!toGm" title="Ведущий не услышит" @click="toGm = false">Игрокам</button>
       </div>
       <div class="composer-row">
-        <textarea ref="input" v-model="text" rows="1" :placeholder="ai && toGm ? (readyMode ? 'Что делает ваш герой?' : 'Что делают ваши герои?') : 'Сообщение игрокам'" enterkeyhint="send" @keydown.enter.exact.prevent="send" />
+        <textarea ref="input" v-model="text" rows="1" :placeholder="liveGm && asGm ? 'Что видят и слышат герои?' : ai && toGm ? (readyMode ? 'Что делает ваш герой?' : 'Что делают ваши герои?') : 'Сообщение игрокам'" enterkeyhint="send" @keydown.enter.exact.prevent="send" />
         <button type="submit" class="primary send" aria-label="Отправить" title="Отправить (Enter)"><SendHorizontal :size="18" /><span class="send-lbl">Отправить</span></button>
         <button v-if="canSpeak" type="button" class="icon ghost speech" :class="{ on: speechPrefs.on }" :aria-pressed="speechPrefs.on" aria-label="озвучивать ведущего" :title="speechPrefs.on ? 'Озвучка ведущего включена' : 'Озвучивать ведущего'" @click="flipSpeech"><Volume2 v-if="speechPrefs.on" :size="19" /><VolumeX v-else :size="19" /></button>
       </div>

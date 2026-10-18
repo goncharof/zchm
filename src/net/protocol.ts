@@ -69,7 +69,7 @@ export interface CreateRoomReq { name: string; gm: GmMode; state?: GameState }
 export interface JoinRoomReq { code: string; name: string; token?: string }
 export interface Joined { code: string; playerId: string; token: string }
 export interface CmdReq { name: string; args: unknown[] }
-export interface ChatReq { text: string; toGm: boolean }
+export interface ChatReq { text: string; toGm: boolean; /** живой ведущий (хозяин в режиме «живой ведущий») пишет как ведущий */ asGm?: boolean }
 
 export interface ServerToClient {
   state: (s: GameState) => void

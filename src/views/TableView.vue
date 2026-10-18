@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import LogPanel from '@/components/LogPanel.vue'
+import GmPanel from '@/components/GmPanel.vue'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { idx } from '@/data'
@@ -28,7 +30,8 @@ const plan = computed(() => (store.location?.plan ? base + store.location.plan :
       <GmChat class="table-chat" height="62vh" />
     </div>
     <div>
-      <div class="card tight">
+      <GmPanel v-if="store.room?.gm === 'human' && store.room.me.isHost" />
+      <div v-else class="card tight">
         <h3>Партия <span class="small muted">· день {{ store.game?.day }} · {{ store.location?.name ?? store.worldNode?.name ?? '' }}</span></h3>
         <div v-for="h in store.heroes" :key="h.uid" class="row" style="gap:.5rem;margin:.35rem 0;flex-wrap:nowrap" :class="{ 'hero-down': h.status.dead }">
           <img :src="classArt(h.classId)" alt="" class="portrait small-portrait" />
@@ -39,6 +42,10 @@ const plan = computed(() => (store.location?.plan ? base + store.location.plan :
           <span class="small muted">{{ h.lives }}/{{ h.maxLives }}</span>
         </div>
         <div class="row" style="margin-top:.4rem"><router-link class="btn small" to="/party">Листы героев</router-link><router-link class="btn small" to="/shop">Лавка</router-link></div>
+      </div>
+      <div v-if="store.game?.log.length" class="card tight">
+        <h3>Журнал игры</h3>
+        <LogPanel :entries="store.game.log" :limit="8" />
       </div>
       <div v-if="plan" class="card tight"><a :href="plan" target="_blank" rel="noopener"><img class="plan-img" :src="plan" :alt="store.location?.name" style="max-height:48vh" /></a></div>
       <OnlinePanel />
