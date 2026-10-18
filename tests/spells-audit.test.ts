@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { idx } from '@/data'
 import { createHero, gainXp } from '@/engine/character'
-import { alliesTurn, makeAlly, monstersTurn, startCombat } from '@/engine/combat'
+import { alliesTurn, makeAlly, monsterAttack, monstersTurn, startCombat } from '@/engine/combat'
 import { canCast, castSpell } from '@/engine/spells'
 import { seededRng, setRng } from '@/engine/dice'
 import type { Hero } from '@/engine/model'
@@ -51,6 +51,16 @@ describe('аудит заклинаний героев', () => {
     cast(m, 'mage-valuny', { combat: state, targetUid: target.uid })
     const hurt = state.monsters.filter((o) => o.lives < o.maxLives)
     expect(hurt).toEqual([target])
+  })
+
+  it('«Воздушная стена» защищает от стрел хазга', () => {
+    const w = createHero('Воин', 'warrior', idx)
+    w.buffs.push({ source: 'Воздушная стена', stat: 'ward', ward: 'air-wall', amount: 0, rounds: -1 })
+    const { state } = startCombat([{ monsterId: 'hazg', count: 1 }], idx)
+    setRng(() => 0.99)
+    const log = monsterAttack(state.monsters[0], w, idx)
+    expect(log[0].text).toContain('воздушной стены')
+    expect(w.lives).toBe(w.maxLives)
   })
 
   it('погибший или потерявший сознание не колдует', () => {

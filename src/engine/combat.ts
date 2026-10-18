@@ -869,8 +869,16 @@ function monsterHitRoll(m: MonsterInstance): number {
   return r
 }
 
+/** Монстры, которые по Бестиарию бьют из лука или метательным оружием (ХАУСРУЛ: от них защищает «Воздушная стена»;
+ *  Амазонка не в списке — она «не менее мастерски» владеет мечом) */
+const ARCHERS = new Set(['hazg', 'kentavr', 'gnom'])
+
 export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex): LogEntry[] {
   const log: LogEntry[] = []
+  if (ARCHERS.has(m.monsterId) && hasWard(target, 'air-wall')) {
+    log.push(entry(`${m.name} стреляет в ${target.name}, но стрела отскакивает от воздушной стены.`, 'miss'))
+    return log
+  }
   const def = heroDefense(target, idx)
   const r = monsterHitRoll(m)
   if (r < def) {
