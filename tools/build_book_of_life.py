@@ -223,7 +223,11 @@ def apply_overrides(locations, issues):
                 return p
             if name == 'scene':
                 return next((g for g in segs if g['kind'] == 'scene'), None)
-            return next((g for g in segs if g['kind'] == 'branch' and g.get('label') == name), None)
+            # одинаковые условия веток различаются номером: «Если пьете#2» — вторая такая ветка
+            m = re.fullmatch(r'(.*)#(\d+)', name)
+            label, nth = (m.group(1), int(m.group(2))) if m else (name, 1)
+            same = [g for g in segs if g['kind'] == 'branch' and g.get('label') == label]
+            return same[nth - 1] if 0 < nth <= len(same) else None
 
         for name, fields in ov.get('hints', {}).items():
             t = target(name)
@@ -242,6 +246,28 @@ def apply_overrides(locations, issues):
                     del h['monsterCounts']
             if not h:
                 del t['hints']
+        # монстры сцены и веток поправлены — общий список параграфа (полный текст, подсказки ИИ-ведущему) собирается
+        # из них, если правка не задаёт его сама
+        hints_ov = ov.get('hints', {})
+        if segs and 'paragraph' not in hints_ov and any(name != 'paragraph' and 'monsters' in f for name, f in hints_ov.items()):
+            union = []
+            for g in segs:
+                for mon in (g.get('hints') or {}).get('monsters', []):
+                    if mon not in union:
+                        union.append(mon)
+            ph = p.setdefault('hints', {})
+            old = ph.get('monsters', [])
+            mons = [x for x in old if x in union] + [x for x in union if x not in old]
+            if mons:
+                ph['monsters'] = mons
+            else:
+                ph.pop('monsters', None)
+            if 'monsterCounts' in ph:
+                ph['monsterCounts'] = {x: c for x, c in ph['monsterCounts'].items() if x in mons}
+                if not ph['monsterCounts']:
+                    del ph['monsterCounts']
+            if not ph:
+                del p['hints']
         for name, when in ov.get('when', {}).items():
             t = target(name)
             if t is None or t is p:

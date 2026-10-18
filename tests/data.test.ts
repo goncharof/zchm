@@ -95,7 +95,12 @@ describe('данные игры', () => {
       const [locId, n] = key.split(':')
       const p = idx.locationById.get(locId)?.paragraphs.find((x) => x.n === Number(n))
       expect(p, key).toBeDefined()
-      const target = (name: string) => name === 'paragraph' ? p : name === 'scene' ? p!.segments?.find((g) => g.kind === 'scene') : p!.segments?.find((g) => g.kind === 'branch' && g.label === name)
+      // одинаковые условия веток различаются номером: «Если пьете#2»
+      const branch = (name: string) => {
+        const m = /^(.*)#(\d+)$/.exec(name)
+        return p!.segments?.filter((g) => g.kind === 'branch' && g.label === (m ? m[1] : name))[m ? Number(m[2]) - 1 : 0]
+      }
+      const target = (name: string) => name === 'paragraph' ? p : name === 'scene' ? p!.segments?.find((g) => g.kind === 'scene') : branch(name)
       for (const [name, fields] of Object.entries(ov.hints ?? {})) {
         const t = target(name)
         expect(t, `${key} «${name}»`).toBeDefined()
@@ -106,7 +111,7 @@ describe('данные игры', () => {
         }
       }
       for (const [name, when] of Object.entries(ov.when ?? {})) {
-        const t = p!.segments?.find((g) => g.kind === 'branch' && g.label === name)
+        const t = branch(name)
         expect(t, `${key} «${name}»`).toBeDefined()
         expect(t!.when, `${key} «${name}»`).toBe(when ?? undefined)
       }

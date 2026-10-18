@@ -77,12 +77,10 @@
       5
      ],
      "monsters": [
-      "strazhnik",
       "drakonid"
      ],
      "monsterCounts": {
-      "drakonid": 4,
-      "strazhnik": 2
+      "drakonid": 4
      }
     },
     "segments": [
@@ -384,7 +382,6 @@
       10
      ],
      "monsters": [
-      "strazhnik",
       "drakonid"
      ],
      "monsterCounts": {
@@ -573,7 +570,6 @@
       6
      ],
      "monsters": [
-      "strazhnik",
       "drakonid"
      ]
     },
@@ -815,12 +811,6 @@
    },
    {
     "n": 35,
-    "hints": {
-     "monsters": [
-      "strazhnik",
-      "grifon"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
@@ -917,7 +907,7 @@
       6
      ],
      "monsters": [
-      "skelet"
+      "magi"
      ]
     },
     "segments": [
@@ -962,7 +952,6 @@
     "hints": {
      "monsters": [
       "strazhnik",
-      "dvarf",
       "gnoll"
      ],
      "monsterCounts": {
@@ -1237,9 +1226,6 @@
      ],
      "prices": [
       10
-     ],
-     "monsters": [
-      "belyy-mag"
      ]
     },
     "segments": [
@@ -1360,7 +1346,6 @@
     "n": 18,
     "hints": {
      "monsters": [
-      "rytsar",
       "ork"
      ],
      "monsterCounts": {
@@ -1467,10 +1452,6 @@
      "coins": [
       1,
       400
-     ],
-     "monsters": [
-      "ten",
-      "rytsar"
      ],
      "artifact": true
     },
@@ -2174,13 +2155,10 @@
     "n": 3,
     "hints": {
      "monsters": [
-      "dvarf",
       "uruk-hay",
-      "chernyy-mag",
-      "skelet"
+      "chernyy-mag"
      ],
      "monsterCounts": {
-      "dvarf": 2,
       "uruk-hay": 19
      }
     },
@@ -3414,7 +3392,6 @@
       8
      ],
      "monsters": [
-      "dvarf",
       "zheleznyy-chelovek"
      ]
     },
@@ -3611,16 +3588,6 @@
    },
    {
     "n": 10,
-    "hints": {
-     "monsters": [
-      "belyy-mag",
-      "ork",
-      "chernyy-mag"
-     ],
-     "monsterCounts": {
-      "ork": 2
-     }
-    },
     "segments": [
      {
       "kind": "scene",
@@ -4408,10 +4375,6 @@
       15,
       10,
       15
-     ],
-     "monsters": [
-      "rot",
-      "rytsar"
      ]
     },
     "segments": [
@@ -4516,12 +4479,8 @@
       10
      ],
      "monsters": [
-      "uruk-hay",
       "gnoll"
      ],
-     "monsterCounts": {
-      "uruk-hay": 12
-     },
      "tavern": true
     },
     "segments": [
@@ -4666,9 +4625,6 @@
     "hints": {
      "prices": [
       5
-     ],
-     "monsters": [
-      "kender"
      ]
     },
     "segments": [
@@ -4741,12 +4697,6 @@
    },
    {
     "n": 22,
-    "hints": {
-     "monsters": [
-      "belyy-mag",
-      "korol-nazgulov"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
@@ -4825,8 +4775,7 @@
     "n": 26,
     "hints": {
      "monsters": [
-      "chernyy-elf",
-      "uruk-hay"
+      "chernyy-elf"
      ]
     },
     "segments": [
@@ -5183,12 +5132,6 @@
    },
    {
     "n": 39,
-    "hints": {
-     "monsters": [
-      "amazonka",
-      "nazgul"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
@@ -5317,9 +5260,6 @@
      "coins": [
       3,
       5
-     ],
-     "monsters": [
-      "gnoll"
      ]
     },
     "segments": [
@@ -5756,11 +5696,6 @@
     "hints": {
      "coins": [
       10
-     ],
-     "monsters": [
-      "rot",
-      "rytsar",
-      "metalok"
      ]
     },
     "segments": [
@@ -6247,12 +6182,8 @@
       150
      ],
      "monsters": [
-      "rytsar",
-      "strazhnik"
-     ],
-     "monsterCounts": {
-      "strazhnik": 40
-     }
+      "rytsar"
+     ]
     },
     "segments": [
      {
@@ -6676,8 +6607,7 @@
     "n": 15,
     "hints": {
      "monsters": [
-      "umertvie",
-      "chelovek"
+      "umertvie"
      ],
      "monsterCounts": {
       "umertvie": 2
@@ -7810,9 +7740,6 @@
     "hints": {
      "bottles": [
       5
-     ],
-     "monsters": [
-      "troll"
      ]
     },
     "segments": [
@@ -9454,11 +9381,6 @@
    },
    {
     "n": 17,
-    "hints": {
-     "monsters": [
-      "skelet"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
@@ -9498,7 +9420,6 @@
     "n": 19,
     "hints": {
      "monsters": [
-      "elf",
       "fantom"
      ]
     },
@@ -9927,9 +9848,6 @@
      "bottles": [
       3,
       4
-     ],
-     "monsters": [
-      "skelet"
      ]
     },
     "segments": [
@@ -10056,8 +9974,7 @@
      ],
      "monsters": [
       "ork",
-      "vampir",
-      "berserker"
+      "vampir"
      ]
     },
     "segments": [
@@ -10115,8 +10032,7 @@
       5
      ],
      "monsters": [
-      "berserker",
-      "rytsar"
+      "berserker"
      ],
      "monsterCounts": {
       "berserker": 2
@@ -10415,9 +10331,6 @@
     "hints": {
      "bottles": [
       5
-     ],
-     "monsters": [
-      "troll"
      ]
     },
     "segments": [
@@ -10818,8 +10731,7 @@
     "n": 22,
     "hints": {
      "monsters": [
-      "lyudoed",
-      "belyy-mag"
+      "lyudoed"
      ],
      "monsterCounts": {
       "lyudoed": 6
@@ -10977,12 +10889,6 @@
    },
    {
     "n": 33,
-    "hints": {
-     "monsters": [
-      "berserker",
-      "ork"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
@@ -11010,9 +10916,7 @@
       6
      ],
      "monsters": [
-      "ork",
-      "chelovek",
-      "berserker"
+      "ork"
      ],
      "monsterCounts": {
       "ork": 10
@@ -11188,11 +11092,6 @@
    },
    {
     "n": 37,
-    "hints": {
-     "monsters": [
-      "chelovek"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
@@ -11428,11 +11327,6 @@
    },
    {
     "n": 8,
-    "hints": {
-     "monsters": [
-      "belyy-mag"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
@@ -12060,9 +11954,6 @@
     "hints": {
      "coins": [
       150
-     ],
-     "monsters": [
-      "rytsar"
      ]
     },
     "segments": [
@@ -12310,8 +12201,7 @@
     "hints": {
      "monsters": [
       "gnoll",
-      "mogilnik",
-      "podzemnyy-monstr"
+      "mogilnik"
      ],
      "monsterCounts": {
       "gnoll": 2,
@@ -12580,9 +12470,6 @@
     "hints": {
      "luck": [
       5
-     ],
-     "monsters": [
-      "rytsar"
      ]
     },
     "segments": [
@@ -12693,12 +12580,10 @@
     "hints": {
      "monsters": [
       "skelet",
-      "smert",
-      "mogilnik"
+      "smert"
      ],
      "monsterCounts": {
-      "skelet": 40,
-      "mogilnik": 27
+      "skelet": 40
      }
     },
     "segments": [
@@ -12987,9 +12872,6 @@
       2,
       2,
       3
-     ],
-     "monsters": [
-      "demon"
      ]
     },
     "segments": [
@@ -13041,9 +12923,6 @@
        "bottles": [
         2,
         3
-       ],
-       "monsters": [
-        "demon"
        ]
       }
      }
@@ -13390,9 +13269,6 @@
      ],
      "coins": [
       119
-     ],
-     "monsters": [
-      "kamennaya-statuya"
      ]
     },
     "segments": [
@@ -13829,7 +13705,6 @@
       20
      ],
      "monsters": [
-      "kender",
       "magi"
      ],
      "scrolls": [
@@ -14033,10 +13908,6 @@
     "hints": {
      "bottles": [
       2
-     ],
-     "monsters": [
-      "zombi",
-      "merlin"
      ]
     },
     "segments": [
@@ -14279,9 +14150,6 @@
      ],
      "coins": [
       77
-     ],
-     "monsters": [
-      "zhnets"
      ]
     },
     "segments": [
@@ -14522,11 +14390,6 @@
    },
    {
     "n": 45,
-    "hints": {
-     "monsters": [
-      "vurdalak"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
@@ -14552,9 +14415,6 @@
     "hints": {
      "luck": [
       8
-     ],
-     "monsters": [
-      "chelovek"
      ]
     },
     "segments": [
@@ -14728,11 +14588,6 @@
    },
    {
     "n": 50,
-    "hints": {
-     "monsters": [
-      "gnoll"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
@@ -15180,10 +15035,6 @@
     "hints": {
      "coins": [
       10
-     ],
-     "monsters": [
-      "skelet",
-      "veselchak"
      ]
     },
     "segments": [
@@ -15854,8 +15705,7 @@
       6
      ],
      "monsters": [
-      "amazonka",
-      "rytsar"
+      "amazonka"
      ],
      "monsterCounts": {
       "amazonka": 2
@@ -16036,8 +15886,7 @@
       5
      ],
      "monsters": [
-      "strazhnik",
-      "gnoll"
+      "strazhnik"
      ],
      "monsterCounts": {
       "strazhnik": 3
@@ -16543,12 +16392,6 @@
    },
    {
     "n": 113,
-    "hints": {
-     "monsters": [
-      "strazhnik",
-      "rytsar"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
@@ -16707,9 +16550,6 @@
     "hints": {
      "bottles": [
       3
-     ],
-     "monsters": [
-      "vedma"
      ]
     },
     "segments": [
@@ -16813,12 +16653,10 @@
       50
      ],
      "monsters": [
-      "ork",
-      "strazhnik"
+      "ork"
      ],
      "monsterCounts": {
-      "ork": 12,
-      "strazhnik": 2
+      "ork": 12
      }
     },
     "segments": [
@@ -17146,8 +16984,7 @@
      ],
      "monsters": [
       "rytsar",
-      "amazonka",
-      "dvarf"
+      "amazonka"
      ],
      "monsterCounts": {
       "rytsar": 5
@@ -17244,11 +17081,6 @@
    },
    {
     "n": 134,
-    "hints": {
-     "monsters": [
-      "belyy-mag"
-     ]
-    },
     "segments": [
      {
       "kind": "scene",
