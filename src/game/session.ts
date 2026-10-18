@@ -274,6 +274,7 @@ export class GameSession {
     const h = this.hero(heroUid)
     const s = idx.spell(spellId)
     if (h.pendingSpellPicks <= 0) throw new GameError('Нет доступных выборов заклинаний')
+    if (s.caster !== idx.cls(h.classId).caster) throw new GameError('Заклинание другого класса')
     if (s.level > h.level) throw new GameError('Уровень заклинания выше уровня персонажа')
     if (h.spellbook.includes(spellId)) throw new GameError('Уже в книге')
     h.spellbook.push(spellId)
@@ -323,6 +324,7 @@ export class GameSession {
     const d = Math.floor(Number(days))
     days = Number.isFinite(d) ? Math.max(1, Math.min(30, d)) : 1
     for (const h of this.heroes) {
+      if (h.status.dead) continue
       const r = rest(h, days, REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY)
       if (r.days < days) this.log(`${h.name} может оплатить только ${r.days} сут. из ${days}.`)
     }

@@ -266,7 +266,8 @@ export function gainXp(hero: Hero, amount: number, idx: DataIndex): LevelUp[] {
     const livesGained = next.lives - prev.lives
     const manaGained = (next.mana ?? 0) - (prev.mana ?? 0)
     hero.maxLives = next.lives
-    hero.lives = Math.min(hero.maxLives, hero.lives + livesGained)
+    // через changeLives: герой без сознания приходит в себя, если жизни стали положительными; мёртвого не трогает
+    changeLives(hero, livesGained)
     hero.maxMana = next.mana ?? 0
     hero.mana = Math.min(hero.maxMana, hero.mana + manaGained)
     if (next.bonus) {
@@ -308,15 +309,14 @@ export function isConscious(hero: Hero): boolean {
   return !hero.status.dead && !hero.status.unconscious
 }
 
-/** Отдых в трактире: сутки = 2 монеты, +5 жизней, +5 маны (стр. 16) */
+/** Отдых в трактире: сутки = 2 монеты, +5 жизней, +5 маны (стр. 16). Жизни прибавляются к настоящим (герой с −8 за сутки
+ *  приходит к −3); мёртвый не отдыхает и не платит */
 export function rest(hero: Hero, days: number, costPerDay: number, lives: number, mana: number): { paid: number; days: number } {
+  if (hero.status.dead) return { paid: 0, days: 0 }
   const affordable = Math.min(days, Math.floor(hero.money / costPerDay))
   if (affordable <= 0) return { paid: 0, days: 0 }
   hero.money -= affordable * costPerDay
-  if (!hero.status.dead) {
-    hero.lives = Math.min(hero.maxLives, Math.max(hero.lives, 0) + lives * affordable)
-    hero.mana = Math.min(hero.maxMana, hero.mana + mana * affordable)
-    if (hero.lives > 0) hero.status.unconscious = false
-  }
+  changeLives(hero, lives * affordable)
+  hero.mana = Math.min(hero.maxMana, hero.mana + mana * affordable)
   return { paid: affordable * costPerDay, days: affordable }
 }
