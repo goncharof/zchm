@@ -549,14 +549,23 @@ export class GameSession {
     this.logAll(out.log)
     this.announceLevelUps(out.levelUps)
   }
-  cast(heroUid: string, spellId: string, opts: { targetUid?: string; targetHeroUid?: string; targetEntryUid?: string; param?: number } = {}): CastResult {
+  cast(heroUid: string, spellId: string, opts: { targetUid?: string; targetHeroUid?: string; targetEntryUid?: string; param?: number; scrollUid?: string } = {}): CastResult {
     if (this.combat && !this.combat.finished) this.requireHeroTurn(this.hero(heroUid))
     // параметр приходит и по сети: только целое от 1 (иначе жизни и мана становятся NaN)
     if (opts.param !== undefined) {
       const p = Math.floor(Number(opts.param))
       opts = { ...opts, param: Number.isFinite(p) && p >= 1 ? Math.min(p, 999) : undefined }
     }
-    const res = castSpell({ hero: this.hero(heroUid), spell: idx.spell(spellId), idx, heroes: this.heroes, combat: this.combat, ...opts })
+    const h = this.hero(heroUid)
+    // прочесть по свитку (стр. 21): заклинание срабатывает один раз, свиток разрушается
+    const { scrollUid, ...rest } = opts
+    const scroll = scrollUid ? h.inventory.find((e) => e.uid === scrollUid) : undefined
+    if (scrollUid && (!scroll || scroll.kind !== 'scroll' || scroll.ref !== spellId || scroll.identified === false)) throw new GameError('Такого свитка у героя нет')
+    const res = castSpell({ hero: h, spell: idx.spell(spellId), idx, heroes: this.heroes, combat: this.combat, ...rest, fromScroll: !!scroll })
+    if (res.ok && scroll) {
+      inv.removeFromInventory(h, scroll.uid, 1)
+      res.log.push({ t: Date.now(), text: 'Свиток рассыпается в холодном белом огне.', kind: 'spell' })
+    }
     this.logAll(res.log)
     this.announceLevelUps(res.levelUps)
     const c = this.combat

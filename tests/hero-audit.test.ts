@@ -89,6 +89,23 @@ describe('аудит героев', () => {
     expect(d.money).toBe(40)
   })
 
+  it('свиток можно прочесть один раз: заклинания нет в книге, маны не нужно, свиток разрушается', () => {
+    const s = new GameSession(blankGame(), null)
+    const p = s.addHero('Жрец', 'priest')
+    const m = s.addHero('Маг', 'mage')
+    s.giveItem(p.uid, 'scroll', 'priest-molitva', 1, true)
+    const scroll = p.inventory.find((e) => e.kind === 'scroll')!
+    const mana = p.mana
+    // маг свиток жреца не прочтёт, да и чужой свиток — не его
+    expect(() => s.cast(m.uid, 'priest-molitva', { scrollUid: scroll.uid })).toThrow(/свитка у героя нет/)
+    const r = s.cast(p.uid, 'priest-molitva', { scrollUid: scroll.uid, targetHeroUid: p.uid })
+    expect(r.ok).toBe(true)
+    expect(p.mana).toBe(mana)
+    expect(p.buffs.some((b) => b.ward === 'prayer')).toBe(true)
+    expect(p.inventory.some((e) => e.kind === 'scroll')).toBe(false)
+    expect(s.state.log.some((e) => e.text.includes('Свиток рассыпается'))).toBe(true)
+  })
+
   it('в книгу записывается только заклинание своего класса', () => {
     const s = new GameSession(blankGame(), null)
     const m = s.addHero('Маг', 'mage')

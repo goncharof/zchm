@@ -193,7 +193,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
             <button class="small" @click="store.flee(h.uid)" :title="`Нужно выкинуть ${fleeNeed()}+`">Бежать ({{ fleeNeed() }}+)</button>
             <button class="small" @click="store.skip(h.uid)">Пропустить</button>
           </div>
-          <div v-if="canAct(h) && h.spellbook.length" style="margin-top:.35rem"><SpellCaster :hero="h" :in-combat="true" :target-uid="target" /></div>
+          <div v-if="canAct(h) && (h.spellbook.length || h.inventory.some((e) => e.kind === 'scroll'))" style="margin-top:.35rem"><SpellCaster :hero="h" :in-combat="true" :target-uid="target" /></div>
           <div v-if="!canAct(h) && isActive(h) && !c.escaped.includes(h.uid) && c.turn === 'heroes' && !c.finished" class="small muted">{{ store.canControl(h.uid) ? 'ждёт следующего раунда' : `ходит ${store.ownerOf(h.uid) ?? 'другой игрок'}` }}</div>
         </div>
         <p class="small muted">Попадание: к18 + ловкость (меткость для метательного) ≥ защита цели. Урон: таблица атак по к6 + сила.</p>

@@ -22,6 +22,8 @@ export interface CastInput {
   targetEntryUid?: string
   /** параметр: число стрел, маны на лечение и т.п. */
   param?: number
+  /** читается по свитку (стр. 21): заклинания нет в книге, постоянная цена в мане не нужна; свиток убирает сессия */
+  fromScroll?: boolean
 }
 
 export interface CastResult {
@@ -79,6 +81,15 @@ export function needsEntryTarget(spell: Spell): boolean {
 
 export function needsParam(spell: Spell): boolean {
   return spell.effect.type === 'heal' || spell.effect.type === 'drain-mana' || spell.effect.type === 'restore-mana' || /стрел/.test(spell.costFormula ?? '')
+}
+
+/** Прочесть заклинание по свитку может маг или жрец своего класса в сознании (стр. 21) */
+export function scrollProblem(hero: Hero, spell: Spell, idx: DataIndex): string | null {
+  const cls = idx.cls(hero.classId)
+  if (!cls.caster) return `${cls.name} не владеет магией — для него свиток просто пергамент`
+  if (!isConscious(hero)) return `${hero.name} ${hero.status.dead ? 'погиб' : 'без сознания'} — читать некому`
+  if (cls.caster !== spell.caster) return `Это заклинание ${spell.caster === 'mage' ? 'мага' : 'жреца'}`
+  return null
 }
 
 export function canCast(hero: Hero, spell: Spell, idx: DataIndex, param?: number): string | null {
@@ -210,10 +221,10 @@ export function castSpell(input: CastInput): CastResult {
   const { hero, spell, idx, heroes, combat } = input
   const entries: LogEntry[] = []
   const res: CastResult = { ok: false, log: entries, manaSpent: 0, xp: 0, damage: 0, levelUps: [] }
-  const why = canCast(hero, spell, idx, input.param)
+  const why = input.fromScroll ? scrollProblem(hero, spell, idx) : canCast(hero, spell, idx, input.param)
   if (!why && !combat && !usableOutOfCombat(spell)) { log(entries, `${hero.name}: «${spell.name}» действует только в бою`, 'info'); return res }
   if (why) { log(entries, `${hero.name}: ${why}`, 'info'); return res }
-  const cost = resolveCost(spell, hero, input.param)
+  const cost = input.fromScroll ? 0 : resolveCost(spell, hero, input.param)
   const effect = spell.effect ?? { type: 'manual' }
   const measured = { damageXp: 0, healed: 0, manaMoved: 0 }
   /** заклинание подействовало хотя бы на одну цель (иначе опыта нет, стр. 10) */

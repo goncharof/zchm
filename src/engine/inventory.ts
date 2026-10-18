@@ -224,7 +224,7 @@ export function copyScroll(hero: Hero, entryUid: string, idx: DataIndex): string
   const cls = idx.cls(hero.classId)
   if (!cls.caster) throw new Error(`${cls.name} не владеет магией — для него это просто пергамент`)
   if (cls.caster !== spell.caster) throw new Error(`Это заклинание ${spell.caster === 'mage' ? 'мага' : 'жреца'}`)
-  if (hero.level <= spell.level) throw new Error(`Нужен уровень выше ${spell.level}. Свиток можно прочесть один раз в бою.`)
+  if (hero.level <= spell.level) throw new Error(`Нужен уровень выше ${spell.level}. Свиток можно прочесть один раз — он есть в списке заклинаний с пометкой 📜.`)
   if (!hero.spellbook.includes(spell.id)) hero.spellbook.push(spell.id)
   removeFromInventory(hero, entryUid, 1)
   return `${spell.name} переписано в книгу, свиток исчезает в холодном белом огне.`
