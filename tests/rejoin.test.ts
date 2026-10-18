@@ -61,6 +61,27 @@ describe('возврат в игру', () => {
     expect(host.room.players).toHaveLength(2)
   })
 
+  it('комнаты не стало, пока ждали связи: экран возврата за стол закрывается', async () => {
+    const mem = new Map<string, string>()
+    ;(globalThis as unknown as { localStorage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> }).localStorage ??= {
+      getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => void mem.set(k, v), removeItem: (k) => void mem.delete(k),
+    }
+    const { createPinia, setActivePinia } = await import('pinia')
+    const { useGameStore } = await import('@/stores/game')
+    setActivePinia(createPinia())
+    const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
+    const store = useGameStore()
+    const net = new NetClient(s.url); clients.push(net)
+    store.attachNet(net)
+    await store.createRoom('Иван', 'book', false)
+    const code = store.room!.code
+    store.rejoinState = 'waiting' // как после входа при лежащем сервере
+    ;(s.store as unknown as { rooms: Map<string, unknown> }).rooms.delete(code)
+    net.socket.disconnect(); net.socket.connect()
+    await until(() => store.net === null)
+    expect(store.rejoinState).toBe('idle')
+  })
+
   it('после обрыва связи команда ждёт повторного входа, а не получает «Вы не в комнате»', async () => {
     const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
     const a = client(s)

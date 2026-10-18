@@ -10,6 +10,7 @@ const router = useRouter()
 const name = ref('')
 /** форма нового героя раскрыта, пока партия пуста (или пока игрок сам её раскрыл) */
 const addOpen = ref(store.heroes.length === 0)
+watch(() => store.heroes.length, (n) => { if (!n) addOpen.value = true })
 const classId = ref('warrior')
 const cls = computed(() => gameData.classes.find((c) => c.id === classId.value)!)
 /** класс уже есть у живого героя команды (если повтор классов не разрешён) */

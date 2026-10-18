@@ -143,6 +143,9 @@ export const useGameStore = defineStore('game', () => {
     room.value = null
     chat.value = []
     streaming.value = {}
+    // экран возврата за стол закрывается, а прочитанное в этой комнате не переносится на следующую
+    rejoinState.value = 'idle'
+    chatSeenT.value = 0
     game.value = readSave()
   }
   function ensureNet(url?: string): NetClient {
