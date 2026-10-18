@@ -440,6 +440,7 @@ button.voted { outline: 2px solid var(--ok); outline-offset: 1px; }
   .map-scroll .map-wrap { width: 780px; max-width: none; }
   .map-scroll .map-node { font-size: .7rem; padding: .1rem .45rem; border-width: 1.5px; }
   .map-hint { display: block; }
+  .map-route-card { display: none; }
   .map-action {
     display: flex; align-items: center; gap: .5rem; position: fixed; left: 10px; right: 10px; z-index: 44;
     bottom: calc(var(--tabbar-h) + 10px + var(--safe-b)); padding: .6rem .7rem; border-radius: 14px;

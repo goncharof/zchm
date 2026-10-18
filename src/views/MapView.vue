@@ -77,7 +77,7 @@ function enter(locationId: string) {
         <p>Партия: <b>{{ current?.name ?? '—' }}</b></p>
         <button v-if="current?.locationId" class="primary" @click="enter(current.locationId)">Войти: {{ idx.locationById.get(current.locationId)?.name }}</button>
       </div>
-      <div class="card" v-if="selected && selected.id !== current?.id">
+      <div class="card map-route-card" v-if="selected && selected.id !== current?.id">
         <h3>{{ selected.name }}</h3>
         <p v-if="route">Путь: {{ route.nodes.length - 1 }} {{ plural(route.nodes.length - 1, 'участок', 'участка', 'участков') }} дороги, <b>{{ days }} {{ plural(days, 'день', 'дня', 'дней') }}</b><span v-if="mounted"> (верхом)</span>.</p>
         <p v-else class="muted">Дороги туда нет.</p>
