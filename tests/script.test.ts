@@ -142,6 +142,24 @@ describe('сценарный ведущий', () => {
     expect(labels).not.toContain('Забрать 176 монет')
   })
 
+  it('проверка удачи внутри ветки: провал «пробить — удача 9» ведёт в ветку «Не пробиваете»', async () => {
+    const g = await setup()
+    const room = (await g.s.store.get(g.j.code))!
+    await g.c.claimHero(room.state.heroes[0].uid)
+    await goTo(g, 'zamok-korolya-nazgulov')
+    await g.c.call('enterLocation', ['krepost-korolya-nazgulov'])
+    await g.c.chat('24', true)
+    await until(() => /помещение 24/.test(lastGm(g.chat)?.text ?? ''))
+    const scene = lastGm(g.chat)
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '▸ Бьете его (пробить — удача 9)')!.id)
+    await until(() => /Раздается вопль/.test(lastGm(g.chat).text))
+    const branch = lastGm(g.chat)
+    setRng(() => 0) // к18 = 1 — провал
+    await g.c.choose(branch.id, branch.choices!.find((c) => c.label.includes('удачи 9'))!.id)
+    await until(() => lastGm(g.chat).text.includes('испытывает удачу'))
+    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('▸ Не пробиваете')
+  })
+
   it('после победы новый противник предлагается: минотавр требует половину сокровищ', async () => {
     const g = await setup()
     await goTo(g, 'mertvyy-gorod')
