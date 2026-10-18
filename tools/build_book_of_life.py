@@ -242,10 +242,18 @@ def apply_overrides(locations, issues):
             if missing:
                 issues.append(f'правка {key}: в ветке «{name}» нет текста «{missing[0]}»')
                 continue
+            # куски покрывают всю ветку: ни одна фраза книги не пропадает (остаются только знаки и тире между ними)
+            rest = src
+            for piece in pieces:
+                for x in (piece['label'], piece['text']):
+                    rest = rest.replace(norm(x), ' ', 1)
+            if re.search(r'[^\W\d_]', rest):
+                issues.append(f'правка {key}: куски ветки «{name}» теряют текст: «{" ".join(rest.split())[:80]}»')
+                continue
             new = []
             for piece in pieces:
                 text = _cap(piece['text'].strip())
-                if not re.search(r'[.!?…»”]$', text):
+                if not re.search(r'[.!?…»”:]$', text):
                     text += '.'
                 seg = {'kind': 'branch', 'label': _cap(piece['label'].strip()), 'blocks': [{'text': text}]}
                 w = branch_when(seg['label'])
