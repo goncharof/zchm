@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { idx } from '@/data'
 import { shortestRoute } from '@/engine/world'
@@ -27,6 +27,16 @@ const routeSegments = computed(() => {
   }
   return out
 })
+// телефон: карта шире экрана — прокрутить к текущему узлу
+const scroller = ref<HTMLElement | null>(null)
+function centerOnParty() {
+  const el = scroller.value
+  const node = current.value
+  if (!el || !node || el.scrollWidth <= el.clientWidth) return
+  el.scrollLeft = Math.max(0, node.x * el.scrollWidth - el.clientWidth / 2)
+}
+onMounted(() => void nextTick(centerOnParty))
+watch(() => [store.world, current.value?.id], () => void nextTick(centerOnParty))
 function isVisited(locationId?: string) {
   return !!locationId && (store.game?.visited[locationId]?.length ?? 0) > 0
 }
@@ -46,7 +56,8 @@ function enter(locationId: string) {
   <div v-else class="cols c21">
     <div>
       <div v-if="!store.world" class="card">Карта мира не загружена (нет src/data/world.json).</div>
-      <div v-else class="map-wrap">
+      <div v-else ref="scroller" class="map-scroll">
+      <div class="map-wrap">
         <img :src="mapSrc" alt="Карта мира" />
         <svg class="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           <line v-for="(s, i) in routeSegments" :key="i" :x1="s[0]" :y1="s[1]" :x2="s[2]" :y2="s[3]" class="route-line" />
@@ -57,6 +68,8 @@ function enter(locationId: string) {
           <template v-if="n.locationId">{{ n.name }}<span v-if="isVisited(n.locationId)" class="visited-mark"> ✓</span></template>
         </button>
       </div>
+      </div>
+      <p class="small muted map-hint">Карту можно листать вбок. Нажмите город, чтобы проложить путь.</p>
     </div>
     <div>
       <div class="card">
@@ -77,6 +90,12 @@ function enter(locationId: string) {
         <div class="row">
           <button v-for="(n, i) in store.game.pendingRoad" :key="i" @click="router.push({ path: '/location/doroga', query: { p: n } })">Дорога {{ n }}</button>
         </div>
+      </div>
+      <!-- телефон: выбранный путь — плашкой над нижней панелью -->
+      <div v-if="selected && selected.id !== current?.id" class="map-action">
+        <div class="grow"><b>{{ selected.name }}</b><div class="small muted">{{ route ? `${days} ${plural(days, 'день', 'дня', 'дней')} пути${mounted ? ', верхом' : ''}` : 'дороги туда нет' }}</div></div>
+        <button class="ghost icon" aria-label="Отменить выбор" @click="selectedId = null">✕</button>
+        <button class="primary" :disabled="!route" @click="go">Отправиться</button>
       </div>
       <div class="card tight">
         <h3>Локации</h3>

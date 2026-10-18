@@ -126,6 +126,8 @@ main.page { max-width: 1200px; margin: 0 auto; padding: 1.1rem 16px 5rem; }
 .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .grid.wide { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
 .cols { display: grid; gap: 1rem; }
+/* ячейки сетки не растягиваются под широкое содержимое (карта, таблицы) — оно прокручивается внутри */
+.cols > *, .loc-layout > * { min-width: 0; }
 .cols.c21 { grid-template-columns: 2fr 1fr; }
 .cols.c11 { grid-template-columns: 1fr 1fr; }
 .cols.side { grid-template-columns: 260px 1fr; }
@@ -196,6 +198,9 @@ table.list tr:last-child td { border-bottom: none; }
 }
 
 /* ---------- карта мира ---------- */
+.map-scroll { position: relative; }
+.map-hint { display: none; margin: .4rem 0 0; }
+.map-action { display: none; }
 .map-wrap { position: relative; width: 100%; overflow: hidden; border-radius: var(--radius); }
 .map-wrap img { width: 100%; height: auto; border-radius: var(--radius); border: 1px solid var(--line); }
 .map-node {
@@ -430,6 +435,17 @@ button.voted { outline: 2px solid var(--ok); outline-offset: 1px; }
   .hero-cover .cta { justify-content: center; }
   .hero-cover .cta button { flex: 1 1 140px; }
   .modal-back { align-items: flex-end; padding: 0; }
+  /* карта шире экрана, листается вбок; выбранный путь — плашкой над нижней панелью */
+  .map-scroll { overflow-x: auto; overscroll-behavior-x: contain; border-radius: var(--radius); scrollbar-width: thin; }
+  .map-scroll .map-wrap { width: 780px; max-width: none; }
+  .map-scroll .map-node { font-size: .7rem; padding: .1rem .45rem; border-width: 1.5px; }
+  .map-hint { display: block; }
+  .map-action {
+    display: flex; align-items: center; gap: .5rem; position: fixed; left: 10px; right: 10px; z-index: 44;
+    bottom: calc(var(--tabbar-h) + 10px + var(--safe-b)); padding: .6rem .7rem; border-radius: 14px;
+    background: var(--surface-2); border: 1px solid var(--line-2); box-shadow: 0 12px 30px rgba(0, 0, 0, .6);
+  }
+  .map-action .grow { flex: 1; min-width: 0; }
   .modal { max-height: 92dvh; border-radius: 18px 18px 0 0; padding-bottom: calc(1rem + var(--safe-b)); }
 }
 @media (max-width: 640px) {
