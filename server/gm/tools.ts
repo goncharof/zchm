@@ -119,6 +119,19 @@ function stemRu(w: string): string {
 }
 const stems = (s: string) => s.split(/[\s-]+/).filter(Boolean).map(stemRu)
 
+/** Параграф для ведущего (сцена, ветки, подсказки) — без побочных эффектов: отметку «пройден» ставит тот, кто его
+ *  действительно разыгрывает (инструмент open_paragraph или сервер после удачного хода) */
+export function paragraphPayload(room: Room, locationId: string, n: number): string {
+  const loc = idx.locationById.get(locationId)
+  if (!loc) throw new GameError(`Нет локации ${locationId}`)
+  const p = loc.paragraphs.find((x) => x.n === n)
+  if (!p) throw new GameError(`В локации «${loc.name}» нет параграфа ${n}`)
+  const before = (room.state.visited[loc.id] ?? []).includes(p.n)
+  const WHEN = { win: 'после победы в бою', lose: 'после поражения', luckOk: 'если проверка удачи прошла', luckFail: 'если проверка удачи не прошла' } as const
+  const branches = (p.segments ?? []).filter((g) => g.kind === 'branch').map((g) => ({ если: g.label, ...(g.when ? { когда: WHEN[g.when] } : {}), исход: g.blocks.map((b) => ('text' in b ? b.text : b.roll.map((o) => `${o.values.join(',')} — ${o.text}`).join('; '))).join(' ') }))
+  return JSON.stringify({ локация: loc.name, параграф: p.n, уже_пройден: before, текст: sceneText(p), ветки: branches, подсказки: p.hints ?? {}, напоминание: 'Раскрывай игрокам только то, что видят герои; исходы веток — после их выбора.' })
+}
+
 /** Монстр по id или имени, в том числе в падеже и числе из текста («гномы», «рыцарей смерти»).
  *  Бесплатные модели получают ужатый промпт без списка id. Совпадение — по основам всех слов имени
  *  (а не по началу строки: иначе «гномы» становились гноллом, «драконы» — драконидом). */
@@ -160,16 +173,10 @@ export function executeGmTool(room: Room, name: string, input: unknown): ToolOut
   try {
     switch (name as GmToolName) {
       case 'open_paragraph': {
-        const loc = idx.locationById.get(String(a.location_id))
-        if (!loc) throw new GameError(`Нет локации ${a.location_id}`)
-        const p = loc.paragraphs.find((x) => x.n === a.n)
-        if (!p) throw new GameError(`В локации «${loc.name}» нет параграфа ${a.n}`)
-        const before = (room.state.visited[loc.id] ?? []).includes(p.n)
-        s.markVisited(loc.id, p.n)
-        if (loc.id === 'doroga') s.dismissRoad(p.n)
-        const WHEN = { win: 'после победы в бою', lose: 'после поражения', luckOk: 'если проверка удачи прошла', luckFail: 'если проверка удачи не прошла' } as const
-        const branches = (p.segments ?? []).filter((g) => g.kind === 'branch').map((g) => ({ если: g.label, ...(g.when ? { когда: WHEN[g.when] } : {}), исход: g.blocks.map((b) => ('text' in b ? b.text : b.roll.map((o) => `${o.values.join(',')} — ${o.text}`).join('; '))).join(' ') }))
-        return { content: json({ локация: loc.name, параграф: p.n, уже_пройден: before, текст: sceneText(p), ветки: branches, подсказки: p.hints ?? {}, напоминание: 'Раскрывай игрокам только то, что видят герои; исходы веток — после их выбора.' }) }
+        const content = paragraphPayload(room, String(a.location_id), Number(a.n))
+        s.markVisited(String(a.location_id), Number(a.n))
+        if (a.location_id === 'doroga') s.dismissRoad(Number(a.n))
+        return { content }
       }
       case 'roll_luck': {
         const h = findHero(room, String(a.hero))

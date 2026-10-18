@@ -287,7 +287,8 @@ export class GameSession {
 
   // ---------- трактир ----------
   restAll(days: number): void {
-    days = Math.max(1, Math.min(30, Math.floor(days)))
+    const d = Math.floor(Number(days))
+    days = Number.isFinite(d) ? Math.max(1, Math.min(30, d)) : 1
     for (const h of this.heroes) {
       const r = rest(h, days, REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY)
       if (r.days < days) this.log(`${h.name} может оплатить только ${r.days} сут. из ${days}.`)
@@ -316,6 +317,9 @@ export class GameSession {
   }
   enterLocation(locationId: string): void {
     if (!idx.locationById.has(locationId)) throw new GameError('Нет такой локации')
+    // войти можно туда, где стоит партия на карте (ведущий в одиночной игре — куда угодно)
+    const node = this.world && this.state.worldNodeId ? this.world.nodes.find((n) => n.id === this.state.worldNodeId) : null
+    if (node && node.locationId !== locationId && !this.state.gmMode) throw new GameError('Сначала дойдите до этой локации по карте')
     this.state.locationId = locationId
     this.log(`Партия входит: ${idx.locationById.get(locationId)?.name ?? locationId}.`)
   }
@@ -333,7 +337,9 @@ export class GameSession {
 
   // ---------- действия по параграфу ----------
   rollDie(sides: number, context?: string): number {
-    const r = roll(Math.max(2, Math.min(100, Math.floor(sides))))
+    const n = Math.floor(Number(sides))
+    sides = Number.isFinite(n) ? Math.max(2, Math.min(100, n)) : 6
+    const r = roll(sides)
     this.log(`${context ? `${String(context).slice(0, 120)}: ` : ''}к${sides} = ${r}.`, 'luck')
     return r
   }
@@ -500,6 +506,11 @@ export class GameSession {
   }
   cast(heroUid: string, spellId: string, opts: { targetUid?: string; targetHeroUid?: string; targetEntryUid?: string; param?: number } = {}): CastResult {
     if (this.combat && !this.combat.finished) this.requireHeroTurn(this.hero(heroUid))
+    // параметр приходит и по сети: только целое от 1 (иначе жизни и мана становятся NaN)
+    if (opts.param !== undefined) {
+      const p = Math.floor(Number(opts.param))
+      opts = { ...opts, param: Number.isFinite(p) && p >= 1 ? Math.min(p, 999) : undefined }
+    }
     const res = castSpell({ hero: this.hero(heroUid), spell: idx.spell(spellId), idx, heroes: this.heroes, combat: this.combat, ...opts })
     this.logAll(res.log)
     this.announceLevelUps(res.levelUps)

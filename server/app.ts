@@ -215,7 +215,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!player.isHost) throw new GameError('Это может только хозяин комнаты')
         room.gm = mode
         // ведущий больше не отвечает сам — отложенные реплики и отметки «готов» не нужны
-        if (!autoGm(room)) { room.held = []; room.ready.clear(); for (const id of Object.keys(room.votes)) clearVotes(room, id) }
+        if (!autoGm(room)) { room.held = []; room.ready.clear(); room.gmQueue = []; for (const id of Object.keys(room.votes)) clearVotes(room, id) }
         ctx.chat(room, { from: 'system', author: 'Игра', text: `Режим ведущего: ${GM_TITLE[mode]}.` })
         ctx.roomChanged(room)
         store.touch(room)
@@ -447,7 +447,9 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
     url: `http://localhost:${port}`, port, http, io, store, gm,
     async close() {
       clearInterval(evictTimer)
-      await gm.idle()
+      // очередь ведущего сохранена в комнатах: сначала записать на диск, ходы моделей ждать недолго
+      await store.flush()
+      await Promise.race([gm.idle(), new Promise((r) => setTimeout(r, 3000))])
       await store.flush()
       await new Promise<void>((resolve) => { io.close(() => resolve()) })
     },

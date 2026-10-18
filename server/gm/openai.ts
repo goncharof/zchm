@@ -89,7 +89,7 @@ export class OpenAiCompatProvider implements LlmProvider {
           let args: unknown
           try { args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {} } catch { args = undefined }
           const out = args === undefined ? { content: 'INVALID_JSON: аргументы не разобраны, повтори вызов', isError: true } : executeGmTool(room, tc.function.name, args)
-          if (!out.isError) done.push(describeTool(tc.function.name, args))
+          if (!out.isError) { const d = describeTool(tc.function.name, args); done.push(d); room.gmDone.push(d) }
           if (out.endsTurn && !out.isError) ends = true
           hist.push({ role: 'tool', tool_call_id: tc.id, content: out.isError ? `Ошибка: ${out.content}` : out.content })
         }
@@ -154,6 +154,8 @@ export class OpenAiCompatProvider implements LlmProvider {
       // сколько ждать: заголовок retry-after (Groq) или retryDelay в теле ответа (Gemini)
       const retryAfter = res.headers.get('retry-after') ?? body.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/)?.[1] ?? null
       const wait = cooldownFor(res.status, retryAfter)
+      const daily = res.status === 429 && /PerDay/i.test(body)
+      if (daily) throw new ProviderError(`${this.label}: дневная квота исчерпана`, Math.max(wait, 3600_000))
       if (res.status === 429 && retryAfter && !retried && wait <= (this.cfg.maxRetryWaitMs ?? 20_000)) {
         // лимит на секунды (токены в минуту) — подождать один раз, а не отдавать ход другой модели
         console.log(`[ведущий ${this.label}] лимит, жду ${Math.ceil(wait / 1000)} с`)

@@ -45,6 +45,7 @@ export interface RoomData {
   gmMarks?: Record<string, number>
   gmQueue?: import('./gm/types').GmInput[]
   gmInFlight?: import('./gm/types').GmInput[] | null
+  gmDone?: string[]
   choiceActions?: Record<string, ChoiceRecord>
   createdAt: number
   updatedAt: number
@@ -101,6 +102,8 @@ export class Room {
   /** очередь входов ведущему и ход, который сейчас идёт, — сохраняются, чтобы пережить перезапуск сервера */
   gmQueue: import('./gm/types').GmInput[] = []
   gmInFlight: import('./gm/types').GmInput[] | null = null
+  /** инструменты, уже выполненные идущим ходом (переживают перезапуск: повтор хода не выдаст награду второй раз) */
+  gmDone: string[] = []
   /** недописанный текст ведущего (стрим): игрок, обновивший страницу, видит его сразу */
   live: Record<string, string> = {}
   gmSeen: Record<string, string> = {}
@@ -184,7 +187,7 @@ export class Room {
       players: [...this.players.values()].map(({ sockets: _s, ...rest }) => { void _s; return rest }),
       chat: this.chat, gmHistories: this.gmHistories, gmSeen: this.gmSeen, script: this.script, choiceActions: this.choiceActions,
       turnMode: this.turnMode, held: this.held, votes: this.votes,
-      gmMarks: this.gmMarks, gmQueue: this.gmQueue, gmInFlight: this.gmInFlight,
+      gmMarks: this.gmMarks, gmQueue: this.gmQueue, gmInFlight: this.gmInFlight, gmDone: this.gmDone,
       createdAt: this.createdAt, updatedAt: this.updatedAt,
     }
   }
@@ -205,6 +208,7 @@ export class Room {
       if (h && h.length > mark) h.length = mark
     }
     r.gmQueue = [...(d.gmInFlight ?? []), ...(d.gmQueue ?? [])]
+    r.gmDone = d.gmDone ?? []
     // отправившие отложенные реплики были готовы — после перезапуска сервера тоже
     r.ready = new Set(r.held.map((h) => h.playerId))
     r.createdAt = d.createdAt
@@ -293,6 +297,9 @@ export class RoomStore {
       const online = [...r.players.values()].some((p) => p.sockets.size > 0)
       if (online || r.gmBusy || this.timers.has(code) || now - r.updatedAt < maxIdleMs) continue
       try { await this.save(r) } catch { continue }
+      // пока сохранялись, кто-то мог войти или комната изменилась
+      const stillIdle = ![...r.players.values()].some((p) => p.sockets.size > 0) && !r.gmBusy && !this.timers.has(code) && now - r.updatedAt >= maxIdleMs
+      if (!stillIdle || this.rooms.get(code) !== r) continue
       this.rooms.delete(code)
       n++
     }

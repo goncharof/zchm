@@ -675,9 +675,20 @@ export function monsterCast(state: CombatState, m: MonsterInstance, heroes: Hero
         const xp = awardXp(state, target, d.dealt, m, idx)
         if (xp.xp) log.push(entry(`${target.name} получает ${xp.xp} очков опыта.`, 'xp'))
       } else if (effect.type === 'control') {
-        if (effect.kind === 'petrify') m.petrified = true
-        else { m.disabled = k6(); m.disabledKind = effect.kind === 'paralysis' ? 'paralysis' : effect.kind === 'sleep' ? 'sleep' : 'freeze' }
+        // отражённое заклинание действует на монстра так же, как на героя: с пределом уровня и своей длительностью
+        if (effect.maxLevel !== undefined && m.level > effect.maxLevel) log.push(entry(`${m.name} слишком силён для собственного заклинания — оно рассеивается.`, 'spell'))
+        else if (effect.kind === 'petrify') m.petrified = true
+        else if (effect.kind === 'web') { m.disabled = Math.max(m.disabled ?? 0, 1); m.disabledKind = 'freeze' }
+        else if (effect.kind === 'hold') { if (!m.held) { m.held = true; m.defenseMod -= 2; m.attackMultiplier *= 0.5 } }
+        else if (effect.kind === 'choke') {
+          const rounds = Math.max(1, Math.ceil(m.level / 2))
+          if (!m.choke) { m.defenseMod -= 4; m.attackMultiplier *= 0.5 }
+          m.choke = Math.max(m.choke ?? 0, rounds)
+        } else { m.disabled = k6(); m.disabledKind = effect.kind === 'paralysis' ? 'paralysis' : effect.kind === 'sleep' ? 'sleep' : 'freeze' }
         log.push(entry(`${m.name} попадает под собственное заклинание.`, 'spell'))
+      } else if (effect.type === 'debuff') {
+        m.attackMultiplier *= 0.5
+        log.push(entry(`${m.name} слабеет от собственного заклинания: атаки вдвое.`, 'spell'))
       }
       if (m.dead) break
       continue

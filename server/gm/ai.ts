@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto'
 import type { Room } from '../rooms'
 import { buildSystemPrompt, recap, snapshot } from './prompt'
 import { ScriptedGm, roomNumber } from './script'
-import { GM_TOOLS, executeGmTool } from './tools'
+import { GM_TOOLS, executeGmTool, paragraphPayload } from './tools'
 import { ProviderError, describeTool, type GmContext, type GmDriver, type GmEvent, type GmFactory, type GmInput, type LlmProvider } from './types'
 
 type Msg = Anthropic.Beta.BetaMessageParam
@@ -131,7 +131,7 @@ export class AnthropicProvider implements LlmProvider {
         let ends = false
         const results: Anthropic.Beta.BetaToolResultBlockParam[] = uses.map((u) => {
           const out = executeGmTool(room, u.name, u.input)
-          if (!out.isError) done.push(describeTool(u.name, u.input))
+          if (!out.isError) { const d = describeTool(u.name, u.input); done.push(d); room.gmDone.push(d) }
           if (out.endsTurn && !out.isError) ends = true
           return { type: 'tool_result', tool_use_id: u.id, content: out.content, ...(out.isError ? { is_error: true } : {}) }
         })
@@ -235,14 +235,18 @@ export class GmDirector implements GmDriver {
   private async turn(room: Room, batch: GmInput[]): Promise<void> {
     const events = batch.flatMap((b) => (b.kind === 'event' ? [b.event] : []))
     const texts = batch.flatMap((b) => (b.kind === 'player' ? [b] : []))
+    // ведёт живой ведущий или никто (режим сменили, пока вход ждал в очереди) — ИИ не отвечает
+    if (room.gm !== 'ai' && room.gm !== 'script') { room.gmDone = []; return }
     if (room.gm === 'script' || !this.opts.providers.length) {
       this.script.handle(room, events, texts)
       return
     }
-    const userText = formatInputs(events, texts) + this.preopen(room, events, texts)
+    const opened = this.preopen(room, events, texts)
+    const userText = formatInputs(events, texts) + opened.text
     const exclude = new Set(texts.map((t) => t.chatId).filter(Boolean) as string[])
-    // что уже сделали прерванные попытки этого хода: их изменения в игре остались, следующая модель не должна их повторить
-    const carried: string[] = []
+    // что уже сделали прерванные попытки этого хода (в том числе до перезапуска сервера): их изменения в игре остались,
+    // следующая модель не должна их повторить
+    const carried: string[] = [...room.gmDone]
     for (const p of this.opts.providers) {
       if ((this.cooling.get(p.id) ?? 0) > Date.now()) continue
       const id = randomUUID()
@@ -253,6 +257,10 @@ export class GmDirector implements GmDriver {
           stateChanged: () => this.ctx.stateChanged(room),
         })
         const msg = this.ctx.chat(room, { id, from: 'gm', author: `Ведущий · ${p.label}`, text })
+        // ход разыгран: заранее открытые помещения и встречи пройдены, список выполненного больше не нужен
+        const s = room.session()
+        for (const w of opened.places) { s.markVisited(w.loc, w.n); if (w.loc === 'doroga') s.dismissRoad(w.n) }
+        room.gmDone = []
         // исход боя описал ИИ — привязка боя к параграфу для сценарного ведущего больше не нужна
         if (events.some((e) => e.type === 'combatEnd')) delete room.script.fight
         this.ctx.done(room, id)
@@ -270,28 +278,36 @@ export class GmDirector implements GmDriver {
       }
     }
     this.ctx.notice(room, 'ИИ-ведущий сейчас недоступен — ход ведёт сценарный ведущий.')
+    room.gmDone = []
     this.script.handle(room, events, texts)
   }
 
   /** Параграфы, которые и так понадобятся: названное игроками помещение и встречи в пути. Сервер открывает их сам
    *  и прикладывает к ходу — модели не нужен лишний запрос с open_paragraph (бесплатные квоты — десятки запросов в день) */
-  private preopen(room: Room, events: GmEvent[], texts: { text: string }[]): string {
+  private preopen(room: Room, events: GmEvent[], texts: { text: string }[]): { text: string; places: { loc: string; n: number }[] } {
     const wanted: { loc: string; n: number }[] = []
     for (const ev of events) if (ev.type === 'travel') for (const n of ev.encounters ?? []) wanted.push({ loc: 'doroga', n })
     const loc = room.state.locationId
-    if (loc) for (const t of texts) { const n = roomNumber(t.text); if (n !== null) wanted.push({ loc, n }) }
+    const fighting = !!room.state.combat && !room.state.combat.finished
+    if (loc && !fighting) {
+      for (const t of texts) {
+        // «не пойдём в помещение 5» — не поход туда
+        if (/(^|\s)не\s+(пойд|ид|заход|вход|сунем|полез)/i.test(t.text)) continue
+        const n = roomNumber(t.text)
+        if (n !== null) wanted.push({ loc, n })
+      }
+    }
     const parts: string[] = []
+    const places: { loc: string; n: number }[] = []
     const seen = new Set<string>()
     for (const w of wanted.slice(0, 4)) {
       const key = `${w.loc}:${w.n}`
       if (seen.has(key)) continue
       seen.add(key)
-      const out = executeGmTool(room, 'open_paragraph', { location_id: w.loc, n: w.n })
-      if (!out.isError) parts.push(out.content)
+      try { parts.push(paragraphPayload(room, w.loc, w.n)); places.push(w) } catch { /* нет такого параграфа — модель разберётся сама */ }
     }
-    if (!parts.length) return ''
-    this.ctx.stateChanged(room)
-    return `\n\n[Сервер уже открыл параграфы для этого хода — open_paragraph для них не вызывай]\n${parts.join('\n')}`
+    if (!parts.length) return { text: '', places }
+    return { text: `\n\n[Сервер уже открыл параграфы для этого хода — open_paragraph для них не вызывай]\n${parts.join('\n')}`, places }
   }
 
   /** Сводка разговора, пропущенного этим провайдером (вели другие модели или сценарный ведущий) */

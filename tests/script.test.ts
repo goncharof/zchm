@@ -39,6 +39,8 @@ async function setup() {
   return { s, c, j, chat, get state() { return state! } }
 }
 const lastGm = (chat: ChatMessage[]) => [...chat].reverse().find((m) => m.from === 'gm')!
+/** партия на нужном узле карты (войти можно только туда, где она стоит) */
+async function goTo(g: { s: GameServer; j: { code: string } }, nodeId: string) { (await g.s.store.get(g.j.code))!.state.worldNodeId = nodeId }
 
 describe('сценарный ведущий', () => {
   it('вход в локацию, номер помещения → сцена с вариантами; проверка удачи и бой выполняются движком', async () => {
@@ -79,6 +81,7 @@ describe('сценарный ведущий', () => {
     const g = await setup()
     await g.c.chat('Поговорим с трактирщиком', true)
     await until(() => lastGm(g.chat)?.text.includes('понимает номера'))
+    await goTo(g, 'gorod-zhretsov')
     await g.c.call('enterLocation', ['zamok-zhretsov'])
     await g.c.chat('17', true)
     await until(() => /помещение 17/.test(lastGm(g.chat)?.text ?? ''))
@@ -104,6 +107,7 @@ describe('сценарный ведущий', () => {
 
   it('провал проверки удачи: кнопка последствия из текста отнимает жизни у проверявшего героя', async () => {
     const g = await setup()
+    await goTo(g, 'krepost-posledney-nadezhdy')
     await g.c.call('enterLocation', ['krepost-posledney-nadezhdy'])
     await until(() => g.chat.some((m) => m.from === 'gm' && /Назовите номер/.test(m.text)))
     await g.c.chat('29', true)
@@ -122,6 +126,7 @@ describe('сценарный ведущий', () => {
 
   it('после боя из параграфа предлагается ветка победы', async () => {
     const g = await setup()
+    await goTo(g, 'krepost-posledney-nadezhdy')
     await g.c.call('enterLocation', ['krepost-posledney-nadezhdy'])
     await until(() => g.chat.some((m) => m.from === 'gm' && /Назовите номер/.test(m.text)))
     await g.c.chat('40', true)
