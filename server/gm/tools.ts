@@ -174,8 +174,7 @@ export function executeGmTool(room: Room, name: string, input: unknown): ToolOut
     switch (name as GmToolName) {
       case 'open_paragraph': {
         const content = paragraphPayload(room, String(a.location_id), Number(a.n))
-        s.markVisited(String(a.location_id), Number(a.n))
-        if (a.location_id === 'doroga') s.dismissRoad(Number(a.n))
+        room.gmOpened.push({ loc: String(a.location_id), n: Number(a.n) })
         return { content }
       }
       case 'roll_luck': {

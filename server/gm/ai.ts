@@ -238,10 +238,11 @@ export class GmDirector implements GmDriver {
     const events = batch.flatMap((b) => (b.kind === 'event' ? [b.event] : []))
     const texts = batch.flatMap((b) => (b.kind === 'player' ? [b] : []))
     // ведёт живой ведущий или никто (режим сменили, пока вход ждал в очереди) — ИИ не отвечает
-    if (room.gm !== 'ai' && room.gm !== 'script') { room.gmDone = []; return }
+    if (room.gm !== 'ai' && room.gm !== 'script') { room.gmDone = []; room.gmOpened = []; return }
     if (room.gm === 'script' || !this.opts.providers.length) {
       // ход прерванной модели доигрывает сценарный ведущий: список выполненного ей больше не нужен
       room.gmDone = []
+      room.gmOpened = []
       this.script.handle(room, events, texts)
       return
     }
@@ -254,6 +255,8 @@ export class GmDirector implements GmDriver {
     for (const p of this.opts.providers) {
       if ((this.cooling.get(p.id) ?? 0) > Date.now()) continue
       const id = randomUUID()
+      // помещения, открытые прошлой (сорвавшейся) моделью, эта откроет сама, если они ей нужны
+      room.gmOpened = []
       const already = carried.length ? `[Прошлая попытка этого хода прервалась, но уже выполнила в игре: ${carried.join('; ')}. Эти действия не повторяй — опиши их результат и продолжи.]\n\n` : ''
       try {
         const text = await p.turn(room, { userText: this.catchup(room, p.id, exclude) + already + userText, snapshot: snapshot(room) }, {
@@ -263,8 +266,9 @@ export class GmDirector implements GmDriver {
         const msg = this.ctx.chat(room, { id, from: 'gm', author: `Ведущий · ${p.label}`, text })
         // ход разыгран: заранее открытые помещения и встречи пройдены, список выполненного больше не нужен
         const s = room.session()
-        for (const w of opened.places) { s.markVisited(w.loc, w.n); if (w.loc === 'doroga') s.dismissRoad(w.n) }
+        for (const w of [...opened.places, ...room.gmOpened]) { s.markVisited(w.loc, w.n); if (w.loc === 'doroga') s.dismissRoad(w.n) }
         room.gmDone = []
+        room.gmOpened = []
         // исход боя описал ИИ — привязка боя к параграфу для сценарного ведущего больше не нужна
         if (events.some((e) => e.type === 'combatEnd')) delete room.script.fight
         this.ctx.done(room, id)
@@ -283,6 +287,7 @@ export class GmDirector implements GmDriver {
     }
     this.ctx.notice(room, 'ИИ-ведущий сейчас недоступен — ход ведёт сценарный ведущий.')
     room.gmDone = []
+    room.gmOpened = []
     this.script.handle(room, events, texts)
   }
 

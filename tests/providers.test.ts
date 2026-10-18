@@ -236,6 +236,8 @@ describe('цепочка моделей ведущего', () => {
     await until(() => g.chat.some((m) => m.author === 'Ведущий · Вторая'))
     expect(carried).toMatch(/roll_luck \{[^}]*\} → \{"герой":"Конан","ok":(true|false)/)
     expect(carried).not.toContain('open_paragraph')
+    // помещение открыла сорвавшаяся модель, а рассказала о нём не она — пройденным оно не считается
+    expect(g.state.visited['zolotoy-gorod'] ?? []).not.toContain(1)
   })
 
   it('модель выполнила действие, но не дописала рассказ — ход засчитан, а не отдан другой модели', async () => {
