@@ -120,6 +120,28 @@ describe('сценарный ведущий', () => {
     expect(g.chat.slice(before).some((m) => m.from === 'gm')).toBe(false)
   })
 
+  it('слитые разметкой исходы разрезаны: провал «Перерубить — удача 8» ведёт в свою ветку с 217 монетами', async () => {
+    const g = await setup()
+    const room = (await g.s.store.get(g.j.code))!
+    await g.c.claimHero(room.state.heroes[0].uid)
+    await goTo(g, 'upokoische')
+    await g.c.call('enterLocation', ['upokoische'])
+    await g.c.chat('26', true)
+    await until(() => /помещение 26/.test(lastGm(g.chat)?.text ?? ''))
+    const scene = lastGm(g.chat)
+    setRng(() => 0) // к18 = 1 — провал
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label.includes('удачи 8'))!.id)
+    await until(() => lastGm(g.chat).text.includes('испытывает удачу'))
+    const res = lastGm(g.chat)
+    expect(res.choices!.map((c) => c.label)).toContain('▸ Не перерубаете')
+    expect(res.choices!.map((c) => c.label)).not.toContain('▸ Если перерубаете')
+    await g.c.choose(res.id, res.choices!.find((c) => c.label === '▸ Не перерубаете')!.id)
+    await until(() => /Падаете без чувств/.test(lastGm(g.chat).text))
+    const labels = lastGm(g.chat).choices!.map((c) => c.label)
+    expect(labels).toContain('Забрать 217 монет')
+    expect(labels).not.toContain('Забрать 176 монет')
+  })
+
   it('после победы новый противник предлагается: минотавр требует половину сокровищ', async () => {
     const g = await setup()
     await goTo(g, 'mertvyy-gorod')
