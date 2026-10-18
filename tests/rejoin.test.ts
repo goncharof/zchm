@@ -74,6 +74,7 @@ describe('возврат в игру', () => {
     const net = new NetClient(s.url); clients.push(net)
     store.attachNet(net)
     await store.createRoom('Иван', 'book', false)
+    await until(() => !!store.room) // описание комнаты приходит сразу после ответа на создание
     const code = store.room!.code
     store.rejoinState = 'waiting' // как после входа при лежащем сервере
     ;(s.store as unknown as { rooms: Map<string, unknown> }).rooms.delete(code)
