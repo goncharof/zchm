@@ -8,8 +8,10 @@ export const SLOT_NAMES: Record<EquipSlot, string> = {
   shield: 'щит',
   helmet: 'шлем',
   gloves: 'рукавицы',
-  accessory1: 'украшение',
-  accessory2: 'украшение 2',
+  bracelet: 'браслет',
+  ring: 'перстень',
+  amulet: 'амулет',
+  necklace: 'ожерелье',
 }
 
 export const HAND_NAMES: Record<string, string> = { any: 'любая рука', right: 'правая рука', two: 'двуручное' }

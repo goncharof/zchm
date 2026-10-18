@@ -7,7 +7,7 @@ import type { Caster, WorldMap } from '@/types'
 import { gameData, idx } from '@/data'
 import type { CombatState, EquipSlot, GameState, Hero, InventoryKind, LogEntry } from '@/engine/model'
 import { SAVE_VERSION, uid } from '@/engine/model'
-import { changeLives, consumePrayer, createHero, gainXp, hasWard, heroLuck, isActive, isConscious, rest, type LevelUp } from '@/engine/character'
+import { artifactSlot, changeLives, consumePrayer, createHero, gainXp, hasWard, heroLuck, isActive, isConscious, rest, type LevelUp } from '@/engine/character'
 import * as inv from '@/engine/inventory'
 import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
@@ -63,6 +63,15 @@ export function migrate(g: GameState): GameState {
     h.buffs ??= []
     h.status ??= {}
     h.pendingSpellPicks ??= 0
+    // прежние слоты «украшение 1/2» → свой слот у каждого украшения-артефакта
+    const eq = h.equipment as Record<string, string | undefined>
+    for (const old of ['accessory1', 'accessory2']) {
+      const uid = eq[old]
+      if (!uid) continue
+      delete eq[old]
+      const e = h.inventory.find((x) => x.uid === uid)
+      if (e?.kind === 'artifact') eq[artifactSlot(parseInt(e.ref, 10))] = uid
+    }
   }
   return g
 }

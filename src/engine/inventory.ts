@@ -105,7 +105,7 @@ export function equip(hero: Hero, entryUid: string, idx: DataIndex, preferredSlo
     if (w.group === 'ammo') throw new Error('Это боеприпас, его не берут в руки')
     if (w.ranged && !w.throwable) return place('ranged')
     if (w.throwable && preferredSlot === 'ranged') return place('ranged')
-    return placeMelee(hero, entryUid, w.hand ?? 'any', !!cls.oneHandOnly, preferredSlot)
+    return placeMelee(hero, idx, entryUid, w.hand ?? 'any', !!cls.oneHandOnly, preferredSlot)
   }
   if (e.kind === 'armor') {
     const a = idx.armor(e.ref)
@@ -121,12 +121,8 @@ export function equip(hero: Hero, entryUid: string, idx: DataIndex, preferredSlo
       if (!canUseWeapon(cls, pseudo)) throw new Error(`${cls.name} не может пользоваться: ${a.name}`)
     }
     if (slot === 'shield') checkShield(hero, idx)
-    if (slot === 'melee') return placeMelee(hero, entryUid, a.hand ?? 'any', !!cls.oneHandOnly, preferredSlot)
+    if (slot === 'melee') return placeMelee(hero, idx, entryUid, a.hand ?? 'any', !!cls.oneHandOnly, preferredSlot)
     if (slot === 'ranged') return place('ranged')
-    if (slot === 'accessory1') {
-      if (preferredSlot === 'accessory2' || (hero.equipment.accessory1 && !hero.equipment.accessory2)) return place('accessory2')
-      return place('accessory1')
-    }
     return place(slot)
   }
   throw new Error('Этот предмет нельзя надеть')
@@ -156,7 +152,7 @@ function handOf(e: InventoryEntry, idx: DataIndex): string | undefined {
   return undefined
 }
 
-function placeMelee(hero: Hero, entryUid: string, hand: 'any' | 'right' | 'two', oneHandOnly: boolean, preferred?: EquipSlot): EquipSlot {
+function placeMelee(hero: Hero, idx: DataIndex, entryUid: string, hand: 'any' | 'right' | 'two', oneHandOnly: boolean, preferred?: EquipSlot): EquipSlot {
   for (const s of Object.keys(hero.equipment) as EquipSlot[]) if (hero.equipment[s] === entryUid) delete hero.equipment[s]
   if (hand === 'two') {
     delete hero.equipment.leftHand
@@ -168,8 +164,16 @@ function placeMelee(hero: Hero, entryUid: string, hand: 'any' | 'right' | 'two',
     hero.equipment.rightHand = entryUid
     return 'rightHand'
   }
-  // оружие "для любой руки"
-  if (preferred === 'leftHand' || (hero.equipment.rightHand && !hero.equipment.leftHand && !hero.equipment.shield)) {
+  // оружие "для любой руки": двуручное в правой исключает второе оружие (стр. 21); щит уступает левую руку, как и наоборот
+  const right = hero.equipment.rightHand ? entryByUid(hero, hero.equipment.rightHand) : undefined
+  const twoHanded = !!right && handOf(right, idx) === 'two'
+  if (preferred === 'leftHand') {
+    if (twoHanded) throw new Error('С двуручным оружием вторую руку не занять')
+    delete hero.equipment.shield
+    hero.equipment.leftHand = entryUid
+    return 'leftHand'
+  }
+  if (right && !twoHanded && !hero.equipment.leftHand && !hero.equipment.shield) {
     hero.equipment.leftHand = entryUid
     return 'leftHand'
   }

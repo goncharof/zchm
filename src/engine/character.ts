@@ -62,12 +62,12 @@ export function artifactSlot(n: number): EquipSlot | 'melee' | 'ranged' {
   if (n === 10) return 'shield'
   if (n === 11) return 'helmet'
   if (n <= 14) return 'body'
-  return 'accessory1'
+  return (['bracelet', 'ring', 'amulet', 'necklace'] as const)[n - 15] ?? 'ring'
 }
 
 function artifactBonuses(hero: Hero, idx: DataIndex) {
   const out = { defense: 0, strength: 0, luck: 0, accuracy: 0 }
-  for (const slot of ['shield', 'helmet', 'accessory1', 'accessory2'] as EquipSlot[]) {
+  for (const slot of ['shield', 'helmet', 'bracelet', 'ring', 'amulet', 'necklace'] as EquipSlot[]) {
     const e = equippedEntry(hero, slot)
     if (!e || e.kind !== 'artifact') continue
     const a = idx.artifact(parseInt(e.ref, 10))

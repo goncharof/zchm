@@ -22,7 +22,8 @@ export interface InventoryEntry {
   verdict?: 'safe' | 'danger'
 }
 
-export type EquipSlot = 'rightHand' | 'leftHand' | 'ranged' | 'body' | 'shield' | 'helmet' | 'gloves' | 'accessory1' | 'accessory2'
+/** Украшения-артефакты (15–18) — у каждого свой слот: носятся все четыре сразу, бонусы суммируются (ХАУСРУЛ, docs/RULES.md п. 6) */
+export type EquipSlot = 'rightHand' | 'leftHand' | 'ranged' | 'body' | 'shield' | 'helmet' | 'gloves' | 'bracelet' | 'ring' | 'amulet' | 'necklace'
 
 export interface HeroStatus {
   /** раундов паралича/оледенения осталось */
