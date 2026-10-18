@@ -54,8 +54,8 @@ export function luckPenalty(text: string, target: number): LuckPenalty | null {
  *  сегмента (сцена/ветка или исход броска), чтобы награды разных частей не путались */
 const coinsWord = (n: number) => `${n} ${plural(n, 'монету', 'монеты', 'монет')}`
 
-/** Бутылки на продажу по тексту: «бутылку (5) за 15 монет», «за каждую просит 10 монет», «бутылки (4) за 5 монет и (5)
- *  за 10 монет», «2 бутылки за 20 монет: (3), (3)». Пусто — монеты и бутылки в тексте не связаны покупкой
+/** Бутылки на продажу по тексту: «бутылку (5) за 15 монет», «за каждую просит 10 монет», «по 5 монет каждую», «бутылки (4)
+ *  за 5 монет и (5) за 10 монет», «2 бутылки за 20 монет: (3), (3)». Пусто — монеты и бутылки в тексте не связаны покупкой
  *  (подарок и просьба о деньгах, награда в лодке, совет за плату). */
 export function bottleSales(text: string, h: ParagraphHints): { bottles: number[]; price: number }[] {
   const prices = h.prices ?? [], bottles = h.bottles ?? []
@@ -63,7 +63,7 @@ export function bottleSales(text: string, h: ParagraphHints): { bottles: number[
   if (!prices.length || !bottles.length || !/бутыл/.test(t)) return []
   if (prices.length > 1) return prices.length === bottles.length ? bottles.map((n, i) => ({ bottles: [n], price: prices[i] })) : []
   const price = prices[0]
-  const each = /за кажд/.test(t)
+  const each = /за кажд/.test(t) || new RegExp(`бутыл[^.]*по ${price} монет\\S* кажд`).test(t)
   if (!each && !new RegExp(`бутыл[^.]*за ${price} монет`).test(t)) return []
   // несколько бутылок за одну цену — одна покупка
   if (!each && new RegExp(`(\\d+|две|три|четыре) бутыл\\S* за ${price} монет`).test(t)) return [{ bottles, price }]

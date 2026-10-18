@@ -6356,7 +6356,15 @@
      "monsterCounts": {
       "torgovets": 4
      },
-     "shop": true
+     "shop": true,
+     "bottles": [
+      2,
+      6,
+      3,
+      5,
+      3,
+      4
+     ]
     }
    },
    {

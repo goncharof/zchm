@@ -157,6 +157,7 @@ describe('сценарный ведущий', () => {
     expect(bottleSales('Предлагает 2 бутылки за 20 монет: (3), (3).', { prices: [20], bottles: [3, 3] })).toEqual([{ bottles: [3, 3], price: 20 }])
     expect(bottleSales('Предлагает две бутылки (5), (5). За каждую просит 10 монет.', { prices: [10], bottles: [5, 5] })).toEqual([{ bottles: [5], price: 10 }])
     expect(bottleSales('продает бутылки (4) за 5 монет и (5) за 10 монет', { prices: [5, 10], bottles: [4, 5] })).toEqual([{ bottles: [4], price: 5 }, { bottles: [5], price: 10 }])
+    expect(bottleSales('На столе ряд бутылок. Торговец предлагает купить 2 бутылки по 5 монет каждую.', { prices: [5], bottles: [2, 6, 2] })).toEqual([{ bottles: [2], price: 5 }, { bottles: [6], price: 5 }])
     expect(bottleSales('Дарит вам (3) и убегает. Падает на колени и просит 5 монет.', { prices: [5], bottles: [3] })).toEqual([])
     expect(bottleSales('Стражник говорит, что за 10 монет даст вам совет. А — 300 монет и (6).', { prices: [10], bottles: [6] })).toEqual([])
   })
