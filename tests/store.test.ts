@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { seededRng, setRng } from '@/engine/dice'
 import { shortestRoute } from '@/engine/world'
@@ -17,6 +18,7 @@ const mem = new Map<string, string>()
 } as Storage
 
 const { useGameStore } = await import('@/stores/game')
+const SAVE_KEY = 'zchm.save.v1'
 
 describe('карта мира', () => {
   const w = world as unknown as WorldMap
@@ -45,6 +47,21 @@ describe('хранилище партии', () => {
     expect(json).toContain('Воин')
     s.importSave(json)
     expect(s.heroes).toHaveLength(2)
+  })
+
+  it('автосохранение пишет время в копию и не трогает само состояние (иначе наблюдатель перезапускает себя)', async () => {
+    const s = useGameStore()
+    s.newGame()
+    const w = (await s.addHero('Воин', 'warrior'))!
+    await nextTick()
+    const before = s.game!.updatedAt
+    await new Promise((r) => setTimeout(r, 5))
+    s.adjustMoney(w.uid, 10)
+    await nextTick()
+    expect(s.game!.updatedAt).toBe(before)
+    const saved = JSON.parse(mem.get(SAVE_KEY)!) as { updatedAt: number; heroes: { money: number }[] }
+    expect(saved.heroes[0].money).toBe(50)
+    expect(saved.updatedAt).toBeGreaterThan(before)
   })
 
   it('параграф: удача, монеты, бутылка, свиток, артефакт, ловушка', async () => {

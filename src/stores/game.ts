@@ -78,12 +78,12 @@ export const useGameStore = defineStore('game', () => {
   /** Герой закреплён за мной (сетевая игра) */
   const isMineHero = (heroUid: string) => !!room.value?.me.heroUids.includes(heroUid)
 
-  // автосохранение — только для одиночной игры (сетевую хранит сервер)
+  // автосохранение — только для одиночной игры (сетевую хранит сервер). Время сохранения пишется в копию: правка
+  // самого состояния внутри глубокого наблюдателя перезапускала его снова и снова, пока Vue не обрывал цикл
   watch(game, (g) => {
     if (net.value) return
     if (!g) { localStorage.removeItem(SAVE_KEY); return }
-    g.updatedAt = Date.now()
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(g)) } catch { /* переполнение хранилища — игнорируем */ }
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ ...g, updatedAt: Date.now() })) } catch { /* переполнение хранилища — игнорируем */ }
   }, { deep: true })
 
   function say(text: string): void {
@@ -233,7 +233,7 @@ export const useGameStore = defineStore('game', () => {
   }
   function saveSlot(n: number): void {
     if (!game.value) return
-    localStorage.setItem(SLOT_KEY(n), JSON.stringify(game.value))
+    localStorage.setItem(SLOT_KEY(n), JSON.stringify({ ...game.value, updatedAt: Date.now() }))
     say(`Сохранено в слот ${n}`)
   }
   function loadSlot(n: number): void {
