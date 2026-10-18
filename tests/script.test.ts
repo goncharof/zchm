@@ -228,6 +228,9 @@ describe('сценарный ведущий', () => {
     expect(luckPenalty('Удача — 12, иначе половина жизней исчезает', 12)).toMatchObject({ kind: 'half' })
     expect(luckPenalty('вас охватывает паралич (удача — 13, жизни не отнимаются)', 13)).toBeNull()
     expect(luckPenalty('Удача — 14, иначе — -2 жизни', 4)).toBeNull()
+    expect(luckPenalty('Отрубить ее — удача — 4. Иначе — верная смерть.', 4)).toMatchObject({ kind: 'death' })
+    expect(luckPenalty('Чтобы выйти из гроба — удача — 6. Иначе — смерть.', 6)).toMatchObject({ kind: 'death' })
+    expect(luckPenalty('Удача — 6. Потом идите дальше. Иначе — смерть.', 6)).toBeNull()
   })
 
   it('провал проверки удачи: кнопка последствия из текста отнимает жизни у проверявшего героя', async () => {

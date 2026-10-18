@@ -40,9 +40,10 @@ function outcomeOffers(loc: string, n: number, when: NonNullable<ParagraphSegmen
 
 export interface LuckPenalty { kind: 'death' | 'lives' | 'half'; amount?: number; text: string }
 
-/** Последствие провала из текста: «удача — 6, иначе смерть», «Удача — 14, иначе — -2 жизни», «иначе половина жизней исчезает» */
+/** Последствие провала из текста: «удача — 6, иначе смерть», «Удача — 14, иначе — -2 жизни», «иначе половина жизней исчезает»,
+ *  «удача — 4. Иначе — верная смерть» (через точку) */
 export function luckPenalty(text: string, target: number): LuckPenalty | null {
-  const m = new RegExp(`удач[аеи]\\s*[—–-]?\\s*${target}(?!\\d)[^.]{0,20}?иначе\\s*[—–-]?\\s*(смерть|[-−–]?\\s*(\\d+)\\s*жизн\\S*|половина жизней)`, 'i').exec(text)
+  const m = new RegExp(`удач[аеи]\\s*[—–-]?\\s*${target}(?!\\d)[^.]{0,20}?\\.?\\s*иначе\\s*[—–-]?\\s*((?:верная\\s+)?смерть|[-−–]?\\s*(\\d+)\\s*жизн\\S*|половина жизней)`, 'i').exec(text)
   if (!m) return null
   if (/смерть/i.test(m[1])) return { kind: 'death', text: 'смерть' }
   if (/половина/i.test(m[1])) return { kind: 'half', text: 'половина жизней' }
