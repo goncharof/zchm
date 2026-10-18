@@ -400,6 +400,8 @@ button.voted { outline: 2px solid var(--ok); outline-offset: 1px; }
 .chat-panel header h3 { margin: 0; font-family: var(--font-title); font-weight: 400; font-size: 1.25rem; }
 @keyframes rise-r { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 
+.onboarding { border-color: rgba(224, 51, 79, .45); background: linear-gradient(90deg, rgba(196, 30, 58, .1), transparent 60%), var(--surface); display: flex; flex-wrap: wrap; gap: .4rem .6rem; align-items: center; font-size: .9rem; }
+
 /* ---------- пульт живого ведущего ---------- */
 .gm-hero { display: flex; gap: .55rem; align-items: flex-start; padding: .45rem 0; border-top: 1px solid var(--line); }
 .gm-hero-main { flex: 1; min-width: 0; display: grid; gap: .3rem; }

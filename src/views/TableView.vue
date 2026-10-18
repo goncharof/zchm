@@ -13,6 +13,8 @@ const store = useGameStore()
 const router = useRouter()
 const base = import.meta.env.BASE_URL
 const plan = computed(() => (store.location?.plan ? base + store.location.plan : null))
+/** у игрока есть свой герой */
+const hasHero = computed(() => !!store.room?.me.heroUids.length)
 </script>
 
 <template>
@@ -26,6 +28,16 @@ const plan = computed(() => (store.location?.plan ? base + store.location.plan :
           <router-link class="btn hide-sm" to="/map">Карта</router-link>
           <router-link v-if="store.location" class="btn hide-sm" :to="`/location/${store.location.id}`">{{ store.location.name }}</router-link>
         </div>
+      </div>
+      <div v-if="!hasHero && !(store.room?.gm === 'human' && store.room.me.isHost)" class="card tight onboarding">
+        <template v-if="store.heroes.length">
+          <b>Вы пока без героя.</b> Возьмите свободного героя в разделе «Партия» или создайте своего — тогда сможете ходить в бою и говорить за него.
+          <router-link class="btn small" to="/party">Взять героя</router-link>
+        </template>
+        <template v-else>
+          <b>Партия ещё не собрана.</b> {{ store.room?.me.isHost ? 'Нажмите «Быстрый старт» на главной или создайте героев в разделе «Партия».' : 'Подождите, пока хозяин соберёт партию, или создайте своего героя в разделе «Партия».' }}
+          <router-link class="btn small" :to="store.room?.me.isHost ? '/' : '/party'">{{ store.room?.me.isHost ? 'На главную' : 'Партия' }}</router-link>
+        </template>
       </div>
       <GmChat class="table-chat" height="62vh" />
     </div>
