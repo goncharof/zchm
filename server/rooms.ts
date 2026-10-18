@@ -23,7 +23,12 @@ export interface Player {
   isHost: boolean
   heroUids: string[]
   sockets: Set<string>
+  /** когда закрылось последнее соединение (для передачи прав хозяина) */
+  awaySince?: number
 }
+
+/** Хозяин не в сети дольше этого — любой игрок может стать хозяином (иначе комнату без хозяина не настроить) */
+export const HOST_AWAY_MS = 2 * 60_000
 
 /** Сериализуемая часть комнаты */
 export interface RoomData {
@@ -160,6 +165,19 @@ export class Room {
     return this.chat.find((m) => m.id === id)
   }
 
+  /** Хозяина нет или он давно не в сети */
+  hostAway(now = Date.now()): boolean {
+    const host = [...this.players.values()].find((p) => p.isHost)
+    return !host || (host.sockets.size === 0 && now - (host.awaySince ?? 0) >= HOST_AWAY_MS)
+  }
+  /** Передать права хозяина; возвращает прежнего хозяина */
+  transferHost(to: Player): Player | undefined {
+    const old = [...this.players.values()].find((p) => p.isHost && p !== to)
+    if (old) old.isHost = false
+    to.isHost = true
+    return old
+  }
+
   playerView(p: Player): PlayerView {
     return { id: p.id, name: p.name, isHost: p.isHost, heroUids: [...p.heroUids], online: p.sockets.size > 0 }
   }
@@ -178,6 +196,7 @@ export class Room {
     return {
       code: this.code, gm: this.gm, players: [...this.players.values()].map((x) => this.playerView(x)), me: this.playerView(p), aiAvailable: true, gmChain, gmBusy: this.gmBusy,
       turnMode: this.turnMode, active: this.activePlayers().map((x) => x.id), ready: [...this.ready], held: this.held.length,
+      hostAway: this.hostAway(),
     }
   }
 
@@ -193,7 +212,8 @@ export class Room {
   }
   static fromData(d: RoomData, world: WorldMap | null): Room {
     const r = new Room(d.code, d.gm, migrate(d.state), world)
-    for (const p of d.players) r.players.set(p.id, { ...p, sockets: new Set() })
+    // после загрузки все не в сети: отсчёт отсутствия хозяина начинается заново
+    for (const p of d.players) r.players.set(p.id, { ...p, sockets: new Set(), awaySince: Date.now() })
     r.chat = d.chat ?? []
     r.gmHistories = d.gmHistories ?? (d.gmHistory?.length ? { claude: d.gmHistory } : {})
     r.gmSeen = d.gmSeen ?? {}

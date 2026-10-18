@@ -41,6 +41,8 @@ export interface RoomView {
   ready: string[]
   /** сколько реплик ведущему ждут хода */
   held: number
+  /** хозяина нет или он давно не в сети — любой игрок может стать хозяином */
+  hostAway: boolean
 }
 
 export interface ChatMessage {
@@ -93,6 +95,7 @@ export interface ClientToServer {
   'turn:ready': (ready: boolean, ack: (a: Ack) => void) => void
   'turn:go': (ack: (a: Ack) => void) => void
   'room:leave': (ack: (a: Ack) => void) => void
+  'room:claimHost': (ack: (a: Ack) => void) => void
   'room:loadState': (state: GameState, ack: (a: Ack) => void) => void
   'hero:claim': (heroUid: string, ack: (a: Ack) => void) => void
   'hero:release': (heroUid: string, ack: (a: Ack) => void) => void

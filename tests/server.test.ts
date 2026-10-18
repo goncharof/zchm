@@ -80,6 +80,30 @@ describe('сетевая игра', () => {
     await until(() => guest.state.heroes.filter((h) => h.classId === 'warrior').length === 2)
   })
 
+  it('хозяин ушёл — права у другого игрока; пропал надолго — другой может их взять', async () => {
+    const s = await server()
+    const host = client(s), guest = client(s), third = client(s)
+    const { code } = await host.c.create('Хозяин', 'ai')
+    await guest.c.join(code, 'Гость')
+    await third.c.join(code, 'Третий')
+    await expect(guest.c.claimHost()).rejects.toThrow(/в сети/)
+    host.c.socket.disconnect()
+    await until(() => guest.room.players.some((p) => p.isHost && !p.online))
+    expect(guest.room.hostAway).toBe(false)
+    await expect(guest.c.claimHost()).rejects.toThrow(/недавно/)
+    // прошло больше двух минут
+    const room = (await s.store.get(code))!
+    for (const p of room.players.values()) if (p.isHost) p.awaySince = Date.now() - 3 * 60_000
+    await guest.c.claimHost()
+    await until(() => guest.room.me.isHost && third.room.players.filter((p) => p.isHost).length === 1)
+    expect(guest.chat.some((m) => /Гость теперь хозяин комнаты \(Хозяин давно не в сети\)/.test(m.text))).toBe(true)
+    await guest.c.setGm('script')
+    // новый хозяин уходит сам — права переходят к игроку в сети
+    await guest.c.leave()
+    await until(() => third.room.me.isHost)
+    expect(third.chat.some((m) => /Хозяин комнаты теперь Третий/.test(m.text))).toBe(true)
+  })
+
   it('режим живого ведущего: награды выдаёт только хозяин', async () => {
     const s = await server()
     const host = client(s), guest = client(s)

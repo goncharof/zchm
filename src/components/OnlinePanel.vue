@@ -71,6 +71,10 @@ function copyLink() {
       </div>
       <p class="small">Ведущий: <b>{{ GM_LABEL[r.gm] }}</b><span v-if="r.gmBusy" class="muted"> — пишет…</span></p>
       <p v-if="r.gm === 'ai'" class="small muted">Модели по порядку: {{ r.gmChain.length ? `${r.gmChain.join(' → ')} → сценарный` : 'не настроены на сервере — ведёт сценарный ведущий' }}.</p>
+      <div v-if="r.hostAway && !r.me.isHost" class="row small" style="margin-bottom:.4rem">
+        <span class="muted">Хозяина комнаты давно нет в сети — режим ведущего и новую партию сейчас некому менять.</span>
+        <button class="small" @click="store.claimHost()">Стать хозяином</button>
+      </div>
       <div v-if="r.me.isHost" class="row small" style="margin-bottom:.4rem">
         <span class="muted">Сменить режим:</span>
         <button v-for="(_label, k) in GM_LABEL" :key="k" class="small" :disabled="k === r.gm" @click="store.setGmMode(k)">{{ SHORT[k] }}</button>

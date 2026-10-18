@@ -11,7 +11,7 @@ import { idx } from '@/data'
 import { stateForClients, type Ack, type ClientToServer, type GmMode, type Joined, type ServerToClient } from '@/net/protocol'
 import { authorize, isCommand } from './permissions'
 import { Schemas, limit, makeLimiters, parse, type Limits } from './guard'
-import { Room, RoomStore, type Player } from './rooms'
+import { HOST_AWAY_MS, Room, RoomStore, type Player } from './rooms'
 import { castVote, clearVotes, tally, voteComplete, votingOn } from './votes'
 
 import { GmDirector } from './gm/ai'
@@ -423,10 +423,31 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       if (!room || !player) return
       try {
         player.sockets.delete(socket.id)
+        if (player.sockets.size === 0) {
+          player.awaySince = Date.now()
+          // хозяин пропал: когда пройдёт срок, остальные увидят кнопку «Стать хозяином»
+          if (player.isHost) { const r = room; setTimeout(() => ctx.roomChanged(r), HOST_AWAY_MS + 500).unref() }
+        }
         ctx.roomChanged(room)
         // ушёл тот, кого ждали, — остальные могут быть уже готовы
         recheck(room)
       } catch (e) { console.error('[отключение]', e) }
+    })
+
+    // хозяин давно не в сети: любой игрок за столом может взять его права (режим ведущего, новая партия, загрузка)
+    socket.on('room:claimHost', (rawAck) => {
+      const ack = safeAck(rawAck)
+      try {
+        if (!room || !player) throw new GameError('Вы не в комнате')
+        limit(limiters.room.take(socket.id), 'Слишком часто: подождите немного')
+        if (player.isHost) { ack({ ok: true }); return }
+        if (!room.hostAway()) throw new GameError('Хозяин комнаты в сети или отошёл совсем недавно')
+        const old = room.transferHost(player)
+        ctx.chat(room, { from: 'system', author: 'Игра', text: `${player.name} теперь хозяин комнаты${old ? ` (${old.name} давно не в сети)` : ''}.${room.gm === 'human' ? ' Ведущий — тоже он.' : ''}` })
+        ctx.roomChanged(room)
+        store.touch(room)
+        ack({ ok: true })
+      } catch (e) { fail(ack, e) }
     })
 
     // явный выход («Выйти»): герои освобождаются, игрок (кроме хозяина) удаляется — иначе остаётся «призрак» с героями
@@ -439,8 +460,11 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         void socket.leave(r.code)
         if (p.sockets.size === 0) {
           p.heroUids = []
+          // хозяин ушёл сам — права переходят к игроку в сети (если в сети никого — к любому оставшемуся)
+          const next = p.isHost ? [...r.players.values()].filter((x) => x !== p).sort((a, b) => Number(b.sockets.size > 0) - Number(a.sockets.size > 0))[0] : undefined
+          if (next) r.transferHost(next)
           if (!p.isHost) r.players.delete(p.id)
-          ctx.chat(r, { from: 'system', author: 'Игра', text: `${p.name} выходит из игры.` })
+          ctx.chat(r, { from: 'system', author: 'Игра', text: `${p.name} выходит из игры.${next ? ` Хозяин комнаты теперь ${next.name}.` : ''}` })
         }
         room = null; player = null
         ctx.roomChanged(r)

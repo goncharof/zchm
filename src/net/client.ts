@@ -171,6 +171,7 @@ export class NetClient {
   async chat(text: string, toGm: boolean, asGm = false): Promise<boolean> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('chat', { text, toGm, ...(asGm ? { asGm } : {}) })); return true }
   async choose(messageId: string, choiceId: string): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('gm:choose', { messageId, choiceId })) }
   async setTurnMode(mode: TurnMode): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('room:turnMode', mode)) }
+  async claimHost(): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('room:claimHost')) }
   async setReady(ready: boolean): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:ready', ready)) }
   async turnGo(): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:go')) }
 
