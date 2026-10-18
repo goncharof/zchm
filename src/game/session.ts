@@ -232,9 +232,9 @@ export class GameSession {
     const e = from.inventory.find((x) => x.uid === entryUid)
     if (!e || from.uid === to.uid) return
     // запомнить вещь до снятия: removeFromInventory уменьшает qty у того же объекта
-    const { kind, ref, qty, identified, poisoned } = e
+    const { kind, ref, qty, identified, poisoned, verdict } = e
     inv.removeFromInventory(from, entryUid, qty)
-    const moved = inv.addToInventory(to, kind, ref, qty, { ...(identified !== undefined ? { identified } : {}), ...(poisoned ? { poisoned } : {}) })
+    const moved = inv.addToInventory(to, kind, ref, qty, { ...(identified !== undefined ? { identified } : {}), ...(poisoned ? { poisoned } : {}), ...(verdict ? { verdict } : {}) })
     this.log(`${from.name} передаёт ${inv.entryName(moved, idx)}${qty > 1 ? ` ×${qty}` : ''} — ${to.name}.`)
   }
   drink(heroUid: string, entryUid: string): void {
@@ -242,17 +242,20 @@ export class GameSession {
     const r = inv.drinkBottle(h, entryUid, idx)
     this.log(`${h.name} пьёт из бутылки (${r.n}). ${r.text}`, r.died ? 'death' : 'info')
   }
-  /** Распознаватель напитков (стр. 21): ошибается с вероятностью 1/6 */
+  /** Распознаватель напитков (стр. 21): говорит только «опасен или нет», что именно в бутылке — не знает; ошибается
+   *  с вероятностью 1/6. Ответ записывается на бутылку, и проверить её второй раз нельзя (иначе ошибку обходили бы повтором) */
   identifyBottle(heroUid: string, entryUid: string): void {
     const h = this.hero(heroUid)
     const e = h.inventory.find((x) => x.uid === entryUid)
     if (!e || e.kind !== 'bottle') return
+    if (e.identified) throw new GameError('Эта бутылка уже опознана')
+    if (e.verdict) throw new GameError(`Эту бутылку уже проверяли: ${e.verdict === 'safe' ? 'безопасна' : 'опасна'}`)
     const has = this.heroes.some((x) => x.inventory.some((i) => i.kind === 'item' && i.ref === 'raspoznavatel-napitkov'))
     if (!has) throw new GameError('Нужен распознаватель напитков')
     const good = parseInt(e.ref, 10) >= 4
     const wrong = roll(6) === 1
-    this.log(`${h.name} проверяет бутылку распознавателем: ${good !== wrong ? 'напиток безопасен' : 'опасно — не пейте'}.`)
-    if (!wrong) e.identified = true
+    e.verdict = good !== wrong ? 'safe' : 'danger'
+    this.log(`${h.name} проверяет бутылку распознавателем: ${e.verdict === 'safe' ? 'напиток безопасен' : 'опасно — не пейте'}.`)
   }
   copyScroll(heroUid: string, entryUid: string): void {
     const h = this.hero(heroUid)

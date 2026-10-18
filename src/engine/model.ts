@@ -18,6 +18,8 @@ export interface InventoryEntry {
   identified?: boolean
   /** оружие смазано ядом (действует на первое попадание) */
   poisoned?: boolean
+  /** ответ распознавателя напитков: только «опасна или нет», и он может ошибиться (стр. 21) */
+  verdict?: 'safe' | 'danger'
 }
 
 export type EquipSlot = 'rightHand' | 'leftHand' | 'ranged' | 'body' | 'shield' | 'helmet' | 'gloves' | 'accessory1' | 'accessory2'

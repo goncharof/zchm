@@ -119,7 +119,7 @@ const statusText = computed(() => {
               <button v-if="e.kind === 'weapon' && idx.weapon(e.ref).throwable" class="small" @click="act(() => store.equipItem(hero.uid, e.uid, 'ranged'))">Метать</button>
             </template>
             <button v-if="e.kind === 'bottle'" class="small" @click="act(() => store.drink(hero.uid, e.uid))">Выпить</button>
-            <button v-if="e.kind === 'bottle' && !e.identified" class="small" @click="act(() => store.identifyBottle(hero.uid, e.uid))">Распознать</button>
+            <button v-if="e.kind === 'bottle' && !e.identified && !e.verdict" class="small" @click="act(() => store.identifyBottle(hero.uid, e.uid))">Распознать</button>
             <button v-if="e.kind === 'scroll'" class="small" @click="act(() => store.copyScroll(hero.uid, e.uid))">В книгу</button>
             <button v-if="canPoison(e) && hero.inventory.some(x => x.kind === 'item' && x.ref === 'yad')" class="small" @click="act(() => store.poisonWeapon(hero.uid, e.uid))">Смазать ядом</button>
             <button v-if="shop && salePrice(e, idx) > 0" class="small" @click="act(() => store.sellItem(hero.uid, e.uid))">Продать за {{ salePrice(e, idx) }}</button>

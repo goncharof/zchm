@@ -11,8 +11,9 @@ import { TROPHIES } from './loot'
 const STACKABLE: InventoryKind[] = ['item', 'bottle', 'trophy']
 
 export function addToInventory(hero: Hero, kind: InventoryKind, ref: string, qty = 1, extra: Partial<InventoryEntry> = {}): InventoryEntry {
-  if (STACKABLE.includes(kind) || isAmmo(kind, ref)) {
-    const same = hero.inventory.find((e) => e.kind === kind && e.ref === ref && !!e.identified === !!extra.identified)
+  // неопознанные бутылки не складываются в стопку с прежними: иначе стопка выдаёт, что номер тот же; отравленное — с чистым
+  if ((STACKABLE.includes(kind) || isAmmo(kind, ref)) && !(kind === 'bottle' && !extra.identified)) {
+    const same = hero.inventory.find((e) => e.kind === kind && e.ref === ref && !!e.identified === !!extra.identified && !!e.poisoned === !!extra.poisoned)
     if (same) {
       same.qty += qty
       return same
@@ -47,7 +48,7 @@ export function entryName(e: InventoryEntry, idx: DataIndex): string {
     case 'item': return idx.item(e.ref).name
     case 'artifact': return idx.artifact(parseInt(e.ref, 10)).name
     case 'scroll': return `Свиток: ${e.identified === false ? '?' : idx.spell(e.ref).name}`
-    case 'bottle': return e.identified ? `Бутылка (${e.ref}): ${BOTTLES[parseInt(e.ref, 10) - 1]?.label}` : 'Бутылка без этикетки'
+    case 'bottle': return e.identified ? `Бутылка (${e.ref}): ${BOTTLES[parseInt(e.ref, 10) - 1]?.label}` : `Бутылка без этикетки${e.verdict ? ` (распознаватель: ${e.verdict === 'safe' ? 'безопасна' : 'опасна'})` : ''}`
     case 'trophy': return TROPHIES[e.ref]?.name ?? e.ref
   }
 }
