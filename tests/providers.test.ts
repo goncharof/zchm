@@ -128,6 +128,25 @@ describe('цепочка моделей ведущего', () => {
     await until(() => g.chat.some((m) => m.author === 'Ведущий · сценарий' && /помещение 2/.test(m.text)))
   })
 
+  it('названное помещение сервер открывает сам — ход стоит один запрос', async () => {
+    const a = fakeFetch([
+      () => sse(textChunks('Ворота.')),
+      (body) => {
+        const user = body.messages.filter((m) => m.role === 'user').at(-1)!
+        expect(String(user.content)).toContain('Сервер уже открыл параграфы')
+        expect(String(user.content)).toContain('зомби')
+        return sse(textChunks('Коридор ведёт к двери, у которой стоит зомби.'))
+      },
+    ])
+    const g = await room([[{ id: 'q', label: 'Модель', baseUrl: 'http://fake', model: 'm' }, a.f]])
+    await g.s.gm.idle()
+    await g.c.chat('Идём в помещение 1', true)
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.author === 'Ведущий · Модель' && m.text.includes('зомби')))
+    expect(a.bodies).toHaveLength(2)
+    expect(g.state.visited['zolotoy-gorod']).toContain(1)
+  })
+
   it('начала бой и уже рассказала — ход закончен без лишнего запроса', async () => {
     const a = fakeFetch([
       () => sse(textChunks('Ворота.')),

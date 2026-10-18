@@ -13,7 +13,7 @@ import type { BetaMessageStreamParams } from '@anthropic-ai/sdk/resources/beta/m
 import { randomUUID } from 'node:crypto'
 import type { Room } from '../rooms'
 import { buildSystemPrompt, recap, snapshot } from './prompt'
-import { ScriptedGm } from './script'
+import { ScriptedGm, roomNumber } from './script'
 import { GM_TOOLS, executeGmTool } from './tools'
 import { ProviderError, describeTool, type GmContext, type GmDriver, type GmEvent, type GmFactory, type GmInput, type LlmProvider } from './types'
 
@@ -165,7 +165,7 @@ export interface DirectorOptions {
 }
 
 const EVENT_HINT: Record<GmEvent['type'], string> = {
-  travel: 'Если в пути были встречи, разыграй их по очереди (open_paragraph с location_id "doroga"), затем опиши прибытие.',
+  travel: 'Если в пути были встречи, разыграй их по очереди (их параграфы сервер приложил ниже), затем опиши прибытие.',
   enter: 'Опиши вход и спроси, куда герои направятся. Параграфы пока не открывай: помещение выберут игроки по плану с номерами.',
   combatEnd: 'Опиши исход боя и продолжи сцену. Трофеи с убитых герои собирают сами на экране боя — оружие и доспехи врагов повторно не выдавай.',
   rest: 'Коротко опиши отдых.',
@@ -239,7 +239,7 @@ export class GmDirector implements GmDriver {
       this.script.handle(room, events, texts)
       return
     }
-    const userText = formatInputs(events, texts)
+    const userText = formatInputs(events, texts) + this.preopen(room, events, texts)
     const exclude = new Set(texts.map((t) => t.chatId).filter(Boolean) as string[])
     // что уже сделали прерванные попытки этого хода: их изменения в игре остались, следующая модель не должна их повторить
     const carried: string[] = []
@@ -271,6 +271,27 @@ export class GmDirector implements GmDriver {
     }
     this.ctx.notice(room, 'ИИ-ведущий сейчас недоступен — ход ведёт сценарный ведущий.')
     this.script.handle(room, events, texts)
+  }
+
+  /** Параграфы, которые и так понадобятся: названное игроками помещение и встречи в пути. Сервер открывает их сам
+   *  и прикладывает к ходу — модели не нужен лишний запрос с open_paragraph (бесплатные квоты — десятки запросов в день) */
+  private preopen(room: Room, events: GmEvent[], texts: { text: string }[]): string {
+    const wanted: { loc: string; n: number }[] = []
+    for (const ev of events) if (ev.type === 'travel') for (const n of ev.encounters ?? []) wanted.push({ loc: 'doroga', n })
+    const loc = room.state.locationId
+    if (loc) for (const t of texts) { const n = roomNumber(t.text); if (n !== null) wanted.push({ loc, n }) }
+    const parts: string[] = []
+    const seen = new Set<string>()
+    for (const w of wanted.slice(0, 4)) {
+      const key = `${w.loc}:${w.n}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const out = executeGmTool(room, 'open_paragraph', { location_id: w.loc, n: w.n })
+      if (!out.isError) parts.push(out.content)
+    }
+    if (!parts.length) return ''
+    this.ctx.stateChanged(room)
+    return `\n\n[Сервер уже открыл параграфы для этого хода — open_paragraph для них не вызывай]\n${parts.join('\n')}`
   }
 
   /** Сводка разговора, пропущенного этим провайдером (вели другие модели или сценарный ведущий) */
