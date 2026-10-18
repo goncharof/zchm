@@ -40,6 +40,8 @@ pnpm dev                            # в другом терминале; на �
 Продакшен — один процесс: `pnpm build && pnpm build:server && pnpm start` или `docker build -t zchm . &&
 docker run -p 8787:8787 -v zchm-data:/data -e ANTHROPIC_API_KEY=... zchm`.
 
+Как дать доступ друзьям — туннель на один вечер или постоянный сервер — описано в `docs/DEPLOY.md`.
+
 Одиночную игру можно выложить на любой статический хостинг (`base: './'`), для GitHub Pages готов workflow
 `.github/workflows/deploy.yml`. Сетевой игре нужен сервер (см. выше).
 
