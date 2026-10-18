@@ -25,6 +25,8 @@ export interface OpenAiCompatConfig {
   usage?: boolean
   /** лимит на короткое время (429 с retry-after не дольше этого) — подождать и повторить, а не отдавать ход дальше */
   maxRetryWaitMs?: number
+  /** пауза перед повтором при временной ошибке провайдера (500/502/503) */
+  transientRetryMs?: number
 }
 
 /** extra_content — служебные данные провайдера у вызова инструмента (подпись мысли Gemini 3); их надо вернуть в истории */
@@ -149,6 +151,12 @@ export class OpenAiCompatProvider implements LlmProvider {
         // лимит на секунды (токены в минуту) — подождать один раз, а не отдавать ход другой модели
         console.log(`[ведущий ${this.label}] лимит, жду ${Math.ceil(wait / 1000)} с`)
         await new Promise((r) => setTimeout(r, wait))
+        return this.request(hist, onText, true)
+      }
+      if ((res.status === 503 || res.status === 502 || res.status === 500) && !retried) {
+        // «модель перегружена» обычно проходит за секунды — один повтор, потом уже следующая модель
+        console.log(`[ведущий ${this.label}] HTTP ${res.status}, повтор через ${(this.cfg.transientRetryMs ?? 2000) / 1000} с`)
+        await new Promise((r) => setTimeout(r, this.cfg.transientRetryMs ?? 2000))
         return this.request(hist, onText, true)
       }
       throw new ProviderError(`${this.label}: HTTP ${res.status} ${body.replace(/\s+/g, ' ').slice(0, 400)}`, wait)

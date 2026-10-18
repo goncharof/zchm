@@ -3,7 +3,8 @@
  * Провайдер включается, если задан его ключ (для своей модели — адрес). Порядок перебора — GM_CHAIN.
  * Бесплатные тарифы и названия моделей часто меняются: модель каждого провайдера можно переопределить.
  *
- *   GEMINI_API_KEY      [GEMINI_MODEL=gemini-3.5-flash]                  — Google AI Studio, бесплатный уровень (3.8-flash там же, но медленный)
+ *   GEMINI_API_KEY      [GEMINI_MODEL=gemini-3.5-flash]                  — Google AI Studio, бесплатный уровень; можно списком через
+ *                       запятую (у каждой модели своя квота). flash-lite не держит правила, 3.8-flash медленная
  *   GROQ_API_KEY        [GROQ_MODEL=openai/gpt-oss-120b]                 — Groq, бесплатный уровень: 8000 токенов в минуту
  *   CEREBRAS_API_KEY    [CEREBRAS_MODEL=gpt-oss-120b]                    — Cerebras, бесплатный уровень (не проверено)
  *   OPENROUTER_API_KEY  [OPENROUTER_MODEL=nvidia/nemotron-3-super-120b-a12b:free] — OpenRouter, модели :free с поддержкой tools
@@ -21,9 +22,12 @@ type Env = Record<string, string | undefined>
 export const DEFAULT_CHAIN = ['gemini', 'groq', 'cerebras', 'openrouter', 'custom', 'claude']
 
 export function buildProvidersFromEnv(env: Env = process.env): LlmProvider[] {
-  const make: Record<string, () => LlmProvider | null> = {
+  // у каждой модели Gemini своя бесплатная квота (у gemini-3.5-flash — 5 запросов в минуту): GEMINI_MODEL можно
+  // задать списком через запятую — модели встанут в цепочку по порядку, каждая со своей историей
+  const geminiModels = (env.GEMINI_MODEL || 'gemini-3.5-flash').split(',').map((s) => s.trim()).filter(Boolean)
+  const make: Record<string, () => LlmProvider | LlmProvider[] | null> = {
     gemini: () => (env.GEMINI_API_KEY || env.GOOGLE_API_KEY)
-      ? new OpenAiCompatProvider({ id: 'gemini', label: 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY, model: env.GEMINI_MODEL || 'gemini-3.5-flash', usage: true, extraBody: { reasoning_effort: env.GEMINI_REASONING || 'low' } })
+      ? geminiModels.map((model, i) => new OpenAiCompatProvider({ id: i ? `gemini-${model}` : 'gemini', label: i ? `Gemini ${model.replace(/^gemini-/, '')}` : 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY, model, usage: true, extraBody: { reasoning_effort: env.GEMINI_REASONING || 'low' } }))
       : null,
     groq: () => {
       if (!env.GROQ_API_KEY) return null
@@ -45,6 +49,6 @@ export function buildProvidersFromEnv(env: Env = process.env): LlmProvider[] {
   const order = (env.GM_CHAIN ? env.GM_CHAIN.split(',') : DEFAULT_CHAIN).map((s) => s.trim().toLowerCase()).filter(Boolean)
   return order.flatMap((id) => {
     const p = make[id]?.()
-    return p ? [p] : []
+    return p ? (Array.isArray(p) ? p : [p]) : []
   })
 }

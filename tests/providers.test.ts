@@ -119,13 +119,23 @@ describe('цепочка моделей ведущего', () => {
     ])
     const g = await room([
       [{ id: 'a', label: 'Первая', baseUrl: 'http://a', model: 'm' }, limited.f],
-      [{ id: 'b', label: 'Вторая', baseUrl: 'http://b', model: 'm' }, backup.f],
+      [{ id: 'b', label: 'Вторая', baseUrl: 'http://b', model: 'm', transientRetryMs: 10 }, backup.f],
     ])
     await g.s.gm.idle()
     await until(() => g.chat.some((m) => m.author === 'Ведущий · Вторая'))
     await g.c.chat('Идём в помещение 2', true)
     await g.s.gm.idle()
     await until(() => g.chat.some((m) => m.author === 'Ведущий · сценарий' && /помещение 2/.test(m.text)))
+  })
+
+  it('временная перегрузка (503) — один повтор, и модель отвечает сама', async () => {
+    const a = fakeFetch([
+      () => new Response('busy', { status: 503 }),
+      () => sse(textChunks('Ворота после перегрузки.')),
+    ])
+    const g = await room([[{ id: 'g', label: 'Gemini', baseUrl: 'http://fake', model: 'm', transientRetryMs: 10 }, a.f]])
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.author === 'Ведущий · Gemini' && m.text === 'Ворота после перегрузки.'))
   })
 
   it('короткий лимит (429 с retry-after в пределах ожидания) — модель ждёт и отвечает сама', async () => {
@@ -187,5 +197,7 @@ describe('цепочка моделей ведущего', () => {
     expect(buildProvidersFromEnv({ GROQ_API_KEY: 'x', GEMINI_API_KEY: 'y' }).map((p) => p.id)).toEqual(['gemini', 'groq'])
     expect(buildProvidersFromEnv({ GROQ_API_KEY: 'x', GEMINI_API_KEY: 'y', GM_CHAIN: 'groq' }).map((p) => p.label)).toEqual(['Groq'])
     expect(buildProvidersFromEnv({ LLM_BASE_URL: 'http://localhost:11434/v1', LLM_MODEL: 'qwen3', LLM_LABEL: 'Ollama' }).map((p) => p.label)).toEqual(['Ollama'])
+    // несколько моделей Gemini — своя квота у каждой
+    expect(buildProvidersFromEnv({ GEMINI_API_KEY: 'y', GEMINI_MODEL: 'gemini-3.5-flash, gemini-3.7-flash' }).map((p) => [p.id, p.label])).toEqual([['gemini', 'Gemini'], ['gemini-gemini-3.7-flash', 'Gemini 3.7-flash']])
   })
 })
