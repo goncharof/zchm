@@ -7,6 +7,7 @@ import { Server } from 'socket.io'
 import type { WorldMap } from '@/types'
 import type { GameState } from '@/engine/model'
 import { GameError, parseSave, runCommand, type CommandArgs, type CommandName } from '@/game/session'
+import { idx } from '@/data'
 import { stateForClients, type Ack, type ClientToServer, type GmMode, type Joined, type ServerToClient } from '@/net/protocol'
 import { authorize, isCommand } from './permissions'
 import { Schemas, limit, makeLimiters, parse, type Limits } from './guard'
@@ -42,8 +43,21 @@ export interface GameServer {
 }
 
 /** Команды, после которых ведущему стоит описать происходящее */
-function gmEventFor(name: CommandName, room: Room, before: GameState): GmEvent | null {
+function gmEventFor(name: CommandName, room: Room, before: GameState, args: unknown[], result: unknown): GmEvent | null {
   const s = room.state
+  // заклинание, которое движок не отыгрывает («Озарение», «Чувство зла», «Чтение эмоций»…): исход решает ведущий
+  if (name === 'cast' && (result as { ok?: boolean } | null)?.ok) {
+    const [heroUid, spellId, opts] = args as CommandArgs<'cast'>
+    const spell = idx.spell(spellId)
+    if (spell.effect.type !== 'manual') return null
+    const hero = s.heroes.find((h) => h.uid === heroUid)
+    const target = s.heroes.find((h) => h.uid === opts?.targetHeroUid)?.name ?? s.combat?.monsters.find((m) => m.uid === opts?.targetUid)?.name
+    return {
+      type: 'spell',
+      spell: { id: spell.id, name: spell.name, hero: hero?.name ?? '' },
+      text: `${hero?.name ?? 'Герой'} произносит «${spell.name}»${target ? ` (цель: ${target})` : ''}. По Книге заклинаний: «${spell.description}»`,
+    }
+  }
   if (name === 'travelTo' && s.worldNodeId !== before.worldNodeId) {
     const node = room.world?.nodes.find((n) => n.id === s.worldNodeId)
     const encounters = s.pendingRoad.slice(before.pendingRoad.length)
@@ -343,7 +357,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (['addHero', 'removeHero', 'quickStart', 'newGame'].includes(name)) ctx.roomChanged(r)
         ack({ ok: true, result: JSON.parse(JSON.stringify(result ?? null)) })
         if (autoGm(r)) {
-          const ev = gmEventFor(name, r, before)
+          const ev = gmEventFor(name, r, before, args as unknown[], result)
           // событие игры не ждёт готовности: отложенные реплики уходят вместе с ним
           if (ev) { if (r.turnMode === 'ready') flushTurn(r, ev); else gm.enqueue(r, { kind: 'event', event: ev }) }
         }

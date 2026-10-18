@@ -4,9 +4,11 @@ import type { Room } from '../rooms'
 
 /** Событие игры, о котором стоит рассказать */
 export interface GmEvent {
-  type: 'travel' | 'enter' | 'combatEnd' | 'rest' | 'pass'
+  type: 'travel' | 'enter' | 'combatEnd' | 'rest' | 'pass' | 'spell'
   /** исход боя (для combatEnd) */
   outcome?: 'victory' | 'fled' | 'defeat'
+  /** заклинание, которое движок не отыгрывает (для spell): исход решает ведущий */
+  spell?: { id: string; name: string; hero: string }
   text: string
   /** встречи в пути (номера параграфов главы «Дорога») */
   encounters?: number[]

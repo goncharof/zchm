@@ -90,6 +90,22 @@ function fresh(room: Room, offers: Offer[]): Offer[] {
 }
 
 /** Номер помещения в реплике: «помещение 5», «№ 5», «в 5» или реплика из одного числа (а не «даю ему 5 монет») */
+/** Ответ сценарного ведущего на заклинание, которое движок не отыгрывает. «Чтение силы» в бою — характеристики
+ *  противников (то, что игроки видят на экране боя, плюс храбрость и магия); остальное решают сами игроки. */
+function spellReply(room: Room, spell: NonNullable<GmEvent['spell']>): string {
+  const c = room.state.combat
+  const foes = c && !c.finished ? c.monsters.filter((m) => !m.dead && !m.fled) : []
+  if (spell.id === 'priest-chtenie-sily' && foes.length) {
+    const lines = foes.map((m) => {
+      const attacks = Array.isArray(m.attacks) ? `атаки ${m.attacks.join('-')}` : m.attacks === 'death' ? 'смертельная атака' : m.attacks === 'magic' ? 'бьёт только магией' : 'не атакует'
+      const magic = m.spells?.length ? `магия: ${m.spells.join(', ')} (маны ${m.mana ?? 0})` : 'магией не владеет'
+      return `• ${m.name}: уровень ${m.level}, защита ${m.defense + m.defenseMod}, жизни ${m.lives}/${m.maxLives}, ${attacks}, храбрость ${m.courage ?? 'нет'}; ${magic}.`
+    })
+    return [`${spell.hero} читает силу противников:`, ...lines].join('\n')
+  }
+  return `«${spell.name}»: сценарный ведущий такие заклинания не отыгрывает — исход решите сами по описанию заклинания (ИИ-ведущий, когда он доступен, разыграет его по тексту книги).`
+}
+
 export function roomNumber(text: string): number | null {
   const m = text.match(/(?:помещени\S*|комнат\S*|номер|№|параграф\S*|§)\s*(\d{1,3})/i) ?? text.trim().match(/^(?:(?:идём|идем|идти|иду|заходим|входим)\s+)?(?:в\s+)?(\d{1,3})\s*[.!]?$/i)
   return m ? Number(m[1]) : null
@@ -159,6 +175,8 @@ export class ScriptedGm {
         const offers = f && ev.outcome ? outcomeOffers(f.loc, f.n, ev.outcome === 'victory' ? 'win' : 'lose') : []
         if (offers.length) this.say(room, `${ev.text} Что дальше по книге:`, [...offers, { label: 'Идти дальше', action: { t: 'next' } }])
         else this.say(room, `${ev.text} Продолжайте: выберите вариант выше или назовите номер следующего помещения.`)
+      } else if (ev.type === 'spell' && ev.spell) {
+        this.say(room, spellReply(room, ev.spell))
       } else if (ev.type === 'pass') {
         this.say(room, room.state.locationId ? 'Все готовы. Выберите вариант выше или назовите номер помещения на плане.' : 'Все готовы. Выберите путь на карте или войдите в локацию.')
       } else {

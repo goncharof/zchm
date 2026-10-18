@@ -96,6 +96,30 @@ describe('сценарный ведущий', () => {
     expect(g.chat.find((m) => m.id === scene.id)!.used ?? []).not.toContain(pay.id)
   })
 
+  it('заклинание, которое движок не отыгрывает, доходит до ведущего: «Чтение силы» в бою показывает противников', async () => {
+    const g = await setup()
+    const room = (await g.s.store.get(g.j.code))!
+    const priest = room.state.heroes.find((h) => h.classId === 'priest')!
+    priest.mana = priest.maxMana = 20
+    priest.spellbook.push('priest-chuvstvo-zla', 'priest-chtenie-sily')
+    await g.c.claimHero(priest.uid)
+    await g.c.call('cast', [priest.uid, 'priest-chuvstvo-zla', {}])
+    await until(() => /«Чувство зла»: сценарный ведущий/.test(lastGm(g.chat)?.text ?? ''))
+    room.session().startEncounter([{ monsterId: 'ork', count: 2 }]) // бой начинает ведущий
+    await g.c.call('cast', [priest.uid, 'priest-chtenie-sily', {}])
+    await until(() => /читает силу/.test(lastGm(g.chat)?.text ?? ''))
+    const text = lastGm(g.chat).text
+    expect(text.match(/Орк( \d)?: уровень/g)?.length).toBe(2)
+    expect(text).toContain('защита')
+    // заклинание с механикой ведущему не пересказывается
+    const mage = room.state.heroes.find((h) => h.classId === 'mage')!
+    await g.c.claimHero(mage.uid)
+    const before = g.chat.length
+    await g.c.call('cast', [mage.uid, mage.spellbook[0], { targetUid: room.state.combat!.monsters[0].uid }])
+    await wait(100)
+    expect(g.chat.slice(before).some((m) => m.from === 'gm')).toBe(false)
+  })
+
   it('последствие провала берётся из текста книги', () => {
     expect(luckPenalty('пускает молнию (удача — 6, иначе смерть)', 6)).toMatchObject({ kind: 'death' })
     expect(luckPenalty('2 берсеркера. Удача — 14, иначе — -2 жизни', 14)).toMatchObject({ kind: 'lives', amount: 2, text: '−2 жизни' })
