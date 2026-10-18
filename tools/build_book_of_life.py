@@ -16,7 +16,7 @@ from PIL import Image, ImageOps
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import slug, clean_text
-from segment import segment
+from segment import segment, branch_when, _cap
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PDF = os.path.join(ROOT, 'source', 'pdf', 'ZChM Kniga Zhizni.pdf')
@@ -229,6 +229,34 @@ def apply_overrides(locations, issues):
             same = [g for g in segs if g['kind'] == 'branch' and g.get('label') == label]
             return same[nth - 1] if 0 < nth <= len(same) else None
 
+        # разрезать ветку, в которую разметка слила два исхода: куски берутся из её текста дословно
+        # (меняются только заглавная буква и точка в конце), подсказки и исход считаются заново
+        for name, pieces in ov.get('split', {}).items():
+            g = target(name)
+            if g is None or g is p or g['kind'] != 'branch' or any('text' not in b for b in g['blocks']):
+                issues.append(f'правка {key}: ветку «{name}» не разрезать')
+                continue
+            norm = lambda x: ' '.join(x.lower().split())
+            src = norm(g['label'] + ' — ' + ' '.join(b['text'] for b in g['blocks']))
+            missing = [x for piece in pieces for x in (piece['label'], piece['text']) if norm(x) not in src]
+            if missing:
+                issues.append(f'правка {key}: в ветке «{name}» нет текста «{missing[0]}»')
+                continue
+            new = []
+            for piece in pieces:
+                text = _cap(piece['text'].strip())
+                if not re.search(r'[.!?…»”]$', text):
+                    text += '.'
+                seg = {'kind': 'branch', 'label': _cap(piece['label'].strip()), 'blocks': [{'text': text}]}
+                w = branch_when(seg['label'])
+                if w:
+                    seg['when'] = w
+                h = hints_for(seg['label'] + ' — ' + text)
+                if h:
+                    seg['hints'] = h
+                new.append(seg)
+            i = segs.index(g)
+            segs[i:i + 1] = new
         for name, fields in ov.get('hints', {}).items():
             t = target(name)
             if t is None:

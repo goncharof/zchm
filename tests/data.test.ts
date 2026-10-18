@@ -89,7 +89,7 @@ describe('данные игры', () => {
   })
 
   it('ручные правки разметки применены и не устарели (tools/book_overrides.json)', () => {
-    type Ov = { hints?: Record<string, Record<string, unknown>>; when?: Record<string, string | null> }
+    type Ov = { hints?: Record<string, Record<string, unknown>>; when?: Record<string, string | null>; split?: Record<string, { label: string; text: string }[]> }
     for (const [key, ov] of Object.entries(overrides as Record<string, Ov | string>)) {
       if (key.startsWith('_') || typeof ov === 'string') continue
       const [locId, n] = key.split(':')
@@ -108,6 +108,14 @@ describe('данные игры', () => {
           const got = (t!.hints as Record<string, unknown> | undefined)?.[k]
           if (v === null || (Array.isArray(v) && !v.length)) expect(got, `${key} «${name}» ${k}`).toBeUndefined()
           else expect(got, `${key} «${name}» ${k}`).toEqual(v)
+        }
+      }
+      // разрезанная ветка: каждый кусок стал веткой со своим условием и дословным текстом
+      for (const [name, pieces] of Object.entries(ov.split ?? {})) {
+        for (const piece of pieces) {
+          const t = branch(piece.label[0].toUpperCase() + piece.label.slice(1))
+          expect(t, `${key} разрезание «${name}»: нет ветки «${piece.label}»`).toBeDefined()
+          expect(t!.blocks.map((b) => ('text' in b ? b.text : '')).join(' ').toLowerCase(), `${key} «${piece.label}»`).toContain(piece.text.slice(1, 40).toLowerCase())
         }
       }
       for (const [name, when] of Object.entries(ov.when ?? {})) {
