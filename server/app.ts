@@ -106,6 +106,18 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
   const gm: GmDriver = opts.gm ? opts.gm(ctx) : new GmDirector(ctx, { providers: [] })
   void socketsOf
   const autoGm = (r: Room) => r.gm === 'ai' || r.gm === 'script'
+
+  // хозяин не в сети: когда выйдет срок, комната обновится сама и остальные увидят «Стать хозяином»
+  // (после перезапуска сервера отсчёт идёт от загрузки комнаты — таймер ставит первый вошедший)
+  const hostTimers = new WeakMap<Room, ReturnType<typeof setTimeout>>()
+  function watchHost(r: Room): void {
+    const host = [...r.players.values()].find((p) => p.isHost)
+    if (!host || host.sockets.size > 0 || r.hostAway()) return
+    clearTimeout(hostTimers.get(r))
+    const t = setTimeout(() => { hostTimers.delete(r); ctx.roomChanged(r) }, Math.max(0, (host.awaySince ?? 0) + HOST_AWAY_MS - Date.now()) + 500)
+    t.unref()
+    hostTimers.set(r, t)
+  }
   const limiters = makeLimiters(opts.limits)
   const GM_TITLE: Record<GmMode, string> = { ai: 'ИИ (если модели недоступны — сценарный)', script: 'сценарный, без ИИ', human: 'хозяин комнаты', book: 'нет, читаем Книгу Жизни сами' }
 
@@ -163,7 +175,12 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
     let player: Player | null = null
 
     async function enter(r: Room, p: Player, ack: (a: Ack) => void) {
-      if (room && player && room !== r) { player.sockets.delete(socket.id); void socket.leave(room.code); ctx.roomChanged(room) }
+      if (room && player && room !== r) {
+        player.sockets.delete(socket.id)
+        void socket.leave(room.code)
+        if (player.sockets.size === 0) { player.awaySince = Date.now(); watchHost(room) }
+        ctx.roomChanged(room)
+      }
       room = r
       player = p
       p.sockets.add(socket.id)
@@ -176,6 +193,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       for (const [id, text] of Object.entries(r.live)) socket.emit('gm:delta', { id, text })
       ctx.roomChanged(r)
       recheck(r)
+      watchHost(r)
       // очередь ведущего, оставшаяся с прошлого запуска сервера
       gm.resume?.(r)
     }
@@ -426,8 +444,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         player.sockets.delete(socket.id)
         if (player.sockets.size === 0) {
           player.awaySince = Date.now()
-          // хозяин пропал: когда пройдёт срок, остальные увидят кнопку «Стать хозяином»
-          if (player.isHost) { const r = room; setTimeout(() => ctx.roomChanged(r), HOST_AWAY_MS + 500).unref() }
+          watchHost(room)
         }
         ctx.roomChanged(room)
         // ушёл тот, кого ждали, — остальные могут быть уже готовы

@@ -9,6 +9,7 @@ import type { GameState } from '@/engine/model'
 import { NetClient } from '@/net/client'
 import type { ChatMessage, RoomView } from '@/net/protocol'
 import { createGameServer, type GameServer } from '../server/app'
+import { HOST_AWAY_MS } from '../server/rooms'
 import { aiGmFactory } from '../server/gm/ai'
 import type { LlmProvider } from '../server/gm/types'
 
@@ -104,6 +105,25 @@ describe('сетевая игра', () => {
     await guest.c.leave()
     await until(() => third.room.me.isHost)
     expect(third.chat.some((m) => /Хозяин комнаты теперь Третий/.test(m.text))).toBe(true)
+  })
+
+  it('после перезапуска сервера кнопка «Стать хозяином» появляется сама, когда выйдет срок', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'zchm-rooms-')); dirs.push(dir)
+    const s1 = await server(dir)
+    const host = client(s1), guest = client(s1)
+    const { code } = await host.c.create('Хозяин', 'book')
+    await guest.c.join(code, 'Гость')
+    host.c.close(); guest.c.close()
+    await s1.close()
+    const s2 = await server(dir)
+    const room = (await s2.store.get(code))!
+    for (const p of room.players.values()) if (p.isHost) p.awaySince = Date.now() - HOST_AWAY_MS + 300
+    const back = client(s2)
+    await back.c.join(code, 'Гость')
+    await until(() => !!back.room)
+    expect(back.room.hostAway).toBe(false)
+    // ничего в комнате не происходит, но срок вышел — комната обновилась сама
+    await until(() => back.room.hostAway, 3000)
   })
 
   it('режим живого ведущего: награды выдаёт только хозяин', async () => {
