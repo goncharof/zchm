@@ -27,7 +27,7 @@ export function buildProvidersFromEnv(env: Env = process.env): LlmProvider[] {
   const geminiModels = (env.GEMINI_MODEL || 'gemini-3.5-flash').split(',').map((s) => s.trim()).filter(Boolean)
   const make: Record<string, () => LlmProvider | LlmProvider[] | null> = {
     gemini: () => (env.GEMINI_API_KEY || env.GOOGLE_API_KEY)
-      ? geminiModels.map((model, i) => new OpenAiCompatProvider({ id: i ? `gemini-${model}` : 'gemini', label: i ? `Gemini ${model.replace(/^gemini-/, '')}` : 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY, model, usage: true, extraBody: { reasoning_effort: env.GEMINI_REASONING || 'low' } }))
+      ? geminiModels.map((model, i) => new OpenAiCompatProvider({ id: i ? `gemini-${model}` : 'gemini', label: i ? `Gemini ${model.replace(/^gemini-/, '')}` : 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY, model, usage: true, maxRetryWaitMs: 60_000, extraBody: { reasoning_effort: env.GEMINI_REASONING || 'low' } }))
       : null,
     groq: () => {
       if (!env.GROQ_API_KEY) return null

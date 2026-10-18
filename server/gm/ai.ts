@@ -128,13 +128,20 @@ export class AnthropicProvider implements LlmProvider {
         history.push({ role: 'assistant', content: content.some((b) => b.type === 'text' || b.type === 'tool_use') ? content : [...content, { type: 'text', text: '…', citations: null }] })
         const uses = content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use')
         if (!uses.length || truncated) break
+        let ends = false
         const results: Anthropic.Beta.BetaToolResultBlockParam[] = uses.map((u) => {
           const out = executeGmTool(room, u.name, u.input)
           if (!out.isError) done.push(describeTool(u.name, u.input))
+          if (out.endsTurn && !out.isError) ends = true
           return { type: 'tool_result', tool_use_id: u.id, content: out.content, ...(out.isError ? { is_error: true } : {}) }
         })
         history.push({ role: 'user', content: results })
         io.stateChanged()
+        // бой начат, а рассказ уже есть — закончить ход без ещё одного запроса
+        if (ends && text.trim()) {
+          history.push({ role: 'assistant', content: [{ type: 'text', text: 'Бой начался — игроки сражаются на экране боя.', citations: null }] })
+          break
+        }
       }
     } catch (err) {
       // откатить незавершённый ход: история остаётся корректной для следующего запроса (старая — если начинали новую)

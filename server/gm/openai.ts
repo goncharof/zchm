@@ -84,14 +84,21 @@ export class OpenAiCompatProvider implements LlmProvider {
           break
         }
         hist.push({ role: 'assistant', content: content || null, tool_calls: toolCalls })
+        let ends = false
         for (const tc of toolCalls) {
           let args: unknown
           try { args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {} } catch { args = undefined }
           const out = args === undefined ? { content: 'INVALID_JSON: аргументы не разобраны, повтори вызов', isError: true } : executeGmTool(room, tc.function.name, args)
           if (!out.isError) done.push(describeTool(tc.function.name, args))
+          if (out.endsTurn && !out.isError) ends = true
           hist.push({ role: 'tool', tool_call_id: tc.id, content: out.isError ? `Ошибка: ${out.content}` : out.content })
         }
         io.stateChanged()
+        // бой начат, а рассказ уже есть — ход закончен без лишнего запроса (бесплатные квоты малы)
+        if (ends && text.trim()) {
+          hist.push({ role: 'assistant', content: 'Бой начался — игроки сражаются на экране боя.' })
+          break
+        }
         if (text && !text.endsWith('\n')) { text += '\n\n'; io.delta('\n\n') }
       }
     } catch (e) {

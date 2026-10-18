@@ -128,6 +128,23 @@ describe('цепочка моделей ведущего', () => {
     await until(() => g.chat.some((m) => m.author === 'Ведущий · сценарий' && /помещение 2/.test(m.text)))
   })
 
+  it('начала бой и уже рассказала — ход закончен без лишнего запроса', async () => {
+    const a = fakeFetch([
+      () => sse(textChunks('Ворота.')),
+      () => sse([
+        { choices: [{ delta: { content: 'Из темноты выходит орк!' } }] },
+        { choices: [{ delta: { tool_calls: [{ index: 0, id: 'c1', function: { name: 'start_combat', arguments: '{"monsters":[{"id":"орк","count":1}]}' } }] } }] },
+      ]),
+    ])
+    const g = await room([[{ id: 'q', label: 'Модель', baseUrl: 'http://fake', model: 'm' }, a.f]])
+    await g.s.gm.idle()
+    await g.c.chat('Заходим', true)
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.author === 'Ведущий · Модель' && m.text.includes('орк')))
+    expect(a.bodies).toHaveLength(2)
+    expect(g.state.combat?.monsters[0].monsterId).toBe('ork')
+  })
+
   it('временная перегрузка (503) — один повтор, и модель отвечает сама', async () => {
     const a = fakeFetch([
       () => new Response('busy', { status: 503 }),
