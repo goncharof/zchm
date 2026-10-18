@@ -248,6 +248,7 @@ export class GameSession {
   }
   drink(heroUid: string, entryUid: string): void {
     const h = this.hero(heroUid)
+    if (!isConscious(h)) throw new GameError(`${h.name} не может пить: ${h.status.dead ? 'погиб' : 'без сознания'}`)
     const r = inv.drinkBottle(h, entryUid, idx)
     this.log(`${h.name} пьёт из бутылки (${r.n}). ${r.text}`, r.died ? 'death' : 'info')
   }

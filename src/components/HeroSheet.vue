@@ -98,7 +98,7 @@ const statusText = computed(() => {
     <SpellPicker v-if="showPicker" :hero="hero" @close="showPicker = false" />
 
     <h3 style="margin-top:.9rem">Снаряжение</h3>
-    <div v-if="!equipped.length" class="muted small">Ничего не надето: защита 9, атаки без оружия 1-1-1-2-2-2.</div>
+    <div v-if="!equipped.length" class="muted small">Ничего не надето: защита {{ heroDefense(hero, idx) }}, атаки без оружия 1-1-1-2-2-2.</div>
     <table v-else class="list">
       <tbody>
         <tr v-for="e in equipped" :key="e.slot"><td class="muted">{{ SLOT_NAMES[e.slot] }}</td><td>{{ e.name }} <span class="small muted">{{ e.detail }}</span></td><td style="text-align:right"><button v-if="!ro" class="small" @click="store.unequipItem(hero.uid, e.slot)">Снять</button></td></tr>
