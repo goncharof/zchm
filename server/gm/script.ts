@@ -260,9 +260,8 @@ export class ScriptedGm {
       case 'branch': {
         const seg = idx.locationById.get(a.loc)?.paragraphs.find((x) => x.n === a.n)?.segments?.[a.seg]
         if (!seg) throw new GameError('Вариант не найден')
-        // исход боя («Если убиваете…», «Если вас победили») — монстры в тексте уже повержены или победили, второго боя нет
-        const hints = seg.when === 'win' || seg.when === 'lose' ? { ...seg.hints, monsters: [] } : seg.hints
-        const offers = [...fresh(room, [...hintOffers(hints, { loc: a.loc, n: a.n, seg: a.seg }, 's', seg.blocks.map(blockText).join('\n')), ...rollOffers(seg.blocks, a.loc, a.n, a.seg)]), { label: 'Идти дальше', action: { t: 'next' } as ScriptAction }]
+        // в исходах боя упомянутые монстры убраны правками книги; новый противник после победы («2 орка бросаются») остаётся
+        const offers = [...fresh(room, [...hintOffers(seg.hints, { loc: a.loc, n: a.n, seg: a.seg }, 's', seg.blocks.map(blockText).join('\n')), ...rollOffers(seg.blocks, a.loc, a.n, a.seg)]), { label: 'Идти дальше', action: { t: 'next' } as ScriptAction }]
         this.say(room, seg.blocks.map(blockText).join('\n'), offers)
         return
       }

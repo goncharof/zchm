@@ -617,9 +617,6 @@
       "hints": {
        "bottles": [
         6
-       ],
-       "monsters": [
-        "drakonid"
        ]
       }
      }
@@ -3135,12 +3132,7 @@
         "text": "Кровь превращается в пар. Двери открываются. Не убиваете (-2 жизни) — дверь под напором крови ломается."
        }
       ],
-      "when": "win",
-      "hints": {
-       "monsters": [
-        "vampir"
-       ]
-      }
+      "when": "win"
      }
     ]
    },
@@ -3342,9 +3334,6 @@
       ],
       "when": "win",
       "hints": {
-       "monsters": [
-        "drakonid"
-       ],
        "scrolls": [
         {
          "caster": "priest",
@@ -4297,14 +4286,7 @@
         "text": "Гор кричит: “Нет! Не может быть! Они убили моего любимого василиска”. Черный жрец отвечает: “Может они и нас хотят убить?” — быстро проговаривает какое-то заклинание и оба исчезают."
        }
       ],
-      "when": "win",
-      "hints": {
-       "monsters": [
-        "gor",
-        "vasilisk",
-        "chernyy-zhrets"
-       ]
-      }
+      "when": "win"
      }
     ]
    },
@@ -5770,12 +5752,7 @@
         "text": "Вы не теряете жизней, а вас просто связывают. Избивая древками копий и поливая грязными ругательствами, вас волокут в тюрьму (локация 25). У дверей тесной камеры оставляют двух стражников. В полу, откинув слой прелой соломы, вы обнаруживаете потайной лаз в 39."
        }
       ],
-      "when": "lose",
-      "hints": {
-       "monsters": [
-        "strazhnik"
-       ]
-      }
+      "when": "lose"
      }
     ]
    },
@@ -7011,10 +6988,6 @@
       "hints": {
        "bottles": [
         5
-       ],
-       "monsters": [
-        "ork",
-        "dvarf"
        ]
       }
      }
@@ -7821,9 +7794,6 @@
       ],
       "when": "win",
       "hints": {
-       "monsters": [
-        "feniks"
-       ],
        "artifact": true
       }
      }
@@ -8922,12 +8892,7 @@
         "text": "Амазонки перестают обращать на вас внимание."
        }
       ],
-      "when": "lose",
-      "hints": {
-       "monsters": [
-        "amazonka"
-       ]
-      }
+      "when": "lose"
      },
      {
       "kind": "branch",
@@ -8942,9 +8907,6 @@
        "bottles": [
         5,
         5
-       ],
-       "monsters": [
-        "amazonka"
        ]
       }
      }
@@ -9211,7 +9173,6 @@
         5
        ],
        "monsters": [
-        "berserker",
         "ork"
        ]
       }
@@ -9552,7 +9513,6 @@
       "when": "win",
       "hints": {
        "monsters": [
-        "zhnets",
         "lyudoed"
        ]
       }
@@ -10561,8 +10521,7 @@
     "n": 18,
     "hints": {
      "monsters": [
-      "drakonid",
-      "fantom"
+      "drakonid"
      ]
     },
     "segments": [
@@ -10587,13 +10546,7 @@
         "text": "Девушка сердечно благодарит вас. Затем превращается в фантома и уходит."
        }
       ],
-      "when": "win",
-      "hints": {
-       "monsters": [
-        "drakonid",
-        "fantom"
-       ]
-      }
+      "when": "win"
      }
     ]
    },
@@ -10659,13 +10612,7 @@
         "text": "Гнолл перестает обращать на вас внимание и снова начинает биться головой об стену."
        }
       ],
-      "when": "win",
-      "hints": {
-       "monsters": [
-        "kobold",
-        "gnoll"
-       ]
-      }
+      "when": "win"
      }
     ]
    },
@@ -11539,8 +11486,7 @@
     "n": 19,
     "hints": {
      "monsters": [
-      "mogilnik",
-      "chelovek"
+      "mogilnik"
      ]
     },
     "segments": [
@@ -11565,13 +11511,7 @@
         "text": "Человек идет с вами. Правда после перенесенных мучений у него всего 2 жизни."
        }
       ],
-      "when": "win",
-      "hints": {
-       "monsters": [
-        "mogilnik",
-        "chelovek"
-       ]
-      }
+      "when": "win"
      }
     ]
    },
@@ -12537,8 +12477,7 @@
       5
      ],
      "monsters": [
-      "umertvie",
-      "gnom"
+      "umertvie"
      ]
     },
     "segments": [
@@ -12567,10 +12506,6 @@
       "hints": {
        "bottles": [
         5
-       ],
-       "monsters": [
-        "umertvie",
-        "gnom"
        ]
       }
      }
@@ -13178,7 +13113,6 @@
       "when": "win",
       "hints": {
        "monsters": [
-        "nazgul",
         "ork"
        ],
        "monsterCounts": {
@@ -13198,10 +13132,6 @@
       "hints": {
        "bottles": [
         6
-       ],
-       "monsters": [
-        "ork",
-        "rytsar"
        ]
       }
      },
@@ -13233,10 +13163,6 @@
        "bottles": [
         2,
         1
-       ],
-       "monsters": [
-        "ork",
-        "nazgul"
        ]
       }
      },
@@ -13897,9 +13823,6 @@
       "hints": {
        "coins": [
         200
-       ],
-       "monsters": [
-        "drakonid"
        ]
       }
      }
@@ -15089,7 +15012,6 @@
       "when": "win",
       "hints": {
        "monsters": [
-        "chelovek",
         "fantom"
        ]
       }
@@ -15156,8 +15078,7 @@
     "n": 70,
     "hints": {
      "monsters": [
-      "lyudoed",
-      "upyr"
+      "lyudoed"
      ],
      "monsterCounts": {
       "lyudoed": 5
@@ -15197,13 +15118,7 @@
         "text": "Видите, что под маской ничего нет. Раздается хохот. Девушка превращается в упыря и улетает."
        }
       ],
-      "when": "win",
-      "hints": {
-       "monsters": [
-        "lyudoed",
-        "upyr"
-       ]
-      }
+      "when": "win"
      }
     ]
    },
@@ -15395,7 +15310,6 @@
     "n": 81,
     "hints": {
      "monsters": [
-      "amazonka",
       "hazg"
      ],
      "monsterCounts": {
@@ -15427,13 +15341,7 @@
         "text": "Она идет с вами."
        }
       ],
-      "when": "win",
-      "hints": {
-       "monsters": [
-        "hazg",
-        "amazonka"
-       ]
-      }
+      "when": "win"
      }
     ]
    },
@@ -15612,13 +15520,7 @@
         "text": "Урук-хай говорит: “Надо же, из-за простой шутки убить человека”."
        }
       ],
-      "when": "win",
-      "hints": {
-       "monsters": [
-        "kobold",
-        "uruk-hay"
-       ]
-      }
+      "when": "win"
      }
     ]
    },
@@ -16748,10 +16650,6 @@
       "hints": {
        "bottles": [
         6
-       ],
-       "monsters": [
-        "troll",
-        "ork"
        ]
       }
      }
@@ -16930,9 +16828,6 @@
       "hints": {
        "coins": [
         20
-       ],
-       "monsters": [
-        "rytsar"
        ]
       }
      }

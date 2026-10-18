@@ -120,6 +120,18 @@ describe('сценарный ведущий', () => {
     expect(g.chat.slice(before).some((m) => m.from === 'gm')).toBe(false)
   })
 
+  it('после победы новый противник предлагается: минотавр требует половину сокровищ', async () => {
+    const g = await setup()
+    await goTo(g, 'mertvyy-gorod')
+    await g.c.call('enterLocation', ['mertvyy-gorod'])
+    await g.c.chat('31', true)
+    await until(() => /помещение 31/.test(lastGm(g.chat)?.text ?? ''))
+    const scene = lastGm(g.chat)
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '▸ Если убиваете дракона')!.id)
+    await until(() => /Минотавр требует/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('⚔ Бой: Минотавр')
+  })
+
   it('ветка-исход боя не предлагает второй бой с теми же монстрами', async () => {
     const g = await setup()
     await g.c.call('enterLocation', ['zolotoy-gorod'])
