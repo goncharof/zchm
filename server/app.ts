@@ -374,7 +374,8 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         const text = req.text.trim()
         if (!text) throw new GameError('Пустое сообщение')
         limit(limiters.chat.take(socket.id), 'Не так быстро: одна реплика в пару секунд')
-        if (req.toGm && autoGm(room)) limit(limiters.toGm.take(`${room.code}:${player.id}`), 'Ведущий не успевает: не больше 4 реплик ведущему в минуту от игрока')
+        // реплики ведущему расходуют квоты моделей; сценарному ведущему (номера помещений подряд) предел не нужен
+        if (req.toGm && room.gm === 'ai' && gm.chain().length) limit(limiters.toGm.take(`${room.code}:${player.id}`), 'Ведущий не успевает: не больше 4 реплик ведущему в минуту от игрока')
         // живой ведущий рассказывает от имени ведущего
         if (req.asGm) {
           if (room.gm !== 'human' || !player.isHost) throw new GameError('Говорить за ведущего может только живой ведущий')

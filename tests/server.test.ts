@@ -9,6 +9,8 @@ import type { GameState } from '@/engine/model'
 import { NetClient } from '@/net/client'
 import type { ChatMessage, RoomView } from '@/net/protocol'
 import { createGameServer, type GameServer } from '../server/app'
+import { aiGmFactory } from '../server/gm/ai'
+import type { LlmProvider } from '../server/gm/types'
 
 const W = world as unknown as WorldMap
 let servers: GameServer[] = []
@@ -160,16 +162,22 @@ describe('защита сервера', () => {
     expect(ok.ok).toBe(true)
   })
 
-  it('частота реплик ведущему ограничена для каждого игрока', async () => {
-    const s = await createGameServer({ port: 0, staticDir: null, world: W, limits: { chat: [100, 100] } })
+  it('частота реплик ИИ-ведущему ограничена для каждого игрока; сценарному — нет', async () => {
+    const echo: LlmProvider = { id: 'echo', label: 'Эхо', async turn() { return 'Слушаю.' } }
+    const s = await createGameServer({ port: 0, staticDir: null, world: W, limits: { chat: [100, 100] }, gm: aiGmFactory({ providers: [echo], cooldownScale: 0 }) })
     servers.push(s)
     const a = client(s)
-    await a.c.create('Аня', 'script')
+    await a.c.create('Аня', 'ai')
+    await a.c.setTurnMode('instant')
     const results = []
     for (let i = 0; i < 7; i++) results.push(await a.c.socket.emitWithAck('chat', { text: `Реплика ${i}`, toGm: true }))
     expect(results.filter((r) => r.ok)).toHaveLength(4)
     expect(results.at(-1)!.error).toMatch(/не больше 4 реплик/)
     // реплики только игрокам не ограничены лимитом ведущего
     expect((await a.c.socket.emitWithAck('chat', { text: 'Игрокам', toGm: false })).ok).toBe(true)
+    // сценарный ведущий квот не тратит: номера помещений можно называть подряд
+    const b = client(s)
+    await b.c.create('Боря', 'script')
+    for (let i = 0; i < 7; i++) expect((await b.c.socket.emitWithAck('chat', { text: `${i + 1}`, toGm: true })).ok).toBe(true)
   })
 })
