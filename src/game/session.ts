@@ -506,7 +506,8 @@ export class GameSession {
       total += n
     }
     if (total > 60) throw new GameError('Слишком много монстров для одного боя')
-    return specs
+    // только нужные поля: лишнее из сетевого запроса в бой не попадает
+    return specs.map((s) => ({ monsterId: String(s.monsterId), count: Number(s.count) }))
   }
   startEncounter(specs: EncounterSpec[], returnTo?: string): void {
     specs = this.specs(specs)
@@ -560,10 +561,15 @@ export class GameSession {
     }
     const h = this.hero(heroUid)
     // прочесть по свитку (стр. 21): заклинание срабатывает один раз, свиток разрушается
-    const { scrollUid, ...rest } = opts
+    const scrollUid = opts.scrollUid
     const scroll = scrollUid ? h.inventory.find((e) => e.uid === scrollUid) : undefined
     if (scrollUid && (!scroll || scroll.kind !== 'scroll' || scroll.ref !== spellId || scroll.identified === false)) throw new GameError('Такого свитка у героя нет')
-    const res = castSpell({ hero: h, spell: idx.spell(spellId), idx, heroes: this.heroes, combat: this.combat, ...rest, fromScroll: !!scroll })
+    // из присланного по сети — только цели и параметр: герой, партия и бой берутся из состояния, а не из запроса
+    const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
+    const res = castSpell({
+      hero: h, spell: idx.spell(spellId), idx, heroes: this.heroes, combat: this.combat, fromScroll: !!scroll,
+      targetUid: str(opts.targetUid), targetHeroUid: str(opts.targetHeroUid), targetEntryUid: str(opts.targetEntryUid), param: opts.param,
+    })
     if (res.ok && scroll) {
       inv.removeFromInventory(h, scroll.uid, 1)
       res.log.push({ t: Date.now(), text: 'Свиток рассыпается в холодном белом огне.', kind: 'spell' })

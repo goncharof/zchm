@@ -133,6 +133,15 @@ describe('третье ревью', () => {
     expect(h.money).toBe(55)
   })
 
+  it('заклинание по сети: подложенный в параметры герой, партия или бой не подменяют настоящих', () => {
+    const s = new GameSession(blankGame(), W)
+    const p = s.addHero('Жрец', 'priest')
+    const fake = { ...p, mana: 999, spellbook: ['priest-ozhivlenie-personazha'] }
+    const r = s.cast(p.uid, 'priest-ozhivlenie-personazha', { hero: fake, heroes: [fake], combat: null } as unknown as Parameters<GameSession['cast']>[2])
+    expect(r.ok).toBe(false)
+    expect(p.xp).toBe(0)
+  })
+
   it('больше шести героев не добавить и по сети', () => {
     const s = new GameSession(blankGame(), W)
     s.setAllowDuplicateClasses(true)
