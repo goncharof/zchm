@@ -296,8 +296,11 @@ export function changeLives(hero: Hero, delta: number): number {
   if (hero.lives <= DEAD_AT) {
     hero.status.dead = true
     hero.status.unconscious = true
+    if (hero.status.poison === -1) delete hero.status.poison
   } else if (hero.lives <= UNCONSCIOUS_AT) {
     hero.status.unconscious = true
+    // яд монстра действует, «пока он не примет противоядия или не потеряет сознание» (стр. 19)
+    if (hero.status.poison === -1) delete hero.status.poison
   } else {
     hero.status.unconscious = false
   }

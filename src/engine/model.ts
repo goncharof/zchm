@@ -195,6 +195,8 @@ export interface LogEntry {
 
 export interface CombatState {
   round: number
+  /** повышения уровня в ход монстров (опыт за урон со временем, отражённое заклинание) — объявляет сессия */
+  levelUps?: import('./character').LevelUp[]
   /** первый раунд — дистанция (метательное оружие и заклинания), затем ближний бой */
   phase: 'ranged' | 'melee'
   turn: 'heroes' | 'monsters'

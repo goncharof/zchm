@@ -77,6 +77,11 @@ export function regrowHeads(state: CombatState): LogEntry[] {
     head.points = 0
     head.disabled = 0
     head.petrified = false
+    // новая голова — без яда, удушья, проклятий и щитов отрубленной (иначе яд клинка тут же убивал отросшую)
+    for (const k of ['poison', 'quake', 'choke', 'dotBy', 'held', 'cursed', 'wards', 'hitMod', 'prayer', 'buffed', 'debuffs', 'noSave', 'disabledKind', 'raised'] as const) delete head[k]
+    head.defenseMod = 0
+    head.attackMod = 0
+    head.attackMultiplier = 1
     log.push(entry(`На месте отрубленной головы вырастает новая: ${head.name}.`, 'hit'))
   }
   return log
@@ -305,7 +310,6 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
       if (healed > 0) out.log.push(entry(`${name} возвращает ${hero.name} ${healed} жизней.`, 'spell'))
     }
     if (xp.xp) out.log.push(entry(`${hero.name} получает ${xp.xp} очков опыта.`, 'xp'))
-    for (const up of xp.levelUps) out.log.push(entry(`${hero.name} достигает ${up.level} уровня!`, 'xp'))
     if (d.killed) break
   }
   out.log.push(...markActed(state, hero, heroes, idx))
@@ -400,8 +404,9 @@ export function checkEnd(state: CombatState, heroes: Hero[]): void {
     state.loot = collectLoot(state.monsters)
     return
   }
-  const fighters = heroes.filter((h) => !state.escaped.includes(h.uid))
-  if (fighters.length === 0) state.finished = 'fled'
+  // погибшие (в том числе в прошлых боях) не держат поле: живые ушли — это отступление, а не поражение
+  const fighters = heroes.filter((h) => !state.escaped.includes(h.uid) && !h.status.dead)
+  if (fighters.length === 0) state.finished = state.escaped.length ? 'fled' : 'defeat'
   else if (fighters.every((h) => !isConscious(h))) state.finished = 'defeat'
 }
 
@@ -425,7 +430,7 @@ function dotXp(state: CombatState, heroes: Hero[], m: MonsterInstance, kind: key
   if (!owner || dealt <= 0) return
   const r = awardXp(state, owner, dealt, m, idx)
   if (r.xp) log.push(entry(`${owner.name} получает ${r.xp} очков опыта.`, 'xp'))
-  for (const up of r.levelUps) log.push(entry(`${owner.name} достигает ${up.level} уровня!`, 'xp'))
+  state.levelUps = [...(state.levelUps ?? []), ...r.levelUps]
 }
 
 /** Ход союзников (призванные существа): каждый атакует случайного монстра */
@@ -549,11 +554,14 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
       continue
     }
     // храбрость: при потере половины жизней один раз бросает к18 ≥ храбрость — бежит
-    if (m.courage !== null && !m.courageChecked && m.lives * 2 <= m.maxLives) {
-      m.courageChecked = true
+    // у многоголового чудовища «половина жизней» — половина голов; проверка одна на всё чудовище
+    const body = m.groupId ? state.monsters.filter((x) => x.groupId === m.groupId) : [m]
+    const halfLost = m.groupId ? body.filter((x) => x.dead).length * 2 >= body.length : m.lives * 2 <= m.maxLives
+    if (m.courage !== null && !m.courageChecked && halfLost) {
+      for (const x of body) x.courageChecked = true
       const r = monsterRoll(m)
       if (r >= m.courage) {
-        m.fled = true
+        for (const x of body) if (!x.dead) x.fled = true
         log.push(entry(`${m.name} проверяет храбрость: ${r} ≥ ${m.courage} — обращается в бегство!`, 'flee'))
         continue
       }
@@ -590,6 +598,8 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
   state.acted = []
   grantRoundActions(state, heroes, idx)
   for (const h of heroes) {
+    // ушедший с поля боя в раундах не участвует
+    if (state.escaped.includes(h.uid)) continue
     h.buffs = h.buffs.filter((b) => b.rounds === -1 || --b.rounds > 0)
     log.push(...tickHeroStatus(h))
   }
@@ -749,6 +759,7 @@ export function monsterCast(state: CombatState, m: MonsterInstance, heroes: Hero
         log.push(entry(`${m.name} теряет ${d.dealt} жизней (${dmg.detail}).${d.killed ? ` ${m.name} повержен!` : ''}`, d.killed ? 'death' : 'damage'))
         const xp = awardXp(state, target, d.dealt, m, idx)
         if (xp.xp) log.push(entry(`${target.name} получает ${xp.xp} очков опыта.`, 'xp'))
+        state.levelUps = [...(state.levelUps ?? []), ...xp.levelUps]
       } else if (effect.type === 'control') {
         // отражённое заклинание действует на монстра так же, как на героя: с пределом уровня и своей длительностью
         if (effect.maxLevel !== undefined && m.level > effect.maxLevel) log.push(entry(`${m.name} слишком силён для собственного заклинания — оно рассеивается.`, 'spell'))

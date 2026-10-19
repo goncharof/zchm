@@ -11,7 +11,7 @@ import { artifactSlot, changeLives, consumePrayer, createHero, gainXp, hasWard, 
 import * as inv from '@/engine/inventory'
 import { k18, roll, rollFormula } from '@/engine/dice'
 import { castSpell, type CastResult } from '@/engine/spells'
-import { makeAlly, cleanupAfterCombat, heroRoll, endHeroesTurn as endHeroesTurnEngine, closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
+import { makeAlly, cleanupAfterCombat, grantRoundActions, heroRoll, endHeroesTurn as endHeroesTurnEngine, closeToMelee, finishCombat, heroAttack, heroFlee, heroSkip, markActed, monstersTurn, startCombat, type EncounterSpec } from '@/engine/combat'
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
 import { TROPHIES, takeLootItem } from '@/engine/loot'
 import { plural } from '@/ui/format'
@@ -514,6 +514,8 @@ export class GameSession {
     // прошлый бой окончен, но не закрыт: сначала подвести его итог (подобрать стрелы, засчитать бой спутникам, снять статусы)
     if (this.combat) this.endCombat()
     const { state, log: entries } = startCombat(specs, idx, returnTo)
+    // второе действие воина 12 уровня — и в раунде дистанции
+    grantRoundActions(state, this.heroes, idx)
     const owner = this.heroes.find((h) => !h.status.dead)?.uid ?? ''
     for (const c of this.state.companions) {
       const m = idx.monster(c.monsterId)
@@ -594,6 +596,8 @@ export class GameSession {
     const c = this.requireCombat()
     if (c.turn !== 'monsters' || c.finished) return
     this.logAll(monstersTurn(c, this.heroes, idx))
+    this.announceLevelUps(c.levelUps ?? [])
+    delete c.levelUps
   }
   /** Забрать трофей с поля боя после победы */
   takeLoot(heroUid: string, lootUid: string): void {
