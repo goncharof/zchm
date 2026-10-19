@@ -8,7 +8,8 @@ import { NetClient } from '@/net/client'
 import type { ChatMessage } from '@/net/protocol'
 import { createGameServer, type GameServer } from '../server/app'
 import { aiGmFactory, type ModelClient } from '../server/gm/ai'
-import { GM_TOOLS } from '../server/gm/tools'
+import { GM_TOOLS, paragraphPayload } from '../server/gm/tools'
+import type { Room } from '../server/rooms'
 
 type Reply = { text?: string; tools?: { name: string; input: unknown }[]; error?: Error; stop?: string }
 
@@ -70,6 +71,14 @@ async function setup(replies: Reply[], maxHistoryChars?: number) {
 }
 
 describe('ИИ-ведущий', () => {
+  it('параграф для модели: награда победы — в подсказках своей ветки, а не сцены', () => {
+    const room = { state: { visited: {} } } as unknown as Room
+    const p = JSON.parse(paragraphPayload(room, 'zolotoy-gorod', 2))
+    expect(p.подсказки.bottles ?? []).not.toContain(5)
+    const win = p.ветки.find((b: { когда?: string }) => b.когда === 'после победы в бою')
+    expect(win.подсказки.bottles).toContain(5)
+  })
+
   it('инструменты фиксированы и строгие', () => {
     expect(GM_TOOLS.map((t) => t.name)).toContain('open_paragraph')
     for (const t of GM_TOOLS) { expect(t.strict).toBe(true); expect((t.input_schema as { additionalProperties?: boolean }).additionalProperties).toBe(false) }

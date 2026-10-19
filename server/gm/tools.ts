@@ -4,6 +4,7 @@ import { sceneText } from '@/game/book'
 import { z } from 'zod'
 import { idx } from '@/data'
 import type { Hero } from '@/engine/model'
+import type { ParagraphHints } from '@/types'
 import { GameError } from '@/game/session'
 import type { Room } from '../rooms'
 
@@ -128,8 +129,11 @@ export function paragraphPayload(room: Room, locationId: string, n: number): str
   if (!p) throw new GameError(`В локации «${loc.name}» нет параграфа ${n}`)
   const before = (room.state.visited[loc.id] ?? []).includes(p.n)
   const WHEN = { win: 'после победы в бою', lose: 'после поражения', luckOk: 'если проверка удачи прошла', luckFail: 'если проверка удачи не прошла' } as const
-  const branches = (p.segments ?? []).filter((g) => g.kind === 'branch').map((g) => ({ если: g.label, ...(g.when ? { когда: WHEN[g.when] } : {}), исход: g.blocks.map((b) => ('text' in b ? b.text : b.roll.map((o) => `${o.values.join(',')} — ${o.text}`).join('; '))).join(' ') }))
-  return JSON.stringify({ локация: loc.name, параграф: p.n, уже_пройден: before, текст: sceneText(p), ветки: branches, подсказки: p.hints ?? {}, напоминание: 'Раскрывай игрокам только то, что видят герои; исходы веток — после их выбора.' })
+  // подсказки — свои у сцены и у каждой ветки: награда за победу не должна выглядеть лежащей на виду
+  const has = (h?: ParagraphHints) => !!h && Object.values(h).some((v) => (Array.isArray(v) ? v.length : !!v))
+  const branches = (p.segments ?? []).filter((g) => g.kind === 'branch').map((g) => ({ если: g.label, ...(g.when ? { когда: WHEN[g.when] } : {}), исход: g.blocks.map((b) => ('text' in b ? b.text : b.roll.map((o) => `${o.values.join(',')} — ${o.text}`).join('; '))).join(' '), ...(has(g.hints) ? { подсказки: g.hints } : {}) }))
+  const scene = (p.segments ? p.segments.find((g) => g.kind === 'scene')?.hints : p.hints) ?? {}
+  return JSON.stringify({ локация: loc.name, параграф: p.n, уже_пройден: before, текст: sceneText(p), подсказки: scene, ветки: branches, напоминание: 'Раскрывай игрокам только то, что видят герои; исходы веток и их подсказки — после их выбора или исхода.' })
 }
 
 /** Монстр по id или имени, в том числе в падеже и числе из текста («гномы», «рыцарей смерти»).
