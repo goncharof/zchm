@@ -18,6 +18,7 @@ import { plural } from '@/ui/format'
 import { REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
 
 export const LOG_CAP = 500
+const LOG_KINDS: NonNullable<LogEntry['kind']>[] = ['hit', 'miss', 'damage', 'spell', 'info', 'xp', 'death', 'flee', 'luck']
 
 /** Ожидаемая ошибка игры (нет дороги, не хватает монет…): показывается игроку как уведомление */
 export class GameError extends Error {
@@ -104,7 +105,9 @@ export class GameSession {
   get combat(): CombatState | null { return this.state.combat }
 
   log(text: string, kind: LogEntry['kind'] = 'info'): void {
-    this.state.log.push({ t: Date.now(), text, kind })
+    // запись журнала — не длиннее 500 знаков и только известного вида (текст приходит и от игроков: заметки, формулы)
+    const k = LOG_KINDS.includes(kind as NonNullable<LogEntry['kind']>) ? kind : 'info'
+    this.state.log.push({ t: Date.now(), text: String(text).slice(0, 500), kind: k })
     if (this.state.log.length > LOG_CAP) this.state.log.splice(0, this.state.log.length - LOG_CAP)
   }
   logAll(entries: LogEntry[]): void {
@@ -204,7 +207,9 @@ export class GameSession {
   }
   buyItem(heroUid: string, kind: 'weapon' | 'armor' | 'item', ref: string, qty = 1): void {
     const h = this.hero(heroUid)
-    const e = inv.buy(h, kind, ref, idx, this.qty(qty, 99))
+    qty = this.qty(qty, 99)
+    let e
+    try { e = inv.buy(h, kind, String(ref), idx, qty) } catch (err) { throw new GameError((err as Error).message) }
     this.log(`${h.name} покупает: ${inv.entryName(e, idx)}${qty > 1 ? ` ×${qty}` : ''}.`)
   }
   sellItem(heroUid: string, entryUid: string, qty = 1): void {
@@ -230,7 +235,8 @@ export class GameSession {
       : kind === 'bottle' ? /^[1-6]$/.test(ref) : kind === 'scroll' ? idx.spellById.has(ref) : kind === 'trophy' ? Object.hasOwn(TROPHIES, ref)
       : kind === 'artifact' ? idx.artifactByN.has(Number(ref)) : false
     if (!known) throw new GameError(`Нет такой вещи: ${kind}/${ref}`)
-    const e = inv.addToInventory(h, kind, ref, this.qty(qty), identified === undefined ? {} : { identified })
+    qty = this.qty(qty)
+    const e = inv.addToInventory(h, kind, ref, qty, identified === undefined ? {} : { identified: !!identified })
     this.log(`${h.name} получает: ${inv.entryName(e, idx)}${qty > 1 ? ` ×${qty}` : ''}.`)
   }
   dropItem(heroUid: string, entryUid: string, qty = 1): void {
@@ -405,7 +411,8 @@ export class GameSession {
   }
   rollDice(formula: string): { total: number; rolls: number[] } {
     let r
-    try { r = rollFormula(String(formula).slice(0, 40)) } catch (e) { throw new GameError((e as Error).message) }
+    formula = String(formula).replace(/\s+/g, '').slice(0, 40)
+    try { r = rollFormula(formula) } catch (e) { throw new GameError((e as Error).message) }
     this.log(`Бросок: ${formula} = ${r.total}${r.rolls.length > 1 ? ` (${r.rolls.join(' + ')})` : ''}.`, 'luck')
     return { total: r.total, rolls: r.rolls }
   }

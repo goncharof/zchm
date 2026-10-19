@@ -63,6 +63,10 @@ export function entryPrice(e: InventoryEntry, idx: DataIndex): number {
 }
 
 export function buy(hero: Hero, kind: 'weapon' | 'armor' | 'item', ref: string, idx: DataIndex, qty = 1): InventoryEntry {
+  // в лавке — только оружие, доспехи и вещи из её списка (команда приходит и по сети: «купить» артефакт или трофей
+  // по нулевой цене было бы раздачей)
+  const known = kind === 'weapon' ? idx.weaponById.get(ref) : kind === 'armor' ? idx.armorById.get(ref) : kind === 'item' ? idx.itemById.get(ref) : undefined
+  if (!known || !(known.price > 0)) throw new Error('Такого товара в лавке нет')
   const price = entryPrice({ uid: '', kind, ref, qty: 1 }, idx) * qty
   if (hero.money < price) throw new Error('Не хватает монет')
   hero.money -= price
