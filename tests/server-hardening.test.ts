@@ -4,6 +4,7 @@ import world from '@/data/world.json'
 import type { WorldMap } from '@/types'
 import type { RoomView } from '@/net/protocol'
 import { NetClient } from '@/net/client'
+import { gameData } from '@/data'
 import { GameSession, blankGame } from '@/game/session'
 import { clientAddr, createGameServer, type GameServer } from '../server/app'
 import { aiGmFactory } from '../server/gm/ai'
@@ -195,9 +196,12 @@ describe('сервер в интернете', () => {
     expect(() => g.buyItem(h.uid, 'artifact' as 'item', '7')).toThrow(/товара/)
     expect(() => g.buyItem(h.uid, 'weapon', 'lazernyy-mech')).toThrow(/товара/)
     expect(h.inventory).toEqual([])
-    // запись журнала не длиннее 500 знаков
+    // заметка игрока — не длиннее 500 знаков, а цитата из книги (описание артефакта) не обрезается
     g.note('я'.repeat(5000))
     expect(g.state.log.at(-1)!.text.length).toBe(500)
+    const long = gameData.artifacts.reduce((a, b) => (b.description.length > a.description.length ? b : a))
+    g.log(`Артефакт опознан: ${long.description}`)
+    expect(g.state.log.at(-1)!.text).toContain(long.description)
   })
 
   it('изменений игры за ход — не больше бюджета; неудачные вызовы его не тратят', async () => {

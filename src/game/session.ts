@@ -105,9 +105,10 @@ export class GameSession {
   get combat(): CombatState | null { return this.state.combat }
 
   log(text: string, kind: LogEntry['kind'] = 'info'): void {
-    // запись журнала — не длиннее 500 знаков и только известного вида (текст приходит и от игроков: заметки, формулы)
+    // запись журнала — только известного вида и в разумных пределах: описания артефактов и заклинаний цитируются
+    // целиком (до 800 знаков), а текст игроков (заметки) обрезает note()
     const k = LOG_KINDS.includes(kind as NonNullable<LogEntry['kind']>) ? kind : 'info'
-    this.state.log.push({ t: Date.now(), text: String(text).slice(0, 500), kind: k })
+    this.state.log.push({ t: Date.now(), text: String(text).slice(0, 4000), kind: k })
     if (this.state.log.length > LOG_CAP) this.state.log.splice(0, this.state.log.length - LOG_CAP)
   }
   logAll(entries: LogEntry[]): void {
