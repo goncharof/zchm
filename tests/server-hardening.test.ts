@@ -158,6 +158,22 @@ describe('сервер в интернете', () => {
     expect(turns).toBeLessThanOrEqual(7)
   })
 
+  it('«Готов» раз за разом не будит модель чаще, чем реплики ведущему', async () => {
+    let turns = 0
+    const echo: LlmProvider = { id: 'echo', label: 'Эхо', async turn() { turns++; return 'Ладно.' } }
+    const s = await createGameServer({ port: 0, staticDir: null, world: W, limits: { choose: [1000, 1000] }, gm: aiGmFactory({ providers: [echo], cooldownScale: 0 }) }); servers.push(s)
+    const c = client(s)
+    await c.c.create('Ира', 'ai')
+    const errors: string[] = []
+    for (let i = 0; i < 12; i++) {
+      const a = await c.c.socket.emitWithAck('turn:ready', true) as { ok: boolean; error?: string }
+      if (!a.ok) errors.push(a.error ?? '')
+      await s.gm.idle()
+    }
+    expect(turns).toBeLessThanOrEqual(4)
+    expect(errors.at(-1)).toMatch(/не успевает/)
+  })
+
   it('в лавке не купить артефакт, трофей или выдуманную вещь', () => {
     const g = new GameSession(blankGame(), W)
     const h = g.addHero('Вор', 'thief')

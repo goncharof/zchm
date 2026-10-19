@@ -311,6 +311,8 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!room || !player) throw new GameError('Вы не в комнате')
         limit(limiters.choose.take(socket.id), 'Слишком часто')
         if (room.turnMode !== 'ready') throw new GameError('Ведущий и так отвечает сразу')
+        // «Готов» без реплик — пустой ход модели: лимит тот же, что у реплик ведущему
+        if (ready && !room.held.length && room.gm === 'ai' && gm.chain().length) limit(limiters.toGm.take(`${room.code}:${player.id}`), 'Ведущий не успевает: не больше 4 ходов в минуту')
         if (ready) room.ready.add(player.id)
         else room.ready.delete(player.id)
         ctx.roomChanged(room)
