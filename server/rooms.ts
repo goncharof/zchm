@@ -118,6 +118,8 @@ export class Room {
   gmOpened: { loc: string; n: number }[] = []
   /** изменений игры инструментами в текущей попытке хода (предел против реплик-приказов) */
   gmChanges = 0
+  /** события игры сверх предела частоты: уйдут ведущему позже (не сохраняется) */
+  lateEvents: import('./gm/types').GmEvent[] = []
   /** недописанный текст ведущего (стрим): игрок, обновивший страницу, видит его сразу */
   live: Record<string, string> = {}
   gmSeen: Record<string, string> = {}

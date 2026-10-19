@@ -147,9 +147,36 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
     ack({ ok: false, error: msg || 'Ошибка' })
   }
 
+  // события сверх предела частоты не пропадают: копятся (последние 8) и уходят ведущему одним ходом, когда предел
+  // позволит, или раньше — вместе с ближайшим ходом
+  const lateTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  function takeLate(r: Room): GmInput[] {
+    const out = r.lateEvents.map((event): GmInput => ({ kind: 'event', event }))
+    r.lateEvents = []
+    return out
+  }
+  function deferEvent(r: Room, ev: GmEvent): void {
+    r.lateEvents = [...r.lateEvents, ev].slice(-8)
+    if (lateTimers.has(r.code)) return
+    const retry = () => {
+      lateTimers.delete(r.code)
+      if (!autoGm(r)) r.lateEvents = []
+      if (!r.lateEvents.length) return
+      if (!limiters.gmEvents.take(r.code)) return schedule()
+      if (r.turnMode === 'ready') flushTurn(r)
+      else gm.enqueue(r, takeLate(r))
+    }
+    const schedule = () => {
+      const t = setTimeout(retry, limiters.gmEvents.waitMs(r.code) + 50)
+      t.unref()
+      lateTimers.set(r.code, t)
+    }
+    schedule()
+  }
+
   /** Отложенные реплики (и событие, если есть) уходят ведущему одним ходом; отметки «готов» сбрасываются */
   function flushTurn(r: Room, event?: GmEvent, pass = false): void {
-    const inputs: GmInput[] = r.held.map((h) => ({ kind: 'player', ...h }))
+    const inputs: GmInput[] = [...takeLate(r), ...r.held.map((h): GmInput => ({ kind: 'player', ...h }))]
     if (event) inputs.push({ kind: 'event', event })
     else if (pass && !inputs.length) inputs.push({ kind: 'event', event: { type: 'pass', text: 'Все игроки готовы.' } })
     r.held = []
@@ -280,7 +307,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!player.isHost) throw new GameError('Это может только хозяин комнаты')
         room.gm = mode
         // ведущий больше не отвечает сам — отложенные реплики и отметки «готов» не нужны
-        if (!autoGm(room)) { room.held = []; room.ready.clear(); room.gmQueue = []; for (const id of Object.keys(room.votes)) clearVotes(room, id) }
+        if (!autoGm(room)) { room.held = []; room.ready.clear(); room.gmQueue = []; room.lateEvents = []; for (const id of Object.keys(room.votes)) clearVotes(room, id) }
         ctx.chat(room, { from: 'system', author: 'Игра', text: `Режим ведущего: ${GM_TITLE[mode]}.` })
         ctx.roomChanged(room)
         store.touch(room)
@@ -413,11 +440,11 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (autoGm(r)) {
           const ev = gmEventFor(name, r, before, args as unknown[], result)
           // события, на которые отвечает модель, — не чаще предела комнаты (клиент, отдыхающий в цикле, тратил бы квоты и
-          // деньги); сверх предела событие пропускается — состояние игры уже изменено
+          // деньги); сверх предела событие откладывается — состояние игры уже изменено
           const paid = r.gm === 'ai' && gm.chain().length > 0
-          if (ev && paid && !limiters.gmEvents.take(r.code)) console.warn(`[ведущий] ${r.code}: событие «${ev.type}» пропущено — слишком часто`)
+          if (ev && paid && !limiters.gmEvents.take(r.code)) deferEvent(r, ev)
           // событие игры не ждёт готовности: отложенные реплики уходят вместе с ним
-          else if (ev) { if (r.turnMode === 'ready') flushTurn(r, ev); else gm.enqueue(r, { kind: 'event', event: ev }) }
+          else if (ev) { if (r.turnMode === 'ready') flushTurn(r, ev); else gm.enqueue(r, [...takeLate(r), { kind: 'event', event: ev }]) }
         }
         // гибель героя, новая партия, удалённый герой меняют состав активных игроков
         if (r.turnMode === 'ready') recheck(r)
@@ -543,6 +570,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
     url: `http://localhost:${port}`, port, http, io, store, gm,
     async close() {
       clearInterval(evictTimer)
+      for (const t of lateTimers.values()) clearTimeout(t)
       // очередь ведущего сохранена в комнатах: сначала записать на диск, ходы моделей ждать недолго
       await store.flush()
       await Promise.race([gm.idle(), new Promise((r) => setTimeout(r, 3000))])

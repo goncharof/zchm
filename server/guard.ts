@@ -42,6 +42,14 @@ export class RateLimiter {
     return ok
   }
 
+  /** Через сколько миллисекунд хватит на действие */
+  waitMs(key: string, cost = 1): number {
+    const b = this.buckets.get(key)
+    if (!b) return 0
+    const have = Math.min(this.capacity, b.tokens + ((Date.now() - b.at) / 1000) * this.perSecond)
+    return have >= cost ? 0 : Math.ceil(((cost - have) / this.perSecond) * 1000)
+  }
+
   /** Хватит ли на действие — без списания (проверка до попытки, которая спишет только при неудаче) */
   can(key: string, cost = 1): boolean {
     const b = this.buckets.get(key)

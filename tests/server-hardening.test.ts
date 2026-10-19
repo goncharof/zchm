@@ -158,6 +158,21 @@ describe('сервер в интернете', () => {
     expect(turns).toBeLessThanOrEqual(7)
   })
 
+  it('событие сверх предела не пропадает: уходит ведущему, когда предел позволит', async () => {
+    const seen: string[] = []
+    const echo: LlmProvider = { id: 'echo', label: 'Эхо', async turn(_r, input) { seen.push(input.userText); return 'Ладно.' } }
+    const s = await createGameServer({ port: 0, staticDir: null, world: W, limits: { cmd: [1000, 1000], gmEvents: [2, 2] }, gm: aiGmFactory({ providers: [echo], cooldownScale: 0 }) }); servers.push(s)
+    const c = client(s)
+    await c.c.create('Ира', 'ai')
+    await c.c.call('quickStart', [])
+    for (let i = 0; i < 6; i++) await c.c.call('restAll', [1])
+    const rests = () => seen.join('\n').match(/отдыхает в трактире/g)?.length ?? 0
+    await until(() => rests() === 6, 4000)
+    await s.gm.idle()
+    // отложенные события ушли одним ходом, а не шестью
+    expect(seen.length).toBeLessThan(6)
+  })
+
   it('«Готов» раз за разом не будит модель чаще, чем реплики ведущему', async () => {
     let turns = 0
     const echo: LlmProvider = { id: 'echo', label: 'Эхо', async turn() { turns++; return 'Ладно.' } }
