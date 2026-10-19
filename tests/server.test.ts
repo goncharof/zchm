@@ -52,7 +52,7 @@ describe('сетевая игра', () => {
     const s = await server()
     const host = client(s), guest = client(s)
     const j = await host.c.create('Иван', 'book')
-    expect(j.code).toMatch(/^[A-Z0-9]{5}$/)
+    expect(j.code).toMatch(/^[A-Z0-9]{6}$/)
     await guest.c.join(j.code, 'Пётр')
     await until(() => !!guest.state && !!guest.room)
     expect(guest.room.players).toHaveLength(2)

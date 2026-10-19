@@ -1,0 +1,117 @@
+// Сервер, открытый в интернет через туннель: вход по имени, подбор кода, размер сообщений, частота ходов ИИ, лавка.
+import { afterEach, describe, expect, it } from 'vitest'
+import world from '@/data/world.json'
+import type { WorldMap } from '@/types'
+import type { RoomView } from '@/net/protocol'
+import { NetClient } from '@/net/client'
+import { GameSession, blankGame } from '@/game/session'
+import { createGameServer, type GameServer } from '../server/app'
+import { aiGmFactory } from '../server/gm/ai'
+import { executeGmTool } from '../server/gm/tools'
+import type { LlmProvider } from '../server/gm/types'
+
+const W = world as unknown as WorldMap
+let servers: GameServer[] = []
+let clients: NetClient[] = []
+afterEach(async () => {
+  for (const c of clients) c.close()
+  for (const s of servers) await s.close()
+  servers = []; clients = []
+})
+const wait = (ms = 30) => new Promise((r) => setTimeout(r, ms))
+async function until(fn: () => boolean, ms = 3000) {
+  const t = Date.now()
+  while (!fn()) { if (Date.now() - t > ms) throw new Error('timeout'); await wait(20) }
+}
+function client(s: GameServer) {
+  const c = new NetClient(s.url); clients.push(c)
+  let room: RoomView | null = null
+  c.onRoom((r) => { room = r })
+  return { c, get room() { return room! } }
+}
+
+describe('сервер в интернете', () => {
+  it('права хозяина по одному имени не отдаются; игрок, вошедший по имени, получает новый токен', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
+    const host = client(s), guest = client(s)
+    const { code } = await host.c.create('Алиса', 'book')
+    const g = await guest.c.join(code, 'Боб')
+    host.c.socket.disconnect(); guest.c.socket.disconnect()
+    await wait(80)
+    const thief = client(s)
+    await thief.c.join(code, 'алиса')
+    await until(() => !!thief.room)
+    expect(thief.room.me.isHost).toBe(false)
+    const bob = client(s)
+    const again = await bob.c.join(code, 'боб')
+    expect(again.playerId).toBe(g.playerId)
+    expect(again.token).not.toBe(g.token)
+  })
+
+  it('одно соединение, перешедшее к другому игроку, не оставляет прежнего «в сети»', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
+    const host = client(s), walker = client(s)
+    const { code } = await host.c.create('Хозяин', 'book')
+    await walker.c.join(code, 'Первый')
+    await walker.c.socket.emitWithAck('room:join', { code, name: 'Второй' })
+    await until(() => host.room?.players.length === 3)
+    await until(() => host.room.players.find((p) => p.name === 'Первый')?.online === false)
+  })
+
+  it('подбор кода комнаты останавливается по адресу, а не по соединению', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W, limits: { room: [1000, 1000] } }); servers.push(s)
+    const errors: string[] = []
+    for (let i = 0; i < 14; i++) {
+      const c = client(s)
+      const a = await c.c.socket.emitWithAck('room:join', { code: `ZZZZ${String(i).padStart(2, '0')}`, name: 'x' }) as { ok: boolean; error?: string }
+      errors.push(a.error ?? '')
+      c.c.close()
+    }
+    expect(errors.some((e) => /неудачных попыток/.test(e))).toBe(true)
+  })
+
+  it('сообщение больше 20 КБ не обрабатывается', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
+    const c = client(s)
+    await c.c.create('Ира', 'book')
+    const big = await Promise.race([
+      c.c.socket.timeout(800).emitWithAck('chat', { text: 'а'.repeat(30_000), toGm: false }).then(() => 'ответ').catch(() => 'нет ответа'),
+      wait(1200).then(() => 'нет ответа'),
+    ])
+    expect(big).toBe('нет ответа')
+  })
+
+  it('события игры будят модель ИИ не чаще предела комнаты', async () => {
+    let turns = 0
+    const echo: LlmProvider = { id: 'echo', label: 'Эхо', async turn() { turns++; return 'Ладно.' } }
+    const s = await createGameServer({ port: 0, staticDir: null, world: W, limits: { cmd: [1000, 1000] }, gm: aiGmFactory({ providers: [echo], cooldownScale: 0 }) }); servers.push(s)
+    const c = client(s)
+    await c.c.create('Ира', 'ai')
+    await c.c.call('quickStart', [])
+    for (let i = 0; i < 20; i++) await c.c.call('restAll', [1]).catch(() => null)
+    await s.gm.idle()
+    expect(turns).toBeLessThanOrEqual(7)
+  })
+
+  it('в лавке не купить артефакт, трофей или выдуманную вещь', () => {
+    const g = new GameSession(blankGame(), W)
+    const h = g.addHero('Вор', 'thief')
+    expect(() => g.buyItem(h.uid, 'artifact' as 'item', '7')).toThrow(/товара/)
+    expect(() => g.buyItem(h.uid, 'weapon', 'lazernyy-mech')).toThrow(/товара/)
+    expect(h.inventory).toEqual([])
+    // запись журнала не длиннее 500 знаков
+    g.note('я'.repeat(5000))
+    expect(g.state.log.at(-1)!.text.length).toBe(500)
+  })
+
+  it('за один ход модель меняет игру не больше 8 раз', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
+    const c = client(s)
+    const { code } = await c.c.create('Ира', 'ai')
+    await c.c.call('quickStart', [])
+    const room = (await s.store.get(code))!
+    room.gmChanges = 0
+    const results = Array.from({ length: 10 }, () => executeGmTool(room, 'change_money', { hero: room.state.heroes[0].name, delta: 10 }))
+    expect(results.filter((r) => !r.isError)).toHaveLength(8)
+  })
+})

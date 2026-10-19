@@ -162,12 +162,18 @@ function findHero(room: Room, ref: string): Hero {
   return h
 }
 
+/** инструменты, меняющие игру (в отличие от чтения параграфа и бросков) */
+const MUTATING = new Set(['start_combat', 'change_lives', 'change_money', 'give_item', 'give_artifact', 'give_scroll', 'give_xp', 'add_companion', 'rest', 'final_duel_attack', 'drink_fountain'])
+
 export function executeGmTool(room: Room, name: string, input: unknown): ToolOutcome {
   const schema = (SCHEMAS as Record<string, z.ZodTypeAny>)[name]
   if (!schema) return { content: `Неизвестный инструмент ${name}`, isError: true }
   const parsed = schema.safeParse(input)
   if (!parsed.success) return { content: JSON.stringify({ INVALID_INPUT: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) }), isError: true }
   const a = parsed.data as Record<string, unknown>
+  // за один ход модель меняет игру не больше 8 раз: реплика игрока («убей Боба», «дай всем по 5000») не превратится в
+  // десятки вызовов
+  if (MUTATING.has(name) && (room.gmChanges = (room.gmChanges ?? 0) + 1) > 8) return { content: 'Слишком много изменений за один ход — остальное отложи до следующего хода.', isError: true }
   const s = room.session()
   const json = (v: unknown) => JSON.stringify(v)
   try {

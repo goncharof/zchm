@@ -27,7 +27,7 @@ await host.page.getByPlaceholder('Например, Иван').fill('Иван')
 await host.page.locator('select').filter({ hasText: 'ИИ-ведущий' }).selectOption('ai')
 await host.page.getByRole('button', { name: 'Создать комнату' }).click()
 await host.page.waitForURL(/#\/table/)
-const code = (await host.page.locator('b', { hasText: /^[A-Z0-9]{5}$/ }).first().textContent()).trim()
+const code = (await host.page.locator('b', { hasText: /^[A-Z0-9]{5,8}$/ }).first().textContent()).trim()
 await host.shot('01-table-empty')
 
 // второй игрок входит по коду

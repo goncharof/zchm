@@ -42,6 +42,13 @@ export class RateLimiter {
     return ok
   }
 
+  /** Хватит ли на действие — без списания (проверка до попытки, которая спишет только при неудаче) */
+  can(key: string, cost = 1): boolean {
+    const b = this.buckets.get(key)
+    if (!b) return true
+    return Math.min(this.capacity, b.tokens + ((Date.now() - b.at) / 1000) * this.perSecond) >= cost
+  }
+
   /** забыть давно полные вёдра, чтобы карта не росла бесконечно */
   private sweep(now: number): void {
     for (const [k, b] of this.buckets) if (b.tokens + ((now - b.at) / 1000) * this.perSecond >= this.capacity) this.buckets.delete(k)
@@ -59,6 +66,12 @@ export interface Limits {
   choose: [number, number]
   /** создание и вход в комнаты с одного соединения */
   room: [number, number]
+  /** новые комнаты с одного адреса */
+  roomCreate: [number, number]
+  /** неудачные входы (неверный код комнаты) с одного адреса */
+  badJoin: [number, number]
+  /** события игры, на которые отвечает модель ИИ, в одной комнате */
+  gmEvents: [number, number]
 }
 
 export const DEFAULT_LIMITS: Limits = {
@@ -67,6 +80,9 @@ export const DEFAULT_LIMITS: Limits = {
   toGm: [4, 4 / 60],
   choose: [10, 2],
   room: [5, 1 / 20],
+  roomCreate: [5, 1 / 120],
+  badJoin: [10, 1 / 30],
+  gmEvents: [6, 6 / 60],
 }
 
 export function makeLimiters(limits: Partial<Limits> = {}) {
@@ -77,6 +93,9 @@ export function makeLimiters(limits: Partial<Limits> = {}) {
     toGm: new RateLimiter(...l.toGm),
     choose: new RateLimiter(...l.choose),
     room: new RateLimiter(...l.room),
+    roomCreate: new RateLimiter(...l.roomCreate),
+    badJoin: new RateLimiter(...l.badJoin),
+    gmEvents: new RateLimiter(...l.gmEvents),
   }
 }
 

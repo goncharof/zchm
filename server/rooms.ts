@@ -94,8 +94,9 @@ export interface ChoiceRecord {
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const CHAT_CAP = 400
 
+/** Код комнаты: 6 знаков из 32 — около миллиарда вариантов, подобрать чужую комнату перебором не выйдет */
 export function newCode(): string {
-  const bytes = randomBytes(5)
+  const bytes = randomBytes(6)
   return [...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('')
 }
 
@@ -113,6 +114,8 @@ export class Room {
   /** помещения, открытые моделью в текущем ходе (open_paragraph): пройденными считаются после удачного хода
    *  (не сохраняется — оборванный ход повторяется, и следующая модель откроет их снова) */
   gmOpened: { loc: string; n: number }[] = []
+  /** изменений игры инструментами в текущей попытке хода (предел против реплик-приказов) */
+  gmChanges = 0
   /** недописанный текст ведущего (стрим): игрок, обновивший страницу, видит его сразу */
   live: Record<string, string> = {}
   gmSeen: Record<string, string> = {}
@@ -296,12 +299,22 @@ export class RoomStore {
   }
 
   /** Запись через временный файл: обрыв посреди записи не портит сохранённую комнату */
-  async save(room: Room): Promise<void> {
-    if (!this.dir) return
-    await mkdir(this.dir, { recursive: true })
+  /** Сохранения одной комнаты идут по очереди (таймер и остановка сервера не пишут один файл одновременно) */
+  private saving = new Map<string, Promise<void>>()
+  save(room: Room): Promise<void> {
+    if (!this.dir) return Promise.resolve()
+    const prev = this.saving.get(room.code) ?? Promise.resolve()
+    const next = prev.catch(() => {}).then(() => this.write(room))
+    this.saving.set(room.code, next)
+    void next.finally(() => { if (this.saving.get(room.code) === next) this.saving.delete(room.code) }).catch(() => {})
+    return next
+  }
+  private async write(room: Room): Promise<void> {
+    await mkdir(this.dir!, { recursive: true })
     const file = this.file(room.code)
-    await writeFile(`${file}.tmp`, JSON.stringify(room.toData()))
-    await rename(`${file}.tmp`, file)
+    const tmp = `${file}.${process.pid}.${Date.now().toString(36)}.tmp`
+    await writeFile(tmp, JSON.stringify(room.toData()))
+    await rename(tmp, file)
   }
 
   async flush(): Promise<void> {

@@ -2,6 +2,7 @@
 import { createServer, type Server as HttpServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { existsSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import sirv from 'sirv'
 import { Server } from 'socket.io'
 import type { WorldMap } from '@/types'
@@ -175,11 +176,20 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
   io.on('connection', (socket) => {
     let room: Room | null = null
     let player: Player | null = null
+    // адрес клиента: за туннелем (cloudflared) все соединения приходят с localhost — настоящий адрес в заголовке
+    const h = socket.handshake.headers
+    const addr = String(h['cf-connecting-ip'] ?? h['x-forwarded-for'] ?? socket.handshake.address ?? '').split(',')[0].trim() || socket.id
+    // сообщения крупнее 20 КБ нужны только для создания комнаты и загрузки сохранения (в них состояние партии)
+    socket.use(([event, ...args], next) => {
+      if (event !== 'room:create' && event !== 'room:loadState' && JSON.stringify(args).length > 20_000) return next(new Error('Слишком большое сообщение'))
+      next()
+    })
 
     async function enter(r: Room, p: Player, ack: (a: Ack) => void) {
-      if (room && player && room !== r) {
+      // соединение переходит к другому игроку (или в другую комнату) — прежний больше не числится в сети через него
+      if (room && player && (room !== r || player !== p)) {
         player.sockets.delete(socket.id)
-        void socket.leave(room.code)
+        if (room !== r) void socket.leave(room.code)
         if (player.sockets.size === 0) { player.awaySince = Date.now(); watchHost(room) }
         ctx.roomChanged(room)
       }
@@ -204,6 +214,8 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       const ack = safeAck(rawAck)
       try {
         limit(limiters.room.take(socket.id), 'Слишком часто: подождите немного')
+        // новые комнаты — не чаще, чем нужно компании: с одного адреса пять сразу, дальше одна в две минуты
+        limit(limiters.roomCreate.take(addr), 'Слишком много новых комнат — подождите несколько минут')
         const req = parse(Schemas.create, raw)
         const mode: GmMode = req.gm
         const state = req.state ? parseSave(JSON.stringify(req.state)) : undefined
@@ -224,13 +236,20 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       try {
         limit(limiters.room.take(socket.id), 'Слишком часто: подождите немного')
         const req = parse(Schemas.join, raw)
+        // подбор кода комнаты: неудачные входы считаются по адресу, а не по соединению (переподключение не сбрасывает)
+        limit(limiters.badJoin.can(addr), 'Слишком много неудачных попыток входа — подождите')
         const r = await store.get(req.code)
         // клиент мог отключиться, пока комната читалась с диска: иначе мёртвый сокет навсегда числится «в сети»
         if (!socket.connected) return
-        if (!r) throw new GameError('Комната не найдена')
+        if (!r) { limiters.badJoin.take(addr); throw new GameError('Комната не найдена') }
         let p = req.token ? r.playerByToken(req.token) : undefined
-        // вход с другого устройства (или после очистки браузера): игрок не в сети с тем же именем — это он, герои при нём
-        if (!p) p = [...r.players.values()].find((x) => x.sockets.size === 0 && x.name.trim().toLowerCase() === req.name.trim().toLowerCase())
+        // вход с другого устройства (или после очистки браузера): игрок не в сети с тем же именем — это он, герои при нём.
+        // Хозяина так не занять (его права — только по токену; пропавшего хозяина сменяет «Стать хозяином»), а прежний
+        // токен перестаёт действовать: вошедший получает новый
+        if (!p) {
+          p = [...r.players.values()].find((x) => x.sockets.size === 0 && !x.isHost && x.name.trim().toLowerCase() === req.name.trim().toLowerCase())
+          if (p) { p.token = randomUUID(); store.touch(r) }
+        }
         if (!p) {
           if ([...r.players.values()].filter((x) => x.sockets.size > 0).length >= 8) throw new GameError('В комнате уже 8 игроков')
           p = r.addPlayer(req.name, false)
@@ -345,6 +364,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       try {
         const heroUid = parse(Schemas.heroUid, raw)
         if (!room || !player) throw new GameError('Вы не в комнате')
+        limit(limiters.cmd.take(socket.id), 'Слишком много действий подряд')
         player.heroUids = player.heroUids.filter((u) => u !== heroUid)
         ctx.roomChanged(room)
         store.touch(room)
@@ -378,8 +398,12 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         ack({ ok: true, result: JSON.parse(JSON.stringify(result ?? null)) })
         if (autoGm(r)) {
           const ev = gmEventFor(name, r, before, args as unknown[], result)
+          // события, на которые отвечает модель, — не чаще предела комнаты (клиент, отдыхающий в цикле, тратил бы квоты и
+          // деньги); сверх предела событие пропускается — состояние игры уже изменено
+          const paid = r.gm === 'ai' && gm.chain().length > 0
+          if (ev && paid && !limiters.gmEvents.take(r.code)) console.warn(`[ведущий] ${r.code}: событие «${ev.type}» пропущено — слишком часто`)
           // событие игры не ждёт готовности: отложенные реплики уходят вместе с ним
-          if (ev) { if (r.turnMode === 'ready') flushTurn(r, ev); else gm.enqueue(r, { kind: 'event', event: ev }) }
+          else if (ev) { if (r.turnMode === 'ready') flushTurn(r, ev); else gm.enqueue(r, { kind: 'event', event: ev }) }
         }
         // гибель героя, новая партия, удалённый герой меняют состав активных игроков
         if (r.turnMode === 'ready') recheck(r)

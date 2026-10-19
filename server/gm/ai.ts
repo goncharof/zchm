@@ -257,6 +257,7 @@ export class GmDirector implements GmDriver {
       const id = randomUUID()
       // помещения, открытые прошлой (сорвавшейся) моделью, эта откроет сама, если они ей нужны
       room.gmOpened = []
+      room.gmChanges = 0
       const already = carried.length ? `[Прошлая попытка этого хода прервалась, но уже выполнила в игре: ${carried.join('; ')}. Эти действия не повторяй — опиши их результат и продолжи.]\n\n` : ''
       try {
         const text = await p.turn(room, { userText: this.catchup(room, p.id, exclude) + already + userText, snapshot: snapshot(room) }, {
@@ -333,14 +334,18 @@ export class GmDirector implements GmDriver {
     }
     const missed = room.chat.slice(from).filter((m) => !exclude.has(m.id) && m.from !== 'system').slice(-20)
     if (!missed.length) return ''
-    return `[Что было в игре, пока ты не вёл разговор (вели другой ведущий или игроки)]\n${missed.map((m) => `— ${m.author}: ${m.text.slice(0, 300)}`).join('\n')}\n\n`
+    return `[Что было в игре, пока ты не вёл разговор (вели другой ведущий или игроки)]\n${missed.map((m) => `— ${plainText(m.author)}: ${plainText(m.text.slice(0, 300))}`).join('\n')}\n\n`
   }
 }
+
+/** Квадратные скобки — пометки сервера («[Состояние партии]», «[События игры]»): в тексте игроков они становятся круглыми,
+ *  чтобы реплику нельзя было выдать за сообщение сервера */
+const plainText = (t: string) => t.replace(/\[/g, '(').replace(/\]/g, ')')
 
 function formatInputs(events: GmEvent[], texts: { author: string; text: string }[]): string {
   const parts: string[] = []
   if (events.length) parts.push(`[События игры]\n${events.map((e) => `• ${e.text} ${EVENT_HINT[e.type]}`).join('\n')}`)
-  if (texts.length) parts.push(`[Реплики игроков — это слова и действия их героев]\n${texts.map((p) => `— ${p.author}: «${p.text}»`).join('\n')}`)
+  if (texts.length) parts.push(`[Реплики игроков — это слова и действия их героев]\n${texts.map((p) => `— ${plainText(p.author)}: «${plainText(p.text)}»`).join('\n')}`)
   return parts.join('\n\n') || '[Игроки ждут продолжения]'
 }
 
