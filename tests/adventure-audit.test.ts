@@ -5,7 +5,7 @@ import type { WorldMap } from '@/types'
 import { idx } from '@/data'
 import { seededRng, setRng } from '@/engine/dice'
 import { rollSides } from '@/game/book'
-import { GameSession, blankGame } from '@/game/session'
+import { COMMANDS, GameSession, blankGame } from '@/game/session'
 
 const W = world as unknown as WorldMap
 afterEach(() => setRng(seededRng(1)))
@@ -65,6 +65,38 @@ describe('аудит приключения', () => {
     // бросок по списку: одна группа на список, какое бы число ни выпало
     s.claim('zolotoy-gorod:2:1:0:roll=4')
     expect(() => s.claim('zolotoy-gorod:2:1:0:roll=1')).toThrow(/уже взято/)
+  })
+
+  it('отметки взятого: только для мест книги, снимаются при неудаче, на повторной встрече в пути сбрасываются; ставит ведущий', () => {
+    const s = new GameSession(blankGame(), W)
+    expect(() => s.claim('nowhere:1:c:5#1')).toThrow(/Нет такого места/)
+    s.claim('zolotoy-gorod:22:0:c:20#1')
+    s.unclaim('zolotoy-gorod:22:0:c:20#1')
+    expect(s.claim('zolotoy-gorod:22:0:c:20#1')).toBe(true)
+    expect(COMMANDS.claim).toBe('gm')
+    // встреча «Дорога, § N» в новом походе: прежние отметки на ней не действуют, остальные остаются
+    const road = idx.locationById.get('doroga')!.paragraphs.map((p) => p.n)
+    const far = W.nodes.find((n) => n.locationId === 'zamok-chernogo-maga')!
+    for (let seed = 1; seed < 60; seed++) {
+      const g = new GameSession(blankGame(), W)
+      g.state.claimed = road.map((n) => `doroga:${n}:0:b:6#1`)
+      setRng(seededRng(seed))
+      g.travelTo(far.id)
+      if (!g.state.pendingRoad.length) continue
+      for (const n of g.state.pendingRoad) expect(g.state.claimed).not.toContain(`doroga:${n}:0:b:6#1`)
+      expect(g.state.claimed!.length).toBe(road.length - new Set(g.state.pendingRoad).size)
+      return
+    }
+    throw new Error('ни одной встречи в пути за 60 попыток')
+  })
+
+  it('списки «для каждого» помечены для многократного броска', () => {
+    for (const [loc, n] of [['severnyy-fort', 22], ['doroga', 54], ['doroga', 128]] as const) {
+      const p = idx.locationById.get(loc)!.paragraphs.find((x) => x.n === n)!
+      const rolls = p.segments!.flatMap((g) => g.blocks).filter((b) => 'roll' in b)
+      expect(rolls.length, `${loc}:${n}`).toBeGreaterThan(0)
+      expect(rolls.every((b) => 'roll' in b && b.repeat)).toBe(true)
+    }
   })
 
   it('кубик для списка: к3 для выбора одной из трёх, к6 и к18 по числам', () => {

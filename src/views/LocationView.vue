@@ -164,9 +164,9 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
               <div v-if="seg.kind === 'scene'">
                 <template v-for="(b, j) in seg.blocks" :key="j">
                   <p v-if="'text' in b" class="paragraph-text">{{ b.text }}</p>
-                  <RollBlock v-else :options="b.roll" :context="`${loc.name}, § ${paragraph.n}`" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}:${i}:${j}`" @fight="startFight" />
+                  <RollBlock v-else :options="b.roll" :repeat="b.repeat" :context="`${loc.name}, § ${paragraph.n}`" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}:${i}:${j}`" @fight="startFight" />
                 </template>
-                <ParagraphActions :hints="seg.hints" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}`" @fight="startFight" />
+                <ParagraphActions :hints="seg.hints" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}:${i}`" @fight="startFight" />
               </div>
               <p v-else-if="!seg.blocks.length" class="paragraph-text muted" style="font-style:italic">{{ seg.label }}.</p>
               <div v-else class="branch" :class="{ open: opened.has(i) }">
@@ -174,9 +174,9 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
                 <div v-if="opened.has(i)" class="branch-body">
                   <template v-for="(b, j) in seg.blocks" :key="j">
                     <p v-if="'text' in b" class="paragraph-text">{{ b.text }}</p>
-                    <RollBlock v-else :options="b.roll" :context="`${loc.name}, § ${paragraph.n}`" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}:${i}:${j}`" @fight="startFight" />
+                    <RollBlock v-else :options="b.roll" :repeat="b.repeat" :context="`${loc.name}, § ${paragraph.n}`" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}:${i}:${j}`" @fight="startFight" />
                   </template>
-                  <ParagraphActions :hints="seg.hints" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}`" @fight="startFight" />
+                  <ParagraphActions :hints="seg.hints" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}:${i}`" @fight="startFight" />
                 </div>
               </div>
             </template>
@@ -184,7 +184,11 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
           </template>
           <template v-else>
             <p class="paragraph-text">{{ paragraphText(paragraph) }}</p>
-            <ParagraphActions :hints="paragraph.hints" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}`" @fight="startFight" />
+            <!-- полный текст: действия — по частям параграфа с теми же отметками, что и в разбивке; исходы бросков — только броском -->
+            <template v-if="segments">
+              <template v-for="(seg, i) in segments" :key="'fa' + i"><ParagraphActions v-if="seg.hints" :hints="seg.hints" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}:${i}`" @fight="startFight" /></template>
+            </template>
+            <ParagraphActions v-else :hints="paragraph.hints" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}:p`" @fight="startFight" />
           </template>
 
           <div v-if="isFinal" class="card tight" style="border-color:var(--accent);margin-top:.6rem">

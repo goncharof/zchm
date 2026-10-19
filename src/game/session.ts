@@ -364,6 +364,8 @@ export class GameSession {
     this.state.worldNodeId = nodeId
     this.state.locationId = null
     this.state.pendingRoad.push(...encounters)
+    // встреча в пути может повториться в другом походе — прежние отметки взятого на ней не действуют
+    if (encounters.length && this.state.claimed) this.state.claimed = this.state.claimed.filter((k) => !encounters.some((n) => k.startsWith(`doroga:${n}:`)))
     const target = this.world.nodes.find((n) => n.id === nodeId)
     const legs = route.nodes.length - 1
     this.log(`Переход: ${legs} ${plural(legs, 'участок', 'участка', 'участков')} дороги, ${days} ${plural(days, 'день', 'дня', 'дней')} пути${flying ? ' на призрачном драконе' : allMounted ? ' верхом' : ''}. Прибытие — ${target?.name ?? nodeId}, день ${this.state.day}.${encounters.length ? ` В пути ${plural(encounters.length, 'случилась', 'случились', 'случилось')} ${encounters.length} ${plural(encounters.length, 'встреча', 'встречи', 'встреч')}: «Дорога», ${encounters.map((n) => `§ ${n}`).join(', ')}.` : ''}`)
@@ -512,11 +514,21 @@ export class GameSession {
    *  Так монеты, бутылки, артефакт или бросок по списку не берутся заново после повторного открытия параграфа */
   claim(key: string): true {
     key = String(key).slice(0, 160)
+    // ключ начинается с существующего места книги «локация:§» (команда приходит и по сети)
+    const [loc, n] = key.split(':')
+    if (!idx.locationById.get(loc)?.paragraphs.some((p) => p.n === Number(n))) throw new GameError('Нет такого места в книге')
     const group = key.split('=')[0]
     const claimed = (this.state.claimed ??= [])
     if (claimed.some((k) => k.split('=')[0] === group)) throw new GameError('Это уже взято')
+    if (claimed.length >= 3000) throw new GameError('Слишком много отметок')
     claimed.push(key)
     return true
+  }
+  /** Снять отметку, если награду выдать не удалось (нет связи, герой убран) — иначе она пропала бы навсегда */
+  unclaim(key: string): void {
+    const claimed = this.state.claimed ?? []
+    const i = claimed.indexOf(String(key))
+    if (i >= 0) claimed.splice(i, 1)
   }
   trapFound(heroUid: string): void {
     const h = this.hero(heroUid)
@@ -727,7 +739,7 @@ export const COMMANDS = {
   drink: 'owner', identifyBottle: 'owner', copyScroll: 'owner', learnSpell: 'owner', useAntidote: 'owner', useParalysisPotion: 'owner', poisonWeapon: 'owner',
   adjustLives: 'gm', adjustMana: 'gm', adjustMoney: 'gm', giveXp: 'gm', giveItem: 'gm',
   restAll: 'party', travelTo: 'party', enterLocation: 'party', leaveLocation: 'party', markVisited: 'party', dismissRoad: 'party',
-  rollDie: 'party', rollDice: 'party', claim: 'party', luckCheck: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
+  rollDie: 'party', rollDice: 'party', claim: 'gm', unclaim: 'gm', luckCheck: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
   addCompanion: 'gm', dismissCompanion: 'party',
   startEncounter: 'gm', addMonstersToCombat: 'gm', abortCombat: 'gm',
   attack: 'owner', cast: 'owner', flee: 'owner', skip: 'owner',

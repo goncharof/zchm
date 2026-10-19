@@ -221,7 +221,8 @@ export interface RollOption {
   hints?: ParagraphHints
 }
 
-export type SegmentBlock = { text: string } | { roll: RollOption[] }
+/** repeat — список бросают много раз («перед каждым черепом», «в каждом из шести домов»); иначе — один бросок */
+export type SegmentBlock = { text: string } | { roll: RollOption[]; repeat?: boolean }
 
 /** Часть параграфа: сцена (видна сразу) или ветка решения (исход раскрывается по выбору) */
 export interface ParagraphSegment {

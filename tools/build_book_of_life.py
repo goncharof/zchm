@@ -310,6 +310,12 @@ def apply_overrides(locations, issues):
                 ph.pop('monsterCounts', None)
             if not ph:
                 del p['hints']
+        # списки, которые по тексту бросают много раз («перед каждым черепом», «в каждом из домов»)
+        if ov.get('repeatRolls'):
+            for g in segs:
+                for b in g['blocks']:
+                    if 'roll' in b:
+                        b['repeat'] = True
         for name, when in ov.get('when', {}).items():
             t = target(name)
             if t is None or t is p:

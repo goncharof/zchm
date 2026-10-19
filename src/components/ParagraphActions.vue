@@ -41,10 +41,12 @@ const rewardKey = (kind: string, value: string | number, list: (string | number)
   `${kind}:${value}#${list.slice(0, i + 1).filter((x) => x === value).length}`
 const claimed = computed(() => new Set(store.game?.claimed ?? []))
 const isTaken = (key: string) => taken.value.has(key) || (!!props.place && claimed.value.has(`${props.place}:${key}`))
-async function reward(key: string, fn: (h: string) => void) {
+/** взять награду: отметка «взято» ставится сразу (два игрока не возьмут её дважды), а если выдать не удалось — снимается */
+async function reward(key: string, give: (h: string) => Promise<boolean>) {
   const h = need(); if (!h) return
-  if (props.place && !(await store.claim(`${props.place}:${key}`))) return
-  fn(h)
+  const full = props.place ? `${props.place}:${key}` : ''
+  if (full && !(await store.claim(full))) return
+  if (!(await give(h))) { if (full) await store.unclaim(full); return }
   taken.value = new Set([...taken.value, key])
 }
 async function luck(target: number) {
@@ -77,10 +79,10 @@ const has = computed(() => !!props.hints && Object.keys(props.hints).length > 0)
     <button v-if="hints?.tavern" class="small" @click="store.restAll(1)">Отдохнуть сутки (2 монеты)</button>
     <router-link v-if="hints?.shop" class="btn small" to="/shop">В лавку</router-link>
     <template v-for="(c, i) in hints?.prices ?? []" :key="'p' + i"><button class="small" :disabled="taken.has('p' + i) || !heroUid || store.hero(heroUid).money < c" :title="heroUid && store.hero(heroUid).money < c ? 'Не хватает монет' : ''" @click="once('p' + i, (h) => store.adjustMoney(h, -c))">Заплатить {{ c }} монет</button></template>
-    <template v-for="(c, i) in hints?.coins ?? []" :key="'c' + i"><button class="small" :disabled="isTaken(rewardKey('c', c, hints?.coins, i))" @click="reward(rewardKey('c', c, hints?.coins, i), (h) => store.adjustMoney(h, c))">+{{ c }} монет</button></template>
-    <template v-for="(b, i) in hints?.bottles ?? []" :key="'b' + i"><button class="small" :disabled="isTaken(rewardKey('b', b, hints?.bottles, i))" @click="reward(rewardKey('b', b, hints?.bottles, i), (h) => store.giveItem(h, 'bottle', String(b), 1, false))">Взять бутылку ({{ b }})</button></template>
-    <button v-if="hints?.artifact" class="small" :disabled="isTaken('art')" @click="reward('art', (h) => store.findArtifact(h))">Найти артефакт (к18)</button>
-    <template v-for="(s, i) in hints?.scrolls ?? []" :key="'s' + i"><button class="small" :disabled="isTaken(rewardKey('s', `${s.caster ?? ''}${s.level ?? ''}`, (hints?.scrolls ?? []).map((x) => `${x.caster ?? ''}${x.level ?? ''}`), i))" @click="reward(rewardKey('s', `${s.caster ?? ''}${s.level ?? ''}`, (hints?.scrolls ?? []).map((x) => `${x.caster ?? ''}${x.level ?? ''}`), i), (h) => store.giveScroll(h, s.caster as Caster | undefined, s.level))">Свиток{{ s.caster ? ` ${casterName(s.caster)}а` : '' }}{{ s.level ? ` ${s.level} ур.` : '' }}</button></template>
+    <template v-for="(c, i) in hints?.coins ?? []" :key="'c' + i"><button class="small" :disabled="isTaken(rewardKey('c', c, hints?.coins, i))" @click="reward(rewardKey('c', c, hints?.coins, i), (h) => store.cmdOk('adjustMoney', h, c))">+{{ c }} монет</button></template>
+    <template v-for="(b, i) in hints?.bottles ?? []" :key="'b' + i"><button class="small" :disabled="isTaken(rewardKey('b', b, hints?.bottles, i))" @click="reward(rewardKey('b', b, hints?.bottles, i), (h) => store.cmdOk('giveItem', h, 'bottle', String(b), 1, false))">Взять бутылку ({{ b }})</button></template>
+    <button v-if="hints?.artifact" class="small" :disabled="isTaken('art')" @click="reward('art', (h) => store.cmdOk('findArtifact', h))">Найти артефакт (к18)</button>
+    <template v-for="(s, i) in hints?.scrolls ?? []" :key="'s' + i"><button class="small" :disabled="isTaken(rewardKey('s', `${s.caster ?? ''}${s.level ?? ''}`, (hints?.scrolls ?? []).map((x) => `${x.caster ?? ''}${x.level ?? ''}`), i))" @click="reward(rewardKey('s', `${s.caster ?? ''}${s.level ?? ''}`, (hints?.scrolls ?? []).map((x) => `${x.caster ?? ''}${x.level ?? ''}`), i), (h) => store.cmdOk('giveScroll', h, s.caster as Caster | undefined, s.level))">Свиток{{ s.caster ? ` ${casterName(s.caster)}а` : '' }}{{ s.level ? ` ${s.level} ур.` : '' }}</button></template>
     <span v-for="m in npcs" :key="'npc' + m" class="badge" :title="idx.monsterById.get(m)?.description">{{ idx.monsterById.get(m)?.name }}</span>
   </div>
   <p v-if="lastLuck" class="small" style="color:var(--note);margin:.3rem 0 0">{{ lastLuck }}</p>

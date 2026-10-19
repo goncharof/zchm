@@ -96,6 +96,21 @@ export const useGameStore = defineStore('game', () => {
     return h
   }
 
+  /** Команда с признаком успеха (ошибку, как и cmd, показывает игроку) */
+  async function cmdOk<K extends CommandName>(name: K, ...args: CommandArgs<K>): Promise<boolean> {
+    try {
+      if (net.value && room.value) await net.value.call(name, args)
+      else {
+        if (!game.value) game.value = blankGame()
+        runCommand(new GameSession(game.value, world.value), name, args)
+      }
+      return true
+    } catch (e) {
+      say((e as Error).message || 'Ошибка')
+      if (!(e instanceof Error) || e.name !== 'GameError') console.error(e)
+      return false
+    }
+  }
   /** Выполнить команду: локально (синхронно, до первого await) или на сервере */
   async function cmd<K extends CommandName>(name: K, ...args: CommandArgs<K>): Promise<CommandResult<K> | undefined> {
     try {
@@ -290,6 +305,7 @@ export const useGameStore = defineStore('game', () => {
     giveScroll: (heroUid: string, caster?: Caster, level?: number) => cmd('giveScroll', heroUid, caster, level),
     trapFound: (heroUid: string) => cmd('trapFound', heroUid),
     claim: (key: string) => cmd('claim', key),
+    unclaim: (key: string) => cmd('unclaim', key),
     finalDuelAttack: (heroUid: string) => cmd('finalDuelAttack', heroUid),
     drinkFountain: () => cmd('drinkFountain'),
     addCompanion: (monsterId: string, battles = 3) => cmd('addCompanion', monsterId, battles),
@@ -313,7 +329,7 @@ export const useGameStore = defineStore('game', () => {
     game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, isMine: isMineHero, chat, netStatus, rejoinState, abandonRejoin, unread, markChatSeen, isMineMsg: isMine, streaming, connecting,
     createRoom, joinRoom, rejoin, leaveRoom, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, claimHost, setReady, turnGo, ownerOf,
     heroes, combat, location, worldNode, started,
-    say, hero, cmd, attachNet, detachNet,
+    say, hero, cmd, cmdOk, attachNet, detachNet,
     resetGame, exportSave, importSave, slotInfo, saveSlot, loadSlot, clearSlot,
     ...c,
   }

@@ -115,8 +115,8 @@ function rollOffers(blocks: SegmentBlock[], loc: string, n: number, seg: number)
   blocks.forEach((b, i) => {
     if ('roll' in b) {
       const sides = rollSides(b.roll)
-      // бросок по списку — один раз за параграф: иначе можно перебрасывать, пока не выпадет награда
-      out.push({ label: `🎲 Бросить к${sides} по списку`, action: { t: 'roll', loc, n, seg, block: i, once: `${loc}:${n}:${seg}:roll:${i}` } })
+      // бросок по списку — один раз за параграф (иначе перебрасывали бы до награды); списки «для каждого» — сколько угодно
+      out.push({ label: b.repeat ? `🎲 Бросить к${sides} (на каждый)` : `🎲 Бросить к${sides} по списку`, action: { t: 'roll', loc, n, seg, block: i, ...(b.repeat ? {} : { once: `${loc}:${n}:${seg}:roll:${i}` }) } })
     }
   })
   return out
@@ -213,6 +213,8 @@ export class ScriptedGm {
     for (const ev of events) {
       if (ev.type === 'travel') {
         const enc = ev.encounters ?? []
+        // встреча может повториться в другом походе — взятое на ней в прошлый раз снова доступно
+        if (enc.length) room.script.taken = (room.script.taken ?? []).filter((k) => !enc.some((n) => k.startsWith(`doroga:${n}:`)))
         this.say(room, `${ev.text}${enc.length ? '' : ' Куда дальше? Войдите в локацию с карты.'}`)
         for (const n of enc) this.presentParagraph(room, 'doroga', n)
       } else if (ev.type === 'enter') {
@@ -289,7 +291,8 @@ export class ScriptedGm {
         const sides = rollSides(block.roll)
         const r = s.rollDie(sides, 'Бросок по списку')
         const hit = block.roll.find((o) => o.values.includes(r))
-        this.say(room, `Выпало ${r}: ${hit?.text ?? 'ничего не происходит'}`, hintOffers(hit?.hints, { loc: a.loc, n: a.n, seg: a.seg }, `r${a.block}`, hit?.text))
+        // награда исхода — своя у каждого варианта списка (в каждом доме деревни — своя), берётся один раз
+        this.say(room, `Выпало ${r}: ${hit?.text ?? 'ничего не происходит'}`, hintOffers(hit?.hints, { loc: a.loc, n: a.n, seg: a.seg }, `r${a.block}.${hit ? block.roll.indexOf(hit) : 0}`, hit?.text))
         return
       }
       case 'luck': {
