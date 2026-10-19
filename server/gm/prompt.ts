@@ -9,6 +9,9 @@ const RULES = `Кратко о правилах (механику считает
 - Бутылки (1)…(6): (1) смерть при неудаче 9, (2) −1к6, (3) −1к3, (4) +1к3, (5) +1к6, (6) все жизни. Найденные бутылки не опознаны.
 - Жизни: 0 — без сознания, −10 — смерть. Трактир: 2 монеты в сутки с героя, +5 жизней и маны в сутки.
 - Артефакт определяется к18 (give_artifact), за находку все получают 500 опыта. Вор получает 400 опыта за найденную ловушку или тайник.
+- Фонтаны (drink_fountain): в зале Чёрного мага — все жизни и мана, в Крепости короля назгулов (§22) — +5 жизней; раз в день.
+- «Невидимость» и «Отворот мертвецов», наложенные до встречи, отмечены в «Состоянии партии»: реши по тексту, удаётся ли
+  обойти врагов; если всё же бой — движок учтёт защиту сам. «Призрачный дракон» несёт партию: переход втрое короче.
 - Классы: воин, варвар, вор, маг, жрец. Маги и жрецы колдуют сами через интерфейс игры.`
 
 /** Ужатый промпт для бесплатных моделей: без списков монстров и локаций (у бесплатных тарифов малы лимиты токенов) */
@@ -80,10 +83,13 @@ export function snapshot(room: Room): string {
   for (const h of s.heroes) {
     const cls = idx.cls(h.classId).name.toLowerCase()
     const weapons = heroWeapons(h, idx).map((w) => `${w.name} (${attacksLabel(w)})`).join(', ') || 'без оружия'
-    const status = [h.status.dead && 'мёртв', !h.status.dead && h.status.unconscious && 'без сознания', h.status.poison && 'отравлен', h.status.paralysis && 'парализован'].filter(Boolean).join(', ')
+    const wards = h.buffs.filter((b) => b.stat === 'ward')
+    const status = [h.status.dead && 'мёртв', !h.status.dead && h.status.unconscious && 'без сознания', h.status.poison && 'отравлен', h.status.paralysis && 'парализован',
+      wards.some((b) => b.ward === 'invisible') && 'невидим', wards.some((b) => b.ward === 'undead') && 'мертвецы его не замечают'].filter(Boolean).join(', ')
     const owner = room.ownerName(h.uid)
     lines.push(`- ${h.name} [${h.uid}] — ${cls} ${h.level} ур., жизни ${h.lives}/${h.maxLives}${h.maxMana ? `, мана ${h.mana}/${h.maxMana}` : ''}, монеты ${h.money}, защита ${heroDefense(h, idx)}, сила ${heroStrength(h, idx)}; оружие: ${weapons}${status ? `; ${status}` : ''}${owner ? `; игрок: ${owner}` : ''}`)
   }
+  if (s.flight) lines.push('Призрачный дракон ждёт партию: следующий переход по карте втрое быстрее.')
   if (s.companions.length) lines.push(`Спутники: ${s.companions.map((c) => `${c.name} (жизни ${c.lives}/${c.maxLives}, боёв ${c.battlesLeft})`).join(', ')}.`)
   if (s.combat) {
     const alive = s.combat.monsters.filter((m) => !m.dead && !m.fled)

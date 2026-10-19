@@ -65,7 +65,7 @@ export const GM_TOOLS: Tool[] = ([
   },
   {
     name: 'add_companion',
-    description: 'Существо из текста присоединяется к партии как спутник на battles боёв (рыцарь — 3 боя, наёмники — сколько оплачено).',
+    description: 'Существо из текста присоединяется к партии как спутник на battles боёв (рыцарь — 3 боя, наёмники — сколько оплачено). Засчитываются только выигранные бои.',
     input_schema: { type: 'object', properties: { monster_id: { type: 'string' }, battles: { type: 'integer' } }, required: ['monster_id', 'battles'], additionalProperties: false },
   },
   {
@@ -80,7 +80,7 @@ export const GM_TOOLS: Tool[] = ([
   },
   {
     name: 'drink_fountain',
-    description: 'Партия пьёт из фонтана в зале Чёрного мага (§13): все жизни и мана восстанавливаются.',
+    description: 'Партия пьёт из фонтана, если она у него: в зале Чёрного мага (Замок, §13) восстанавливаются все жизни и мана, в Крепости короля назгулов (§22) — +5 жизней. Из одного фонтана — раз в день.',
     input_schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
   },
 ] as Tool[]).map((t) => ({ ...t, strict: true, eager_input_streaming: true }))
