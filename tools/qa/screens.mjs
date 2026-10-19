@@ -77,11 +77,11 @@ async function run(label, viewport) {
   await shot('07-location')
 
   // бой из параграфа или произвольный
-  const fight = page.locator('button.danger', { hasText: '⚔' }).first()
+  const fight = page.locator('button.danger', { hasText: 'Бой:' }).first()
   if (await fight.count()) await fight.click()
   else {
     await page.getByRole('button', { name: 'Произвольный бой' }).click()
-    await page.locator('tr', { hasText: 'Орк' }).getByRole('button', { name: '+' }).click()
+    await page.locator('.pick-row', { hasText: 'Орк' }).first().getByRole('button', { name: /^Больше/ }).click()
     await page.getByRole('button', { name: 'Начать бой' }).click()
   }
   await page.waitForSelector('text=Раунд')

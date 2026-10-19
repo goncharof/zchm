@@ -38,6 +38,26 @@ watch(() => [c.value?.turn, c.value?.round, c.value?.finished, autoMonsters.valu
 }, { immediate: true })
 onBeforeUnmount(() => { if (autoTimer) clearTimeout(autoTimer) })
 const targetMonster = computed(() => alive.value.find((m) => m.uid === target.value) ?? null)
+type Foe = NonNullable<typeof c.value>['monsters'][number]
+/** плитки противников: головы одного чудовища (Гидра) — одной плиткой «головы N/M», удар идёт по первой живой голове */
+const foeTiles = computed(() => {
+  const out: { key: string; m: Foe; heads?: { alive: number; total: number }; down: boolean; targetUid: string | null; isTarget: boolean }[] = []
+  const seen = new Set<string>()
+  for (const m of c.value?.monsters ?? []) {
+    if (m.groupId) {
+      if (seen.has(m.groupId)) continue
+      seen.add(m.groupId)
+      const heads = (c.value?.monsters ?? []).filter((x) => x.groupId === m.groupId)
+      const live = heads.filter((x) => !x.dead && !x.fled)
+      const shown = live[0] ?? heads[0]
+      out.push({ key: m.groupId, m: shown, heads: { alive: live.length, total: heads.length }, down: !live.length, targetUid: live[0]?.uid ?? null, isTarget: heads.some((x) => x.uid === target.value) })
+    } else out.push({ key: m.uid, m, down: m.dead || m.fled, targetUid: m.dead || m.fled ? null : m.uid, isTarget: m.uid === target.value })
+  }
+  return out
+})
+/** много противников — плитки поменьше, повергнутые прячутся (на телефоне кнопки героев остаются ближе) */
+const manyFoes = computed(() => foeTiles.value.length > 6)
+const foeName = (name: string) => name.replace(/, голова \d+$/, '')
 
 // трофеи после победы: забирает выбранный свой живой герой
 const takers = computed(() => store.heroes.filter((h) => !h.status.dead && store.canControl(h.uid)).sort((a, b) => Number(store.isMine(b.uid)) - Number(store.isMine(a.uid))))
@@ -58,7 +78,7 @@ function heroState(h: Hero) {
   if (h.status.freeze) return `обездвижен (${h.status.freeze})`
   if (h.status.charmed) return 'очарован'
   const marks = [h.status.choke ? `задыхается (${h.status.choke})` : '', h.status.cursed ? 'проклят' : ''].filter(Boolean)
-  if (c.value.acted.includes(h.uid)) marks.unshift('сходил')
+  if (c.value.acted.includes(h.uid) && !c.value.finished) marks.unshift('сходил')
   return marks.join(', ')
 }
 function needRoll(h: Hero, slot: string) {
@@ -120,7 +140,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
         <span class="badge">{{ c.phase === 'ranged' ? 'дистанция' : 'ближний бой' }}</span>
         <span class="badge accent" v-if="!c.finished">ход: {{ c.turn === 'heroes' ? 'герои' : 'монстры' }}</span>
         <span class="badge" v-if="c.initiative">инициатива {{ c.initiative.heroes }}:{{ c.initiative.monsters }}</span>
-        <span class="badge" v-if="c.finished" style="border-color:var(--accent);color:var(--accent)">{{ c.finished === 'victory' ? 'Победа' : c.finished === 'fled' ? 'Отступление' : 'Поражение' }}</span>
+        <span class="badge" v-if="c.finished" :style="c.finished === 'victory' ? 'border-color:var(--ok);color:var(--ok)' : 'border-color:var(--accent);color:var(--accent)'">{{ c.finished === 'victory' ? 'Победа' : c.finished === 'fled' ? 'Отступление' : 'Поражение' }}</span>
       </div>
       <div class="row">
         <button v-if="!c.finished && c.phase === 'ranged'" @click="store.toMelee()">Сойтись вплотную</button>
@@ -149,17 +169,19 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
 
     <div class="cols c11">
       <div>
-        <h3>Противники <span class="small muted">— нажмите, чтобы выбрать цель</span></h3>
-        <div class="foes">
-        <div v-for="m in c.monsters" :key="m.uid" class="card tight foe" :class="{ 'hero-down': m.dead || m.fled }"
-          :style="m.uid === target ? 'outline: 2px solid var(--accent)' : 'cursor:pointer'" @click="!m.dead && !m.fled && (target = m.uid)">
-          <div class="monster-card">
+        <h3>Противники <span v-if="!c.finished" class="small muted">— нажмите, чтобы выбрать цель</span></h3>
+        <div class="foes" :class="{ many: manyFoes }">
+        <div v-for="t in foeTiles" :key="t.key" class="card tight foe" :class="{ 'hero-down': t.down }"
+          :style="t.isTarget ? 'outline: 2px solid var(--accent)' : 'cursor:pointer'" @click="t.targetUid && (target = t.targetUid)">
+          <div class="monster-card" v-for="m in [t.m]" :key="m.uid">
             <img v-if="idx.monsterById.get(m.monsterId)?.image" :src="base + idx.monsterById.get(m.monsterId)!.image" :alt="m.name" loading="lazy" />
             <div v-else class="foe-ph" :title="m.name" aria-hidden="true">✦</div>
             <div>
-              <div class="row between"><b>{{ m.name }}<span v-if="m.uid === target" class="badge accent" style="margin-left:.4rem">цель</span></b><span class="small muted">ур. {{ m.level }} · защита {{ m.defense + m.defenseMod }}</span></div>
-              <div class="bar" style="margin:.3rem 0" :class="{ danger: m.lives * 2 <= m.maxLives }"><i :style="{ width: pct(m.lives, m.maxLives) }" /></div>
-              <div class="small muted foe-hp">♥ {{ Math.max(0, m.lives) }}/{{ m.maxLives }} · защ. {{ m.defense + m.defenseMod }}</div>
+              <div class="row between"><b :title="m.name">{{ t.heads ? foeName(m.name) : m.name }}<span v-if="t.isTarget" class="badge accent" style="margin-left:.4rem">цель</span></b><span class="small muted">ур. {{ m.level }} · защита {{ m.defense + m.defenseMod }}</span></div>
+              <div v-if="t.heads" class="bar" style="margin:.3rem 0" :class="{ danger: t.heads.alive * 2 <= t.heads.total }"><i :style="{ width: pct(t.heads.alive, t.heads.total) }" /></div>
+              <div v-else class="bar" style="margin:.3rem 0" :class="{ danger: m.lives * 2 <= m.maxLives }"><i :style="{ width: pct(m.lives, m.maxLives) }" /></div>
+              <div v-if="t.heads" class="small muted">головы {{ t.heads.alive }}/{{ t.heads.total }} · защ. {{ m.defense + m.defenseMod }}</div>
+              <div v-else class="small muted foe-hp">♥ {{ Math.max(0, m.lives) }}/{{ m.maxLives }} · защ. {{ m.defense + m.defenseMod }}</div>
               <div class="small muted foe-stats">жизни {{ Math.max(0, m.lives) }}/{{ m.maxLives }} · атаки {{ Array.isArray(m.attacks) ? m.attacks.join('-') : m.attacks === 'death' ? 'смерть' : m.attacks === 'magic' ? 'магия' : 'нет' }}<template v-if="m.courage !== null"> · храбрость {{ m.courage }}</template><template v-if="m.mana !== undefined"> · мана {{ m.mana }}</template>
                 <template v-if="m.extraAttacks?.length"> · {{ m.extraAttacks.map(e => EXTRA[e.kind] + ' ' + e.threshold).join(', ') }}</template>
                 <template v-if="m.spells?.length"> · заклинания: {{ m.spells.join(', ') }}</template>
@@ -192,6 +214,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
             <button v-if="!heroWeapons(h, idx).some(w => !w.ranged)" class="small" :disabled="!targetMonster || c.phase === 'ranged'" :title="needRoll(h, 'unarmed')" @click="store.attack(h.uid, 'unarmed', target)">Голыми руками <span class="muted">{{ needRoll(h, 'unarmed') }}</span></button>
             <button class="small" @click="store.flee(h.uid)" :title="`Нужно выкинуть ${fleeNeed()}+`">Бежать ({{ fleeNeed() }}+)</button>
             <button class="small" @click="store.skip(h.uid)">Пропустить</button>
+            <span v-if="c.phase === 'ranged' && heroWeapons(h, idx).some((w) => !weaponReady(w))" class="small muted" style="flex-basis:100%">Клинки — после «Сойтись вплотную»; на дистанции стреляют, метают и колдуют.</span>
           </div>
           <div v-if="canAct(h) && (h.spellbook.length || h.inventory.some((e) => e.kind === 'scroll'))" style="margin-top:.35rem"><SpellCaster :hero="h" :in-combat="true" :target-uid="target" /></div>
           <div v-if="!canAct(h) && isActive(h) && !c.escaped.includes(h.uid) && c.turn === 'heroes' && !c.finished" class="small muted">{{ store.canControl(h.uid) ? 'ждёт следующего раунда' : `ходит ${store.ownerOf(h.uid) ?? 'другой игрок'}` }}</div>

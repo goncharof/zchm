@@ -21,6 +21,8 @@ const owner = computed(() => store.ownerOf(props.hero.uid))
 /** ручная правка — для ведущего (в игре без ведущего — для всех) */
 const gmTools = computed(() => store.isGm && !store.aiGm)
 const transferTo = ref('')
+/** распознаватель напитков есть у кого-то в партии (иначе кнопка «Распознать» только ругалась бы) */
+const hasRecognizer = computed(() => store.heroes.some((x) => x.inventory.some((i) => i.kind === 'item' && i.ref === 'raspoznavatel-napitkov')))
 const renaming = ref(false)
 const newName = ref(props.hero.name)
 
@@ -111,16 +113,16 @@ const statusText = computed(() => {
     <div v-if="!hero.inventory.length" class="muted small">Пусто.</div>
     <table v-else class="list">
       <tbody>
-        <tr v-for="e in hero.inventory" :key="e.uid">
-          <td>{{ entryName(e, idx) }}<span v-if="e.qty > 1"> ×{{ e.qty }}</span><span v-if="e.poisoned" class="badge" style="margin-left:.3rem">яд</span><div class="small muted">{{ detail(e) }}</div></td>
-          <td v-if="!ro" style="text-align:right;white-space:nowrap">
+        <tr v-for="e in hero.inventory" :key="e.uid" class="inv-row">
+          <td>{{ entryName(e, idx) }}<span v-if="e.qty > 1"> ×{{ e.qty }}</span><span v-if="e.poisoned" class="badge" style="margin-left:.3rem">яд</span><span v-if="isEquipped(e)" class="badge" style="margin-left:.3rem">надето</span><div class="small muted inv-detail" :title="detail(e)">{{ detail(e) }}</div></td>
+          <td v-if="!ro" class="inv-actions">
             <template v-if="canEquip(e) && !isEquipped(e)">
               <button class="small" @click="act(() => store.equipItem(hero.uid, e.uid))">Надеть</button>
               <button v-if="e.kind === 'weapon' && idx.weapon(e.ref).hand === 'any'" class="small" @click="act(() => store.equipItem(hero.uid, e.uid, 'leftHand'))">В левую</button>
               <button v-if="e.kind === 'weapon' && idx.weapon(e.ref).throwable" class="small" @click="act(() => store.equipItem(hero.uid, e.uid, 'ranged'))">Метать</button>
             </template>
             <button v-if="e.kind === 'bottle'" class="small" @click="act(() => store.drink(hero.uid, e.uid))">Выпить</button>
-            <button v-if="e.kind === 'bottle' && !e.identified && !e.verdict" class="small" @click="act(() => store.identifyBottle(hero.uid, e.uid))">Распознать</button>
+            <button v-if="e.kind === 'bottle' && !e.identified && !e.verdict && hasRecognizer" class="small" @click="act(() => store.identifyBottle(hero.uid, e.uid))">Распознать</button>
             <button v-if="e.kind === 'scroll'" class="small" @click="act(() => store.copyScroll(hero.uid, e.uid))">В книгу</button>
             <button v-if="canPoison(e) && hero.inventory.some(x => x.kind === 'item' && x.ref === 'yad')" class="small" @click="act(() => store.poisonWeapon(hero.uid, e.uid))">Смазать ядом</button>
             <button v-if="shop && salePrice(e, idx) > 0" class="small" @click="act(() => store.sellItem(hero.uid, e.uid))">Продать за {{ salePrice(e, idx) }}</button>
