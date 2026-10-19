@@ -174,6 +174,8 @@ export interface Monster {
   /** опыт за каждую отнятую жизнь */
   points?: number
   extraAttacks?: { kind: ExtraAttackKind; threshold: number }[]
+  /** «Атакует дважды/трижды» — атак за раунд */
+  attacksPerRound?: number
   spells?: string[]
   luckSave?: { against: string; threshold: number }
   /** NPC без боевых характеристик (Мерлин, Торговец, Чёрный маг...) */

@@ -18,7 +18,10 @@ os.makedirs(os.path.dirname(OUT_JSON), exist_ok=True)
 os.makedirs(OUT_IMG, exist_ok=True)
 
 STAT_RE = re.compile(r'^(уровень|атаки|защита|храбрость|мана|жизни|очки)\s*[–—-]\s*(.+)$')
-EXTRA_RE = re.compile(r'(Окаменение|Оледенение|Паралич|Яд)\s*[–—-]\s*(\d+)')
+# регистр не важен: у Умертвия «Паралич — 11, окаменение — 16»
+EXTRA_RE = re.compile(r'(Окаменение|Оледенение|Паралич|Яд)\s*[–—-]\s*(\d+)', re.IGNORECASE)
+# «Атакует дважды», «Атакуют трижды», «дважды за раунд»
+MULTI_RE = re.compile(r'Атаку(?:ет|ют)\s+(дважды|трижды)', re.IGNORECASE)
 EXTRA_KIND = {'Окаменение': 'petrify', 'Оледенение': 'freeze', 'Паралич': 'paralysis', 'Яд': 'poison'}
 SPELLS_RE = re.compile(r'Владе\w+\s+заклинани\w+:\s*([^.]+)\.')
 LUCK_RE = re.compile(r'Удача от ([^—–-]+?)\s*[–—-]\s*(\d+)')
@@ -98,8 +101,10 @@ for i in range(2, len(doc) - 1):  # skip cover (p1), credits (p2) and back page 
     for k, key in (('защита', 'defense'), ('храбрость', 'courage'), ('мана', 'mana'), ('жизни', 'lives'), ('очки', 'points')):
         if k in stats and stats[k] is not None:
             entry[key] = stats[k]
-    extras = [{'kind': EXTRA_KIND[k], 'threshold': int(v)} for k, v in EXTRA_RE.findall(description)]
+    extras = [{'kind': EXTRA_KIND[k.capitalize()], 'threshold': int(v)} for k, v in EXTRA_RE.findall(description)]
     if extras: entry['extraAttacks'] = extras
+    m = MULTI_RE.search(description)
+    if m: entry['attacksPerRound'] = 2 if m.group(1).lower() == 'дважды' else 3
     m = SPELLS_RE.search(description)
     if m:
         entry['spells'] = [s.strip() for s in re.split(r',\s*', m.group(1)) if s.strip()]

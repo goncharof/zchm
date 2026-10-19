@@ -568,10 +568,17 @@ export function monstersTurn(state: CombatState, heroes: Hero[], idx: DataIndex)
     const spellLog = monsterCast(state, m, heroes, idx)
     if (spellLog) { log.push(...spellLog); checkEnd(state, heroes); if (state.finished) break; continue }
     if (m.attacks === 'magic' || m.attacks === 'none') { log.push(entry(`${m.name} выжидает.`)); continue }
-    const target = targets[roll(targets.length) - 1]
-    if ('ownerUid' in target) log.push(...monsterAttackAlly(m, target))
-    else log.push(...monsterAttack(m, target, idx))
-    checkEnd(state, heroes)
+    // «Атакует дважды / трижды» (Бестиарий): каждая атака — по случайной цели
+    const swings = idx.monsterById.get(m.monsterId)?.attacksPerRound ?? 1
+    for (let k = 0; k < swings; k++) {
+      const pool = k === 0 ? targets : monsterTargets(state, heroes, m)
+      if (!pool.length) break
+      const target = pool[roll(pool.length) - 1]
+      if ('ownerUid' in target) log.push(...monsterAttackAlly(m, target))
+      else log.push(...monsterAttack(m, target, idx))
+      checkEnd(state, heroes)
+      if (state.finished) break
+    }
     if (state.finished) break
   }
   checkEnd(state, heroes)
