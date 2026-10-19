@@ -83,5 +83,5 @@ const has = computed(() => !!props.hints && Object.keys(props.hints).length > 0)
     <template v-for="(s, i) in hints?.scrolls ?? []" :key="'s' + i"><button class="small" :disabled="isTaken(rewardKey('s', `${s.caster ?? ''}${s.level ?? ''}`, (hints?.scrolls ?? []).map((x) => `${x.caster ?? ''}${x.level ?? ''}`), i))" @click="reward(rewardKey('s', `${s.caster ?? ''}${s.level ?? ''}`, (hints?.scrolls ?? []).map((x) => `${x.caster ?? ''}${x.level ?? ''}`), i), (h) => store.giveScroll(h, s.caster as Caster | undefined, s.level))">Свиток{{ s.caster ? ` ${casterName(s.caster)}а` : '' }}{{ s.level ? ` ${s.level} ур.` : '' }}</button></template>
     <span v-for="m in npcs" :key="'npc' + m" class="badge" :title="idx.monsterById.get(m)?.description">{{ idx.monsterById.get(m)?.name }}</span>
   </div>
-  <p v-if="lastLuck" class="small" style="color:#d7c56a;margin:.3rem 0 0">{{ lastLuck }}</p>
+  <p v-if="lastLuck" class="small" style="color:var(--note);margin:.3rem 0 0">{{ lastLuck }}</p>
 </template>

@@ -142,7 +142,7 @@ const statusText = computed(() => {
       <table class="list">
         <tbody>
           <tr v-for="id in hero.spellbook" :key="id">
-            <td>{{ idx.spell(id).level }} ур.</td><td><b>{{ idx.spell(id).name }}</b> <span class="small muted">мана {{ idx.spell(id).cost ?? idx.spell(id).costFormula }}</span><div class="small muted">{{ idx.spell(id).description }}</div></td>
+            <td style="white-space:nowrap">{{ idx.spell(id).level }} ур.</td><td><b>{{ idx.spell(id).name }}</b> <span class="small muted">{{ idx.spell(id).cost !== undefined && idx.spell(id).cost !== null ? `${idx.spell(id).cost} маны` : idx.spell(id).costFormula }}</span><div class="small muted">{{ idx.spell(id).description }}</div></td>
           </tr>
         </tbody>
       </table>

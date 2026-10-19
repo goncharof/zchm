@@ -25,6 +25,8 @@
   --ok: #5fc58c;
   --mana: #6ea4ff;
   --brass: #d6b26a;
+  /* итог броска и состояния существ — светлое золото */
+  --note: #d7c56a;
   --parchment: #e5d8b8;
   --parchment-2: #d3c09a;
   --parchment-ink: #2a2116;
@@ -129,6 +131,7 @@ main.page { max-width: 1200px; margin: 0 auto; padding: 1.1rem 16px 5rem; }
 .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .row.between { justify-content: space-between; }
 .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.grid > .card { margin-bottom: 0; }
 .grid.wide { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
 .cols { display: grid; gap: 1rem; }
 /* ячейки сетки не растягиваются под широкое содержимое (карта, таблицы) — оно прокручивается внутри */

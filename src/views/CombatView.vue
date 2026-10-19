@@ -186,7 +186,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
                 <template v-if="m.extraAttacks?.length"> · {{ m.extraAttacks.map(e => EXTRA[e.kind] + ' ' + e.threshold).join(', ') }}</template>
                 <template v-if="m.spells?.length"> · заклинания: {{ m.spells.join(', ') }}</template>
               </div>
-              <div v-if="monsterState(m)" class="small" style="color:#d7c56a">{{ monsterState(m) }}</div>
+              <div v-if="monsterState(m)" class="small" style="color:var(--note)">{{ monsterState(m) }}</div>
             </div>
           </div>
         </div>

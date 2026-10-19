@@ -192,7 +192,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
             <p class="small muted">Попасть в мага — бросок удачи 15. При промахе маг бросает огненный шар: удача 11, иначе −1к18 жизней. Попадание — победа.</p>
             <div v-if="store.game?.victory"><b>Победа!</b> {{ store.game.victory.heroName }} сразил Чёрного мага на {{ store.game.victory.day }}-й день.</div>
             <button v-else class="primary" @click="finalAttack">⚔ Атаковать Чёрного мага (удача 15)</button>
-            <p v-if="lastFinal" class="small" style="color:#d7c56a;margin:.3rem 0 0">{{ lastFinal }}</p>
+            <p v-if="lastFinal" class="small" style="color:var(--note);margin:.3rem 0 0">{{ lastFinal }}</p>
             <div class="row" style="margin-top:.4rem"><button class="small" @click="fountain">Выпить из фонтана (все жизни и мана)</button></div>
           </div>
           <div v-else-if="id === 'krepost-korolya-nazgulov' && current === 22" class="row" style="margin-top:.6rem">
