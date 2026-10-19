@@ -282,6 +282,8 @@ table.shop td:last-child button + button { margin-left: .3rem; }
 }
 .map-node:hover:not(:disabled) { background: var(--surface-3); border-color: var(--stone-hi); }
 .map-node.junction { padding: 0; width: 12px; height: 12px; border-color: var(--faint); }
+/* палец промахивается мимо мелкой метки — невидимое поле вокруг расширяет область нажатия */
+@media (pointer: coarse) { .map-node::after { content: ''; position: absolute; inset: -9px -4px; } }
 .map-node.current { background: linear-gradient(180deg, var(--blood-2), var(--blood)); border-color: #f0667b; color: #fff; font-weight: 700; }
 .map-node.selected { box-shadow: 0 0 0 3px rgba(143, 211, 168, .45); }
 .map-node.visited:not(.current) { border-color: var(--ok); }

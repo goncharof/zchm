@@ -18,6 +18,11 @@ const mounted = computed(() => {
   return living.length > 0 && living.every((h) => h.inventory.some((e) => e.kind === 'item' && e.ref === 'kon'))
 })
 const flying = computed(() => !!store.game?.flight)
+/** глава Книги Жизни этого места, если её название не совпадает с надписью на карте («Город Жрецов» — «Замок жрецов») */
+const chapter = computed(() => {
+  const name = selected.value?.locationId ? idx.locationById.get(selected.value.locationId)?.name : undefined
+  return name && name.toLowerCase().replace(/ё/g, 'е') !== selected.value!.name.toLowerCase().replace(/ё/g, 'е') ? name : ''
+})
 const days = computed(() => (route.value ? (flying.value ? Math.ceil(route.value.days / 3) : mounted.value ? Math.ceil(route.value.days / 2) : route.value.days) : 0))
 const how = computed(() => (flying.value ? 'на драконе' : mounted.value ? 'верхом' : ''))
 const current = computed(() => store.worldNode)
@@ -84,7 +89,7 @@ function enter(locationId: string) {
         <button v-if="current?.locationId" class="primary" @click="enter(current.locationId)">Войти: {{ idx.locationById.get(current.locationId)?.name }}</button>
       </div>
       <div class="card map-route-card" v-if="selected && selected.id !== current?.id">
-        <h3>{{ selected.name }}</h3>
+        <h3>{{ selected.name }}<span v-if="chapter" class="small muted" style="font-family:var(--font);margin-left:.4rem">глава «{{ chapter }}»</span></h3>
         <p v-if="route">Путь: {{ route.nodes.length - 1 }} {{ plural(route.nodes.length - 1, 'участок', 'участка', 'участков') }} дороги, <b>{{ days }} {{ plural(days, 'день', 'дня', 'дней') }}</b><span v-if="how"> ({{ how }})</span>.</p>
         <p v-else class="muted">Дороги туда нет.</p>
         <p class="small muted">Перемещаться можно только по дорогам, 1 клетка в день (верхом — 2, на призрачном драконе — 3). За каждый день пути возможна случайная встреча.</p>
@@ -99,7 +104,7 @@ function enter(locationId: string) {
       </div>
       <!-- телефон: выбранный путь — плашкой над нижней панелью -->
       <div v-if="selected && selected.id !== current?.id" class="map-action">
-        <div class="grow"><b>{{ selected.name }}</b><div class="small muted">{{ route ? `${days} ${plural(days, 'день', 'дня', 'дней')} пути${how ? `, ${how}` : ''}` : 'дороги туда нет' }}</div></div>
+        <div class="grow"><b>{{ selected.name }}</b><span v-if="chapter" class="small muted"> · «{{ chapter }}»</span><div class="small muted">{{ route ? `${days} ${plural(days, 'день', 'дня', 'дней')} пути${how ? `, ${how}` : ''}` : 'дороги туда нет' }}</div></div>
         <button class="ghost icon" aria-label="Отменить выбор" @click="selectedId = null">✕</button>
         <button class="primary" :disabled="!route" @click="go">Отправиться</button>
       </div>
