@@ -58,6 +58,15 @@ const foeTiles = computed(() => {
 /** много противников — плитки поменьше, повергнутые прячутся (на телефоне кнопки героев остаются ближе) */
 const manyFoes = computed(() => foeTiles.value.length > 6)
 const foeName = (name: string) => name.replace(/, голова \d+$/, '')
+/** нажатие на плитку: голова чудовища — сначала бодрствующая, повторное нажатие — следующая голова */
+function pickTile(t: { key: string; heads?: unknown; targetUid: string | null }) {
+  if (!t.heads) { if (t.targetUid) target.value = t.targetUid; return }
+  const heads = (c.value?.monsters ?? []).filter((x) => x.groupId === t.key && !x.dead && !x.fled)
+  if (!heads.length) return
+  const i = heads.findIndex((x) => x.uid === target.value)
+  target.value = i >= 0 ? heads[(i + 1) % heads.length].uid : (heads.find((x) => !x.disabled && !x.petrified) ?? heads[0]).uid
+}
+const headLabel = (uid: string) => /голова (\d+)$/.exec(c.value?.monsters.find((x) => x.uid === uid)?.name ?? '')?.[1]
 
 // трофеи после победы: забирает выбранный свой живой герой
 const takers = computed(() => store.heroes.filter((h) => !h.status.dead && store.canControl(h.uid)).sort((a, b) => Number(store.isMine(b.uid)) - Number(store.isMine(a.uid))))
@@ -172,15 +181,15 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
         <h3>Противники <span v-if="!c.finished" class="small muted">— нажмите, чтобы выбрать цель</span></h3>
         <div class="foes" :class="{ many: manyFoes }">
         <div v-for="t in foeTiles" :key="t.key" class="card tight foe" :class="{ 'hero-down': t.down }"
-          :style="t.isTarget ? 'outline: 2px solid var(--accent)' : 'cursor:pointer'" @click="t.targetUid && (target = t.targetUid)">
+          :style="t.isTarget ? 'outline: 2px solid var(--accent)' : 'cursor:pointer'" @click="pickTile(t)">
           <div class="monster-card" v-for="m in [t.m]" :key="m.uid">
             <img v-if="idx.monsterById.get(m.monsterId)?.image" :src="base + idx.monsterById.get(m.monsterId)!.image" :alt="m.name" loading="lazy" />
             <div v-else class="foe-ph" :title="m.name" aria-hidden="true">✦</div>
             <div>
-              <div class="row between"><b :title="m.name">{{ t.heads ? foeName(m.name) : m.name }}<span v-if="t.isTarget" class="badge accent" style="margin-left:.4rem">цель</span></b><span class="small muted">ур. {{ m.level }} · защита {{ m.defense + m.defenseMod }}</span></div>
+              <div class="row between"><b :title="m.name">{{ t.heads ? foeName(m.name) : m.name }}<span v-if="t.isTarget" class="badge accent" style="margin-left:.4rem">цель{{ t.heads && headLabel(target) ? ` · голова ${headLabel(target)}` : '' }}</span></b><span class="small muted">ур. {{ m.level }} · защита {{ m.defense + m.defenseMod }}</span></div>
               <div v-if="t.heads" class="bar" style="margin:.3rem 0" :class="{ danger: t.heads.alive * 2 <= t.heads.total }"><i :style="{ width: pct(t.heads.alive, t.heads.total) }" /></div>
               <div v-else class="bar" style="margin:.3rem 0" :class="{ danger: m.lives * 2 <= m.maxLives }"><i :style="{ width: pct(m.lives, m.maxLives) }" /></div>
-              <div v-if="t.heads" class="small muted">головы {{ t.heads.alive }}/{{ t.heads.total }} · защ. {{ m.defense + m.defenseMod }}</div>
+              <div v-if="t.heads" class="small muted">головы {{ t.heads.alive }}/{{ t.heads.total }} · защ. {{ m.defense + m.defenseMod }}<template v-if="t.isTarget && headLabel(target)"> · бьём голову {{ headLabel(target) }}</template></div>
               <div v-else class="small muted foe-hp">♥ {{ Math.max(0, m.lives) }}/{{ m.maxLives }} · защ. {{ m.defense + m.defenseMod }}</div>
               <div class="small muted foe-stats">жизни {{ Math.max(0, m.lives) }}/{{ m.maxLives }} · атаки {{ Array.isArray(m.attacks) ? m.attacks.join('-') : m.attacks === 'death' ? 'смерть' : m.attacks === 'magic' ? 'магия' : 'нет' }}<template v-if="m.courage !== null"> · храбрость {{ m.courage }}</template><template v-if="m.mana !== undefined"> · мана {{ m.mana }}</template>
                 <template v-if="m.extraAttacks?.length"> · {{ m.extraAttacks.map(e => EXTRA[e.kind] + ' ' + e.threshold).join(', ') }}</template>

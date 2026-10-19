@@ -568,7 +568,7 @@ main.page, .topbar-inner, .party-bar-inner { padding-left: max(16px, env(safe-ar
   button, .btn { min-height: 42px; }
   button.small { min-height: 36px; }
   /* раскрывающиеся блоки («Другие действия», «＋ спутник») — палец попадает с первого раза */
-  details > summary { min-height: 40px; display: flex; align-items: center; }
+  details > summary { min-height: 40px; padding-block: .55rem; }
   .hero-switch button { min-height: 40px; }
   .numgrid button { min-height: 44px; }
 }
