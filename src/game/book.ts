@@ -27,3 +27,12 @@ export function paragraphText(p: Paragraph): string {
     return g.kind === 'branch' ? `${g.label}${body ? ` — ${body}` : ''}` : body
   }).join(' ')
 }
+
+/** Кубик для списка исходов «1 — …, 2 — …»: к18, если есть числа больше 6; к3, если список — ровно 1, 2, 3 (выбор одной
+ *  из трёх, иначе на 4–6 ничего не выпадает); иначе к6 */
+export function rollSides(options: { values: number[] }[]): number {
+  const all = options.flatMap((o) => o.values)
+  if (Math.max(...all) > 6) return 18
+  const set = new Set(all)
+  return set.size === 3 && [1, 2, 3].every((v) => set.has(v)) ? 3 : 6
+}

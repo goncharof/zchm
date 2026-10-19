@@ -89,9 +89,15 @@ function next() {
 function leave() { store.leaveLocation(); router.push('/map') }
 async function finalAttack() {
   if (!heroUid.value) return
+  // зал с фонтаном считается пройденным, как только в нём начали схватку (иначе движок не пускает в дуэль)
+  if (current.value) await store.markVisited(props.id, current.value)
   const won = await store.finalDuelAttack(heroUid.value)
   lastFinal.value = won ? 'Попадание! Чёрный маг повержен.' : 'Промах — маг отвечает огненным шаром (см. журнал).'
   if (won && current.value) store.markVisited(props.id, current.value)
+}
+async function fountain() {
+  if (current.value) await store.markVisited(props.id, current.value)
+  await store.drinkFountain()
 }
 function trap() { if (heroUid.value) store.trapFound(heroUid.value) }
 function lives(n: number) { if (heroUid.value) store.adjustLives(heroUid.value, n) }
@@ -158,9 +164,9 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
               <div v-if="seg.kind === 'scene'">
                 <template v-for="(b, j) in seg.blocks" :key="j">
                   <p v-if="'text' in b" class="paragraph-text">{{ b.text }}</p>
-                  <RollBlock v-else :options="b.roll" :context="`${loc.name}, § ${paragraph.n}`" :hero-uid="heroUid" @fight="startFight" />
+                  <RollBlock v-else :options="b.roll" :context="`${loc.name}, § ${paragraph.n}`" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}:${i}:${j}`" @fight="startFight" />
                 </template>
-                <ParagraphActions :hints="seg.hints" :hero-uid="heroUid" @fight="startFight" />
+                <ParagraphActions :hints="seg.hints" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}`" @fight="startFight" />
               </div>
               <p v-else-if="!seg.blocks.length" class="paragraph-text muted" style="font-style:italic">{{ seg.label }}.</p>
               <div v-else class="branch" :class="{ open: opened.has(i) }">
@@ -168,9 +174,9 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
                 <div v-if="opened.has(i)" class="branch-body">
                   <template v-for="(b, j) in seg.blocks" :key="j">
                     <p v-if="'text' in b" class="paragraph-text">{{ b.text }}</p>
-                    <RollBlock v-else :options="b.roll" :context="`${loc.name}, § ${paragraph.n}`" :hero-uid="heroUid" @fight="startFight" />
+                    <RollBlock v-else :options="b.roll" :context="`${loc.name}, § ${paragraph.n}`" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}:${i}:${j}`" @fight="startFight" />
                   </template>
-                  <ParagraphActions :hints="seg.hints" :hero-uid="heroUid" @fight="startFight" />
+                  <ParagraphActions :hints="seg.hints" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}`" @fight="startFight" />
                 </div>
               </div>
             </template>
@@ -178,7 +184,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
           </template>
           <template v-else>
             <p class="paragraph-text">{{ paragraphText(paragraph) }}</p>
-            <ParagraphActions :hints="paragraph.hints" :hero-uid="heroUid" @fight="startFight" />
+            <ParagraphActions :hints="paragraph.hints" :hero-uid="heroUid" :place="`${loc.id}:${paragraph.n}`" @fight="startFight" />
           </template>
 
           <div v-if="isFinal" class="card tight" style="border-color:var(--accent);margin-top:.6rem">
@@ -187,7 +193,10 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
             <div v-if="store.game?.victory"><b>Победа!</b> {{ store.game.victory.heroName }} сразил Чёрного мага на {{ store.game.victory.day }}-й день.</div>
             <button v-else class="primary" @click="finalAttack">⚔ Атаковать Чёрного мага (удача 15)</button>
             <p v-if="lastFinal" class="small" style="color:#d7c56a;margin:.3rem 0 0">{{ lastFinal }}</p>
-            <div class="row" style="margin-top:.4rem"><button class="small" @click="store.drinkFountain()">Выпить из фонтана (все жизни и мана)</button></div>
+            <div class="row" style="margin-top:.4rem"><button class="small" @click="fountain">Выпить из фонтана (все жизни и мана)</button></div>
+          </div>
+          <div v-else-if="id === 'krepost-korolya-nazgulov' && current === 22" class="row" style="margin-top:.6rem">
+            <button class="small" @click="fountain">Выпить из фонтана (+5 жизней каждому)</button>
           </div>
 
           <div class="row" style="margin-top:.8rem">

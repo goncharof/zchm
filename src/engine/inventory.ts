@@ -3,7 +3,7 @@ import type { Artifact, Weapon } from '@/types'
 import type { DataIndex } from './data'
 import type { EquipSlot, Hero, InventoryEntry, InventoryKind } from './model'
 import { uid } from './model'
-import { BOW_GROUPS, artifactSlot, canUseWeapon, changeLives, entryByUid, heroLuck } from './character'
+import { BOW_GROUPS, artifactSlot, canUseWeapon, changeLives, consumePrayer, entryByUid, hasWard, heroLuck } from './character'
 import { k18, rollFormula } from './dice'
 import { BOTTLES, DEAD_AT } from './rules'
 import { TROPHIES } from './loot'
@@ -196,7 +196,13 @@ export function drinkBottle(hero: Hero, entryUid: string, idx: DataIndex): Bottl
   const rule = BOTTLES[n - 1]
   removeFromInventory(hero, entryUid, 1)
   if (rule.effect === 'death') {
-    const r = k18()
+    // бросок удачи как любой другой: «Удача» спасает без броска, «Молитва» +3, «Несчастье» — меньший из двух
+    const blessing = hasWard(hero, 'luck')
+    if (blessing) {
+      hero.buffs = hero.buffs.filter((b) => b !== blessing)
+      return { n, text: `Яд! Боги даруют удачу — ${hero.name} выплёвывает отраву и остаётся жив.`, delta: 0, died: false }
+    }
+    const r = (hero.status.cursed ? Math.min(k18(), k18()) : k18()) + consumePrayer(hero)
     const luck = heroLuck(hero, idx)
     if (r + luck >= (rule.luck ?? 9)) {
       return { n, text: `Яд! Бросок удачи ${r}+${luck} ≥ ${rule.luck} — ${hero.name} выплёвывает отраву и остаётся жив.`, delta: 0, died: false }

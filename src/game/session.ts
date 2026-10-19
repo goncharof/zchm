@@ -404,17 +404,24 @@ export class GameSession {
     this.log(`Бросок: ${formula} = ${r.total}${r.rolls.length > 1 ? ` (${r.rolls.join(' + ')})` : ''}.`, 'luck')
     return { total: r.total, rolls: r.rolls }
   }
-  luckCheck(heroUid: string, target: number): { ok: boolean; roll: number; luck: number } {
-    const h = this.hero(heroUid)
-    target = this.int(target, 100)
+  /** Бросок удачи героя: благословение «Удача» — успех без броска, «Молитва» +3, «Несчастье» — меньший из двух */
+  private luckRoll(h: Hero): { roll: number; blessed: boolean } {
     const blessing = hasWard(h, 'luck')
     if (blessing) {
       h.buffs = h.buffs.filter((b) => b !== blessing)
+      return { roll: 18, blessed: true }
+    }
+    return { roll: heroRoll(h) + consumePrayer(h), blessed: false }
+  }
+  luckCheck(heroUid: string, target: number): { ok: boolean; roll: number; luck: number } {
+    const h = this.hero(heroUid)
+    target = this.int(target, 100)
+    const lr = this.luckRoll(h)
+    if (lr.blessed) {
       this.log(`${h.name}: боги даруют удачу — проверка ${target} пройдена без броска.`, 'luck')
       return { ok: true, roll: 18, luck: heroLuck(h, idx) }
     }
-    const prayer = consumePrayer(h)
-    const r = heroRoll(h) + prayer
+    const r = lr.roll
     const luck = heroLuck(h, idx)
     const ok = r + luck >= target
     this.log(`${h.name} бросает удачу ${target}: к18 = ${r}${luck ? ` + ${luck}` : ''} — ${ok ? 'удача!' : 'неудача'}.`, 'luck')
@@ -422,10 +429,11 @@ export class GameSession {
   }
   findArtifact(heroUid: string): number | null {
     const h = this.hero(heroUid)
+    const free = idx.data.artifacts.map((a) => a.n).filter((x) => !this.state.artifactsFound.includes(x))
+    if (!free.length) throw new GameError('Все артефакты уже найдены')
     let n = k18()
-    // ХАУСРУЛ: уже найденный артефакт перебрасывается
-    for (let i = 0; i < 18 && this.state.artifactsFound.includes(n); i++) n = k18()
-    if (this.state.artifactsFound.includes(n)) throw new GameError('Все артефакты уже найдены')
+    // ХАУСРУЛ: выпал уже найденный — берётся случайный из оставшихся (перебросы до упора иногда не находили последний)
+    if (this.state.artifactsFound.includes(n)) n = free[roll(free.length) - 1]
     this.state.artifactsFound.push(n)
     const a = idx.artifact(n)
     inv.addToInventory(h, 'artifact', String(n))
@@ -462,10 +470,12 @@ export class GameSession {
       this.state.victory = { day: this.state.day, heroUid, heroName: h.name }
       return true
     }
-    const save = k18()
+    // уворот от шара — обычный бросок удачи: действуют «Удача», «Молитва» и «Несчастье»
+    const saveRoll = this.luckRoll(h)
+    const save = saveRoll.roll
     const luck = heroLuck(h, idx)
-    if (save + luck >= 11) {
-      this.log(`Чёрный маг бросает огненный шар: ${h.name} уворачивается (к18 = ${save}${luck ? ` + ${luck}` : ''} ≥ 11).`, 'luck')
+    if (saveRoll.blessed || save + luck >= 11) {
+      this.log(`Чёрный маг бросает огненный шар: ${h.name} уворачивается (${saveRoll.blessed ? 'боги даруют удачу' : `к18 = ${save}${luck ? ` + ${luck}` : ''} ≥ 11`}).`, 'luck')
     } else {
       const dmg = rollFormula('1к18').total
       const lost = -changeLives(h, -dmg)
@@ -476,19 +486,39 @@ export class GameSession {
     return false
   }
   drinkFountain(): void {
-    // фонтаны книги: зал Чёрного мага (Замок, § 13) и фонтан Белого мага (Крепость короля назгулов, § 22)
+    // фонтаны книги: зал Чёрного мага (Замок, § 13: «восстанавливаются все жизни и мана») и фонтан Крепости короля
+    // назгулов (§ 22: «+5 жизней»)
     const at = (loc: string, n: number) => this.state.locationId === loc && (this.state.visited[loc] ?? []).includes(n)
-    if (!at('zamok-chernogo-maga', 13) && !at('krepost-korolya-nazgulov', 22)) throw new GameError('Здесь нет фонтана')
+    const castle = at('zamok-chernogo-maga', 13)
+    if (!castle && !at('krepost-korolya-nazgulov', 22)) throw new GameError('Здесь нет фонтана')
+    const place = castle ? 'zamok-chernogo-maga:13' : 'krepost-korolya-nazgulov:22'
+    // ХАУСРУЛ: из одного фонтана — раз в день (иначе между ударами дуэли можно лечиться без конца)
+    if (this.state.fountainUsed?.place === place && this.state.fountainUsed.day === this.state.day) throw new GameError('Из этого фонтана сегодня уже пили')
+    this.state.fountainUsed = { place, day: this.state.day }
     for (const h of this.heroes) {
       if (h.status.dead) continue
-      changeLives(h, h.maxLives - h.lives)
-      h.mana = h.maxMana
-      delete h.status.poison
+      if (castle) {
+        changeLives(h, h.maxLives - h.lives)
+        h.mana = h.maxMana
+        delete h.status.poison
+      } else changeLives(h, 5)
     }
-    this.log('Команда пьёт из фонтана — все жизни и мана восстановлены.')
+    this.log(castle ? 'Команда пьёт из фонтана — все жизни и мана восстановлены.' : 'Команда пьёт из фонтана: +5 жизней каждому.')
+  }
+  /** Отметить награду из текста книги взятой (игра без ведущего): «группа=значение», второй раз группа не берётся.
+   *  Так монеты, бутылки, артефакт или бросок по списку не берутся заново после повторного открытия параграфа */
+  claim(key: string): true {
+    key = String(key).slice(0, 160)
+    const group = key.split('=')[0]
+    const claimed = (this.state.claimed ??= [])
+    if (claimed.some((k) => k.split('=')[0] === group)) throw new GameError('Это уже взято')
+    claimed.push(key)
+    return true
   }
   trapFound(heroUid: string): void {
     const h = this.hero(heroUid)
+    // стр. 10: «вор получает 400 очков» — за ловушку или потайную дверь опыт только вору
+    if (h.classId !== 'thief') throw new GameError('Опыт за ловушки и потайные двери получает только вор')
     this.log(`${h.name} обнаруживает ловушку или потайную дверь: +${XP_TRAP_FOUND} опыта.`, 'xp')
     this.announceLevelUps(gainXp(h, XP_TRAP_FOUND, idx))
   }
@@ -642,6 +672,8 @@ export class GameSession {
         continue
       }
       c.lives = Math.min(c.maxLives, a.lives)
+      // спутник служит, «пока вы не выиграете» оговорённое число схваток (стр. 16): бегство и поражение не засчитываются
+      if (combat.finished !== 'victory') continue
       c.battlesLeft -= 1
       if (c.battlesLeft <= 0) {
         this.state.companions = this.state.companions.filter((x) => x.uid !== c.uid)
@@ -691,7 +723,7 @@ export const COMMANDS = {
   drink: 'owner', identifyBottle: 'owner', copyScroll: 'owner', learnSpell: 'owner', useAntidote: 'owner', useParalysisPotion: 'owner', poisonWeapon: 'owner',
   adjustLives: 'gm', adjustMana: 'gm', adjustMoney: 'gm', giveXp: 'gm', giveItem: 'gm',
   restAll: 'party', travelTo: 'party', enterLocation: 'party', leaveLocation: 'party', markVisited: 'party', dismissRoad: 'party',
-  rollDie: 'party', rollDice: 'party', luckCheck: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
+  rollDie: 'party', rollDice: 'party', claim: 'party', luckCheck: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
   addCompanion: 'gm', dismissCompanion: 'party',
   startEncounter: 'gm', addMonstersToCombat: 'gm', abortCombat: 'gm',
   attack: 'owner', cast: 'owner', flee: 'owner', skip: 'owner',

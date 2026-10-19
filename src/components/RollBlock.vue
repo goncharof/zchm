@@ -4,18 +4,27 @@ import type { RollOption } from '@/types'
 import type { EncounterSpec } from '@/engine/combat'
 import { useGameStore } from '@/stores/game'
 import ParagraphActions from './ParagraphActions.vue'
+import { rollSides } from '@/game/book'
 
 /** Список исходов «1 — …, 2 — …» с броском кубика */
-const props = defineProps<{ options: RollOption[]; context?: string; heroUid?: string }>()
+/** place — где в книге список (для броска один раз и наград его исходов) */
+const props = defineProps<{ options: RollOption[]; context?: string; heroUid?: string; place?: string }>()
 const emit = defineEmits<{ fight: [specs: EncounterSpec[]] }>()
 const chosen = computed(() => (result.value === null ? null : props.options.find((o) => o.values.includes(result.value!)) ?? null))
 const store = useGameStore()
 const result = ref<number | null>(null)
-const sides = computed(() => (Math.max(...props.options.flatMap((o) => o.values)) > 6 ? 18 : 6))
-watch(() => props.options, () => { result.value = null })
+const sides = computed(() => rollSides(props.options))
+// бросок по списку — один раз: при повторном открытии показывается выпавшее (иначе перебрасывали бы до награды)
+const rolled = computed(() => {
+  const k = props.place ? (store.game?.claimed ?? []).find((x) => x.startsWith(`${props.place}:roll=`)) : undefined
+  return k ? Number(k.split('=')[1]) : null
+})
+watch([() => props.options, rolled], () => { result.value = rolled.value }, { immediate: true })
 async function rollIt() {
+  if (rolled.value !== null) { result.value = rolled.value; return }
   const r = await store.rollDie(sides.value, props.context)
   if (r === undefined) return
+  if (props.place && !(await store.claim(`${props.place}:roll=${r}`))) return
   result.value = r
   const hit = props.options.find((o) => o.values.includes(r))
   if (hit) void store.note(`Выпало ${r}: ${hit.text}`, 'luck')
@@ -28,9 +37,9 @@ async function rollIt() {
       <b>{{ o.values.join(', ') }}</b> — {{ o.text }}
     </div>
     <div class="row" style="margin-top:.35rem">
-      <button class="small primary" @click="rollIt">Бросить к{{ sides }}</button>
+      <button class="small primary" :disabled="rolled !== null" @click="rollIt">{{ rolled !== null ? 'Брошено' : `Бросить к${sides}` }}</button>
       <span v-if="result !== null" class="small">Выпало <b>{{ result }}</b></span>
     </div>
-    <ParagraphActions v-if="chosen?.hints && heroUid" :hints="chosen.hints" :hero-uid="heroUid" @fight="(s) => emit('fight', s)" />
+    <ParagraphActions v-if="chosen?.hints && heroUid" :hints="chosen.hints" :hero-uid="heroUid" :place="place ? `${place}:r` : undefined" @fight="(s) => emit('fight', s)" />
   </div>
 </template>

@@ -12,7 +12,11 @@ const mapSrc = `${import.meta.env.BASE_URL}img/map/world.jpg`
 const selectedId = ref<string | null>(null)
 const selected = computed(() => store.world?.nodes.find((n) => n.id === selectedId.value) ?? null)
 const route = computed(() => (store.world && store.game?.worldNodeId && selectedId.value ? shortestRoute(store.world, store.game.worldNodeId, selectedId.value) : null))
-const mounted = computed(() => store.heroes.length > 0 && store.heroes.every((h) => h.inventory.some((e) => e.kind === 'item' && e.ref === 'kon')))
+// верхом — если конь есть у каждого живого (как в движке: погибших везут)
+const mounted = computed(() => {
+  const living = store.heroes.filter((h) => !h.status.dead)
+  return living.length > 0 && living.every((h) => h.inventory.some((e) => e.kind === 'item' && e.ref === 'kon'))
+})
 const days = computed(() => (route.value ? (mounted.value ? Math.ceil(route.value.days / 2) : route.value.days) : 0))
 const current = computed(() => store.worldNode)
 

@@ -289,6 +289,7 @@ export const useGameStore = defineStore('game', () => {
     findArtifact: (heroUid: string) => cmd('findArtifact', heroUid),
     giveScroll: (heroUid: string, caster?: Caster, level?: number) => cmd('giveScroll', heroUid, caster, level),
     trapFound: (heroUid: string) => cmd('trapFound', heroUid),
+    claim: (key: string) => cmd('claim', key),
     finalDuelAttack: (heroUid: string) => cmd('finalDuelAttack', heroUid),
     drinkFountain: () => cmd('drinkFountain'),
     addCompanion: (monsterId: string, battles = 3) => cmd('addCompanion', monsterId, battles),

@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { idx } from '@/data'
 import type { ParagraphHints, ParagraphSegment, SegmentBlock } from '@/types'
-import { blockText, paragraphSegments } from '@/game/book'
+import { blockText, paragraphSegments, rollSides } from '@/game/book'
 import type { Hero } from '@/engine/model'
 import { GameError } from '@/game/session'
 import { plural } from '@/ui/format'
@@ -114,7 +114,7 @@ function rollOffers(blocks: SegmentBlock[], loc: string, n: number, seg: number)
   const out: Offer[] = []
   blocks.forEach((b, i) => {
     if ('roll' in b) {
-      const sides = Math.max(...b.roll.flatMap((o) => o.values)) > 6 ? 18 : 6
+      const sides = rollSides(b.roll)
       // бросок по списку — один раз за параграф: иначе можно перебрасывать, пока не выпадет награда
       out.push({ label: `🎲 Бросить к${sides} по списку`, action: { t: 'roll', loc, n, seg, block: i, once: `${loc}:${n}:${seg}:roll:${i}` } })
     }
@@ -286,7 +286,7 @@ export class ScriptedGm {
         const seg = idx.locationById.get(a.loc)?.paragraphs.find((x) => x.n === a.n)?.segments?.[a.seg]
         const block = seg?.blocks[a.block]
         if (!block || !('roll' in block)) throw new GameError('Список не найден')
-        const sides = Math.max(...block.roll.flatMap((o) => o.values)) > 6 ? 18 : 6
+        const sides = rollSides(block.roll)
         const r = s.rollDie(sides, 'Бросок по списку')
         const hit = block.roll.find((o) => o.values.includes(r))
         this.say(room, `Выпало ${r}: ${hit?.text ?? 'ничего не происходит'}`, hintOffers(hit?.hints, { loc: a.loc, n: a.n, seg: a.seg }, `r${a.block}`, hit?.text))

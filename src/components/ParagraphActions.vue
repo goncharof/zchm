@@ -7,7 +7,9 @@ import { useGameStore } from '@/stores/game'
 import { casterName } from '@/ui/format'
 
 /** Кнопки действий по подсказкам из текста: удача, бой, монеты, бутылки, артефакт, свитки */
-const props = defineProps<{ hints?: ParagraphHints; heroUid: string }>()
+/** place — где в книге («локация:§», для исходов броска — с номером списка): по нему награда берётся один раз
+ *  на всю партию, даже если параграф открыли заново или переключили полный текст */
+const props = defineProps<{ hints?: ParagraphHints; heroUid: string; place?: string }>()
 const emit = defineEmits<{ fight: [specs: EncounterSpec[]] }>()
 const store = useGameStore()
 const counts = ref<Record<string, number>>({})
@@ -30,6 +32,17 @@ function need(): string | null {
 }
 function once(key: string, fn: (h: string) => void) {
   const h = need(); if (!h) return
+  fn(h)
+  taken.value = new Set([...taken.value, key])
+}
+/** награда из текста: ключ по виду и значению («c:20#1» — первые 20 монет), отмечается в состоянии партии */
+const rewardKey = (kind: string, value: string | number, list: (string | number)[] = [], i = 0) =>
+  `${kind}:${value}#${list.slice(0, i + 1).filter((x) => x === value).length}`
+const claimed = computed(() => new Set(store.game?.claimed ?? []))
+const isTaken = (key: string) => taken.value.has(key) || (!!props.place && claimed.value.has(`${props.place}:${key}`))
+async function reward(key: string, fn: (h: string) => void) {
+  const h = need(); if (!h) return
+  if (props.place && !(await store.claim(`${props.place}:${key}`))) return
   fn(h)
   taken.value = new Set([...taken.value, key])
 }
@@ -63,10 +76,10 @@ const has = computed(() => !!props.hints && Object.keys(props.hints).length > 0)
     <button v-if="hints?.tavern" class="small" @click="store.restAll(1)">Отдохнуть сутки (2 монеты)</button>
     <router-link v-if="hints?.shop" class="btn small" to="/shop">В лавку</router-link>
     <template v-for="(c, i) in hints?.prices ?? []" :key="'p' + i"><button class="small" :disabled="taken.has('p' + i) || !heroUid || store.hero(heroUid).money < c" :title="heroUid && store.hero(heroUid).money < c ? 'Не хватает монет' : ''" @click="once('p' + i, (h) => store.adjustMoney(h, -c))">Заплатить {{ c }} монет</button></template>
-    <template v-for="(c, i) in hints?.coins ?? []" :key="'c' + i"><button class="small" :disabled="taken.has('c' + i)" @click="once('c' + i, (h) => store.adjustMoney(h, c))">+{{ c }} монет</button></template>
-    <template v-for="(b, i) in hints?.bottles ?? []" :key="'b' + i"><button class="small" :disabled="taken.has('b' + i)" @click="once('b' + i, (h) => store.giveItem(h, 'bottle', String(b), 1, false))">Взять бутылку ({{ b }})</button></template>
-    <button v-if="hints?.artifact" class="small" :disabled="taken.has('art')" @click="once('art', (h) => store.findArtifact(h))">Найти артефакт (к18)</button>
-    <template v-for="(s, i) in hints?.scrolls ?? []" :key="'s' + i"><button class="small" :disabled="taken.has('s' + i)" @click="once('s' + i, (h) => store.giveScroll(h, s.caster as Caster | undefined, s.level))">Свиток{{ s.caster ? ` ${casterName(s.caster)}а` : '' }}{{ s.level ? ` ${s.level} ур.` : '' }}</button></template>
+    <template v-for="(c, i) in hints?.coins ?? []" :key="'c' + i"><button class="small" :disabled="isTaken(rewardKey('c', c, hints?.coins, i))" @click="reward(rewardKey('c', c, hints?.coins, i), (h) => store.adjustMoney(h, c))">+{{ c }} монет</button></template>
+    <template v-for="(b, i) in hints?.bottles ?? []" :key="'b' + i"><button class="small" :disabled="isTaken(rewardKey('b', b, hints?.bottles, i))" @click="reward(rewardKey('b', b, hints?.bottles, i), (h) => store.giveItem(h, 'bottle', String(b), 1, false))">Взять бутылку ({{ b }})</button></template>
+    <button v-if="hints?.artifact" class="small" :disabled="isTaken('art')" @click="reward('art', (h) => store.findArtifact(h))">Найти артефакт (к18)</button>
+    <template v-for="(s, i) in hints?.scrolls ?? []" :key="'s' + i"><button class="small" :disabled="isTaken(rewardKey('s', `${s.caster ?? ''}${s.level ?? ''}`, (hints?.scrolls ?? []).map((x) => `${x.caster ?? ''}${x.level ?? ''}`), i))" @click="reward(rewardKey('s', `${s.caster ?? ''}${s.level ?? ''}`, (hints?.scrolls ?? []).map((x) => `${x.caster ?? ''}${x.level ?? ''}`), i), (h) => store.giveScroll(h, s.caster as Caster | undefined, s.level))">Свиток{{ s.caster ? ` ${casterName(s.caster)}а` : '' }}{{ s.level ? ` ${s.level} ур.` : '' }}</button></template>
     <span v-for="m in npcs" :key="'npc' + m" class="badge" :title="idx.monsterById.get(m)?.description">{{ idx.monsterById.get(m)?.name }}</span>
   </div>
   <p v-if="lastLuck" class="small" style="color:#d7c56a;margin:.3rem 0 0">{{ lastLuck }}</p>

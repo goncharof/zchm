@@ -249,6 +249,10 @@ export interface GameState {
   companions: Companion[]
   /** партия победила Чёрного мага */
   victory?: { day: number; heroUid: string; heroName: string }
+  /** из какого фонтана и в какой день пили: снова — только на следующий день (иначе бесконечное лечение в дуэли) */
+  fountainUsed?: { place: string; day: number }
+  /** награды из текста книги, уже взятые без ведущего (ключи «локация:§:часть:награда») — второй раз не выдаются */
+  claimed?: string[]
   seed?: number
 }
 

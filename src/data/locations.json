@@ -2377,14 +2377,10 @@
       15,
       11
      ],
-     "coins": [
-      1000
-     ],
      "monsters": [
       "chernyy-mag",
       "magi"
-     ],
-     "artifact": true
+     ]
     },
     "segments": [
      {
@@ -2441,14 +2437,10 @@
        }
       ],
       "hints": {
-       "coins": [
-        1000
-       ],
        "monsters": [
         "chernyy-mag",
         "magi"
-       ],
-       "artifact": true
+       ]
       }
      },
      {
