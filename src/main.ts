@@ -18,8 +18,10 @@ import '@fontsource/old-standard-tt/latin-400.css'
 import '@fontsource/old-standard-tt/cyrillic-400-italic.css'
 import '@fontsource/old-standard-tt/cyrillic-700.css'
 import './style.css'
+import { watchForUpdates } from './ui/version'
 
 createApp(App).use(createPinia()).use(router).mount('#app')
+watchForUpdates()
 
 // офлайн-режим и установка на телефон (только в сборке)
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

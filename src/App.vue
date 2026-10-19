@@ -11,6 +11,7 @@ import { idx } from '@/data'
 import { savedSession } from '@/net/client'
 import { speak, speechPrefs, spokenIds } from '@/ui/speech'
 import { classArt, pct } from '@/ui/format'
+import { updateAvailable } from '@/ui/version'
 
 const store = useGameStore()
 const route = useRoute()
@@ -62,6 +63,7 @@ const reference = [
   { to: '/lore', label: 'Предыстория', icon: BookOpen },
   { to: '/about', label: 'Об игре', icon: Info },
 ]
+function reload() { location.reload() }
 const refActive = computed(() => reference.some((r) => route.path.startsWith(r.to)))
 const onlineCount = computed(() => store.room?.players.filter((p) => p.online).length ?? 0)
 </script>
@@ -153,6 +155,10 @@ const onlineCount = computed(() => store.room?.players.filter((p) => p.online).l
   </section>
 
   <div v-if="store.notice" class="notice" role="status">{{ store.notice }}</div>
+  <div v-if="updateAvailable" class="update-bar" role="status">
+    <span>Вышла новая версия игры.{{ store.online ? ' После обновления вы вернётесь за стол.' : ' Партия сохранена.' }}</span>
+    <button class="small primary" @click="reload">Обновить</button>
+  </div>
   <DiceTray v-if="dice" @close="dice = false" />
   <div v-if="!store.room && (store.rejoinState !== 'idle' || (pendingRejoin && store.connecting))" class="overlay" role="status">
     <img :src="`${base}img/brand/logo.png`" alt="" />

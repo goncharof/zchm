@@ -15,8 +15,8 @@ self.addEventListener('fetch', (e) => {
   const req = e.request
   const url = new URL(req.url)
   if (req.method !== 'GET' || url.origin !== self.location.origin) return
-  // сетевая игра и служебные адреса сервера — всегда напрямую
-  if (url.pathname.includes('/socket.io/') || url.pathname.endsWith('/health')) return
+  // сетевая игра, служебные адреса сервера и номер сборки — всегда напрямую, мимо кэша
+  if (url.pathname.includes('/socket.io/') || url.pathname.endsWith('/health') || url.pathname.endsWith('/version.json')) return
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req)

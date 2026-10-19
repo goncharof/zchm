@@ -1,11 +1,26 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
+import type { Plugin } from 'vite'
+
+/** Номер сборки: вшивается в код и кладётся в version.json — открытая давно вкладка узнаёт, что вышла новая версия */
+const BUILD_ID = Date.now().toString(36)
+function versionFile(): Plugin {
+  return {
+    name: 'zchm-version',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ build: BUILD_ID }) })
+    },
+  }
+}
 
 // base './' — сборка работает из любого подкаталога (GitHub Pages, file://)
 export default defineConfig(({ isSsrBuild }) => ({
   base: './',
-  plugins: [vue()],
+  // номер сборки — только у фронтенда (сборке сервера он не нужен)
+  plugins: [vue(), ...(isSsrBuild ? [] : [versionFile()])],
+  define: { __BUILD_ID__: JSON.stringify(BUILD_ID) },
   // JSON как строка + JSON.parse: быстрее разбирается браузером
   json: { stringify: true },
   server: {
