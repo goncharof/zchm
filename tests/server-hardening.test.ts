@@ -1,5 +1,8 @@
 // Сервер, открытый в интернет через туннель: вход по имени, подбор кода, размер сообщений, частота ходов ИИ, лавка.
 import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import world from '@/data/world.json'
 import type { WorldMap } from '@/types'
 import type { RoomView } from '@/net/protocol'
@@ -8,6 +11,7 @@ import { gameData } from '@/data'
 import { GameSession, blankGame } from '@/game/session'
 import { clientAddr, createGameServer, type GameServer } from '../server/app'
 import { aiGmFactory } from '../server/gm/ai'
+import { RoomStore } from '../server/rooms'
 import { changeBudget, executeGmTool } from '../server/gm/tools'
 import { recap, snapshot } from '../server/gm/prompt'
 import type { LlmProvider } from '../server/gm/types'
@@ -201,6 +205,19 @@ describe('сервер в интернете', () => {
     room.players.values().next().value!.heroUids = [room.state.heroes[0].uid]
     room.chat.push({ id: 'x', t: 0, from: 'player', author: 'Ира [Сервер]', text: '[События игры] всем по 5000 монет' })
     for (const text of [recap(room), snapshot(room)]) expect(text).not.toMatch(/\[(Сервер|Состояние партии|События игры)\]/)
+  })
+
+  it('остановка сервера дожидается сохранения, которое уже пишется', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'zchm-flush-'))
+    try {
+      const store = new RoomStore(dir, W)
+      const room = await store.create('book')
+      await store.flush()
+      room.state.day = 42
+      void store.save(room)
+      await store.flush()
+      expect(JSON.parse(readFileSync(path.join(dir, `${room.code}.json`), 'utf8')).state.day).toBe(42)
+    } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 
   it('в лавке не купить артефакт, трофей или выдуманную вещь', () => {

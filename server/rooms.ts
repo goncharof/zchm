@@ -302,7 +302,6 @@ export class RoomStore {
     }, 500))
   }
 
-  /** Запись через временный файл: обрыв посреди записи не портит сохранённую комнату */
   /** Сохранения одной комнаты идут по очереди (таймер и остановка сервера не пишут один файл одновременно) */
   private saving = new Map<string, Promise<void>>()
   save(room: Room): Promise<void> {
@@ -313,6 +312,7 @@ export class RoomStore {
     void next.finally(() => { if (this.saving.get(room.code) === next) this.saving.delete(room.code) }).catch(() => {})
     return next
   }
+  /** Запись через временный файл: обрыв посреди записи не портит сохранённую комнату */
   private async write(room: Room): Promise<void> {
     await mkdir(this.dir!, { recursive: true })
     const file = this.file(room.code)
@@ -328,6 +328,8 @@ export class RoomStore {
       if (r) await this.save(r).catch((e) => console.error(`[комнаты] не удалось сохранить ${code}:`, (e as Error).message))
     }
     this.timers.clear()
+    // и запись, которая уже идёт: остановка сервера не должна оборвать её
+    await Promise.allSettled([...this.saving.values()])
   }
 
   /** Выгрузить из памяти комнаты, где давно никого нет (они сохранены на диске и загрузятся при входе) */
