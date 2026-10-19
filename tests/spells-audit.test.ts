@@ -1,7 +1,7 @@
 // Регрессии по аудиту заклинаний героев: время действия вне боя, повторное наложение, цели, щиты монстров, опыт.
 import { afterEach, describe, expect, it } from 'vitest'
 import { idx } from '@/data'
-import { createHero, gainXp } from '@/engine/character'
+import { createHero, gainXp, heroDefense } from '@/engine/character'
 import { alliesTurn, makeAlly, monsterAttack, monstersTurn, startCombat } from '@/engine/combat'
 import { canCast, castSpell } from '@/engine/spells'
 import { seededRng, setRng } from '@/engine/dice'
@@ -40,6 +40,20 @@ describe('аудит заклинаний героев', () => {
     const second = cast(p, 'priest-slabost', { combat: state, targetUid: ork.uid })
     expect(ork.attackMultiplier).toBe(0.5)
     expect(second.xp).toBe(0)
+  })
+
+  it('повторный «Призрачный доспех» не снимает защиту; повторная «Молитва» опыта не даёт', () => {
+    const m = caster('mage', 6000, 'mage-prizrachnyy-dospeh')
+    const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
+    const before = heroDefense(m, idx)
+    cast(m, 'mage-prizrachnyy-dospeh', { combat: state })
+    const armored = heroDefense(m, idx)
+    expect(armored).toBeGreaterThan(before)
+    cast(m, 'mage-prizrachnyy-dospeh', { combat: state })
+    expect(heroDefense(m, idx)).toBe(armored)
+    const p = caster('priest', 60000, 'priest-molitva')
+    expect(cast(p, 'priest-molitva', { targetHeroUid: p.uid }).xp).toBeGreaterThan(0)
+    expect(cast(p, 'priest-molitva', { targetHeroUid: p.uid }).xp).toBe(0)
   })
 
   it('«Валуны» мага 6 уровня — один валун в выбранную цель', () => {

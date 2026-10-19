@@ -336,15 +336,18 @@ export function castSpell(input: CastInput): CastResult {
     }
     case 'buff': {
       spend()
-      const { value, multiplier } = parseAmount(effect.amount, hero, effect.stat, effect.stat === 'defense' ? heroDefense(hero, idx) : undefined)
       const rounds = durationRounds(effect.duration ?? spell.duration, hero.level)
       const targets = effect.scope === 'party' ? heroes.filter((h) => !h.status.dead) : effect.scope === 'ally' ? [targetHero()] : [hero]
-      // повторное заклинание обновляет действие, а не складывается («Сила» дважды — не ×4)
+      // повторное заклинание обновляет действие, а не складывается («Сила» дважды — не ×4); прежнее снимается до расчёта,
+      // иначе «Призрачный доспех» считал прибавку от уже усиленной защиты и второй раз давал +0
+      let shown = ''
       for (const t of targets) {
         t.buffs = t.buffs.filter((b) => b.source !== spell.name)
+        const { value, multiplier } = parseAmount(effect.amount, hero, effect.stat, effect.stat === 'defense' ? heroDefense(t, idx) : undefined)
         t.buffs.push({ source: spell.name, stat: effect.stat, amount: value, multiplier, rounds })
+        shown ||= multiplier ? `×${value}` : (value >= 0 ? '+' : '') + value
       }
-      log(entries, `${targets.map((t) => t.name).join(', ')}: ${statName(effect.stat)} ${multiplier ? `×${value}` : (value >= 0 ? '+' : '') + value}${rounds > 0 ? ` на ${rounds} раунд(ов)` : ' до конца боя'}.`)
+      log(entries, `${targets.map((t) => t.name).join(', ')}: ${statName(effect.stat)} ${shown}${rounds > 0 ? ` на ${rounds} раунд(ов)` : ' до конца боя'}.`)
       break
     }
     case 'debuff': {
@@ -422,6 +425,8 @@ export function castSpell(input: CastInput): CastResult {
       // Воздушный щит: один общий запас 2к6 уровней заклинаний на всю партию
       const charge = effect.kind === 'spell-shield' ? rollFormula('2к6').total : undefined
       const poolId = charge !== undefined ? `pool_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}` : undefined
+      // та же защита уже стоит у всех целей — повтор лишь обновляет её, опыта за него нет (иначе ферма опыта вне боя)
+      if (targets.every((t) => t.buffs.some((b) => b.stat === 'ward' && b.ward === effect.kind))) effective = false
       for (const t of targets) {
         t.buffs = t.buffs.filter((b) => !(b.stat === 'ward' && b.ward === effect.kind))
         t.buffs.push({ source: spell.name, stat: 'ward', ward: effect.kind, amount: effect.kind === 'reflect' ? hero.level : 0, rounds, charge, poolId })
@@ -433,6 +438,7 @@ export function castSpell(input: CastInput): CastResult {
     case 'initiative': {
       spend()
       const t = targetHero()
+      if (t.status.initiative) effective = false
       t.status.initiative = true
       log(entries, `${t.name} в ближайшем бою атакует первым.`)
       break
@@ -480,7 +486,8 @@ export function castSpell(input: CastInput): CastResult {
       const found = findEntry(heroes, input.targetEntryUid)
       if (!found || found.entry.kind !== 'bottle') return fail('Удваивать можно только бутылки')
       spend()
-      addToInventory(found.owner, 'bottle', found.entry.ref, 1, { identified: found.entry.identified })
+      // копия той же бутылки — с тем же ответом распознавателя (иначе копией обходили запрет повторной проверки)
+      addToInventory(found.owner, 'bottle', found.entry.ref, 1, { identified: found.entry.identified, ...(found.entry.verdict ? { verdict: found.entry.verdict } : {}) })
       log(entries, `Бутылка у ${found.owner.name} удваивается вместе с содержимым.`)
       break
     }
