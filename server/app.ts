@@ -236,13 +236,14 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       try {
         limit(limiters.room.take(socket.id), 'Слишком часто: подождите немного')
         const req = parse(Schemas.join, raw)
-        // подбор кода комнаты: неудачные входы считаются по адресу, а не по соединению (переподключение не сбрасывает)
-        limit(limiters.badJoin.can(addr), 'Слишком много неудачных попыток входа — подождите')
         const r = await store.get(req.code)
         // клиент мог отключиться, пока комната читалась с диска: иначе мёртвый сокет навсегда числится «в сети»
         if (!socket.connected) return
+        let p = r && req.token ? r.playerByToken(req.token) : undefined
+        // подбор кода комнаты: неудачные входы считаются по адресу, а не по соединению (переподключение не сбрасывает);
+        // свой токен пропускает всегда — чужие опечатки с того же адреса (общий Wi-Fi) не мешают вернуться за стол
+        if (!p) limit(limiters.badJoin.can(addr), 'Слишком много неудачных попыток входа — подождите')
         if (!r) { limiters.badJoin.take(addr); throw new GameError('Комната не найдена') }
-        let p = req.token ? r.playerByToken(req.token) : undefined
         let token = p ? req.token : undefined
         // вход с другого устройства (или после очистки браузера): игрок не в сети с тем же именем — это он, герои при нём.
         // Хозяина так не занять (его права — только по токену; пропавшего хозяина сменяет «Стать хозяином»). Свой токен

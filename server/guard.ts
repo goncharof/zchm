@@ -81,7 +81,8 @@ export const DEFAULT_LIMITS: Limits = {
   choose: [10, 2],
   room: [5, 1 / 20],
   roomCreate: [5, 1 / 120],
-  badJoin: [10, 1 / 30],
+  // компания за общим Wi-Fi может ошибиться в коде раз двадцать; подбор — 4 попытки в минуту на миллиард кодов
+  badJoin: [20, 1 / 15],
   gmEvents: [6, 6 / 60],
 }
 

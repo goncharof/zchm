@@ -85,6 +85,21 @@ describe('сервер в интернете', () => {
     await until(() => host.room.players.find((p) => p.name === 'Боб')?.online === true)
   })
 
+  it('чужие опечатки в коде с того же адреса не мешают вернуться за стол по своему токену', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W, limits: { room: [1000, 1000], badJoin: [3, 1 / 600] } }); servers.push(s)
+    const host = client(s)
+    const { code } = await host.c.create('Алиса', 'book')
+    const bob = client(s)
+    const b = await bob.c.join(code, 'Боб')
+    bob.c.close()
+    for (let i = 0; i < 4; i++) await client(s).c.socket.emitWithAck('room:join', { code: 'ZZZZZZ', name: 'x' })
+    const again = client(s)
+    expect((await again.c.join(code, 'Боб', b.token)).playerId).toBe(b.playerId)
+    // а без токена — ограничение действует
+    const a = await client(s).c.socket.emitWithAck('room:join', { code, name: 'Новичок' }) as { ok: boolean; error?: string }
+    expect(a.error).toMatch(/неудачных попыток/)
+  })
+
   it('одно соединение, перешедшее к другому игроку, не оставляет прежнего «в сети»', async () => {
     const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
     const host = client(s), walker = client(s)
@@ -96,7 +111,7 @@ describe('сервер в интернете', () => {
   })
 
   it('подбор кода комнаты останавливается по адресу, а не по соединению', async () => {
-    const s = await createGameServer({ port: 0, staticDir: null, world: W, limits: { room: [1000, 1000] } }); servers.push(s)
+    const s = await createGameServer({ port: 0, staticDir: null, world: W, limits: { room: [1000, 1000], badJoin: [10, 1 / 30] } }); servers.push(s)
     const errors: string[] = []
     for (let i = 0; i < 14; i++) {
       const c = client(s)
