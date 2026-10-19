@@ -42,7 +42,7 @@ cloudflared tunnel --url http://localhost:8787
 git clone <ваш репозиторий> zchm && cd zchm
 docker build -t zchm .
 docker run -d --name zchm --restart unless-stopped -p 127.0.0.1:8787:8787 \
-  -v zchm-data:/data \
+  -v zchm-data:/data -e TRUST_PROXY=1 \
   -e GEMINI_API_KEY=... -e GROQ_API_KEY=... -e OPENROUTER_API_KEY=... \
   zchm
 ```
@@ -70,6 +70,7 @@ HTTPS и сокеты — через обратный прокси, проще �
 fly launch --no-deploy            # создаст fly.toml по Dockerfile
 fly volumes create zchm_data --size 1
 # в fly.toml: [mounts] source = "zchm_data", destination = "/data"; internal_port = 8787
+# в fly.toml: [env] TRUST_PROXY = "1"
 fly secrets set GEMINI_API_KEY=... GROQ_API_KEY=...
 fly deploy
 ```
@@ -83,6 +84,7 @@ fly deploy
 |---|---|---|
 | `PORT`, `HOST` | `8787`, `0.0.0.0` | адрес сервера |
 | `DATA_DIR` | `data/rooms` | где хранятся комнаты |
+| `TRUST_PROXY` | — | `1`: соединения идут через свой прокси не с этой машины (Docker, Fly.io) — адрес игрока брать из X-Forwarded-For. Без прокси не включать: адрес подделает любой |
 | `STATIC_DIR` | `dist` | собранный фронтенд |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | `gemini-3.5-flash` | Google AI Studio; моделей можно несколько через запятую |
 | `GROQ_API_KEY`, `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq |

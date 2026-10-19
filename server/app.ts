@@ -1,5 +1,5 @@
 /** Сервер сетевой игры: HTTP (статика сборки) + socket.io (комнаты, команды, чат, ИИ-ведущий). */
-import { createServer, type Server as HttpServer } from 'node:http'
+import { createServer, type IncomingHttpHeaders, type Server as HttpServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -31,6 +31,8 @@ export interface ServerOptions {
   gm?: GmFactory
   /** ограничения частоты запросов (по умолчанию — DEFAULT_LIMITS) */
   limits?: Partial<Limits>
+  /** соединения приходят через свой прокси не с этой машины (Docker, Fly.io) — верить X-Forwarded-For (TRUST_PROXY=1) */
+  trustProxy?: boolean
 }
 
 export interface GameServer {
@@ -79,6 +81,16 @@ function gmEventFor(name: CommandName, room: Room, before: GameState, args: unkn
   }
   if (name === 'restAll') return { type: 'rest', text: `Партия отдыхает в трактире. День ${s.day}.` }
   return null
+}
+
+/** Адрес клиента для ограничений частоты. Заголовкам верим только от своего прокси — cloudflared и Caddy на этой
+ *  машине (соединение с localhost) или прокси при trustProxy. Последний адрес в X-Forwarded-For дописал сам прокси,
+ *  остальные мог прислать клиент; cf-connecting-ip — только когда X-Forwarded-For нет (за Caddy его подделает клиент). */
+export function clientAddr(hs: { address?: string; headers: IncomingHttpHeaders }, trustProxy: boolean): string {
+  const peer = hs.address ?? ''
+  if (!trustProxy && !/^(::1$|127\.|::ffff:127\.)/.test(peer)) return peer
+  const xff = String(hs.headers['x-forwarded-for'] ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+  return xff.at(-1) ?? (String(hs.headers['cf-connecting-ip'] ?? '').trim() || peer)
 }
 
 export async function createGameServer(opts: ServerOptions): Promise<GameServer> {
@@ -176,9 +188,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
   io.on('connection', (socket) => {
     let room: Room | null = null
     let player: Player | null = null
-    // адрес клиента: за туннелем (cloudflared) все соединения приходят с localhost — настоящий адрес в заголовке
-    const h = socket.handshake.headers
-    const addr = String(h['cf-connecting-ip'] ?? h['x-forwarded-for'] ?? socket.handshake.address ?? '').split(',')[0].trim() || socket.id
+    const addr = clientAddr(socket.handshake, opts.trustProxy ?? false) || socket.id
     // сообщения крупнее 20 КБ нужны только для создания комнаты и загрузки сохранения (в них состояние партии)
     socket.use(([event, ...args], next) => {
       if (event !== 'room:create' && event !== 'room:loadState' && JSON.stringify(args).length > 20_000) return next(new Error('Слишком большое сообщение'))

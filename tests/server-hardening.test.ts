@@ -5,7 +5,7 @@ import type { WorldMap } from '@/types'
 import type { RoomView } from '@/net/protocol'
 import { NetClient } from '@/net/client'
 import { GameSession, blankGame } from '@/game/session'
-import { createGameServer, type GameServer } from '../server/app'
+import { clientAddr, createGameServer, type GameServer } from '../server/app'
 import { aiGmFactory } from '../server/gm/ai'
 import { changeBudget, executeGmTool } from '../server/gm/tools'
 import type { LlmProvider } from '../server/gm/types'
@@ -98,6 +98,19 @@ describe('сервер в интернете', () => {
     // а без токена — ограничение действует
     const a = await client(s).c.socket.emitWithAck('room:join', { code, name: 'Новичок' }) as { ok: boolean; error?: string }
     expect(a.error).toMatch(/неудачных попыток/)
+  })
+
+  it('адрес клиента: заголовкам верим только от своего прокси, и только адресу, который он дописал', () => {
+    const xff = { 'x-forwarded-for': '6.6.6.6, 1.2.3.4', 'cf-connecting-ip': '7.7.7.7' }
+    // напрямую из интернета — заголовки игнорируются
+    expect(clientAddr({ address: '9.9.9.9', headers: xff }, false)).toBe('9.9.9.9')
+    // cloudflared или Caddy на этой машине — последний адрес X-Forwarded-For
+    expect(clientAddr({ address: '127.0.0.1', headers: xff }, false)).toBe('1.2.3.4')
+    expect(clientAddr({ address: '::ffff:127.0.0.1', headers: xff }, false)).toBe('1.2.3.4')
+    expect(clientAddr({ address: '::1', headers: { 'cf-connecting-ip': '7.7.7.7' } }, false)).toBe('7.7.7.7')
+    expect(clientAddr({ address: '127.0.0.1', headers: {} }, false)).toBe('127.0.0.1')
+    // Docker, Fly.io: TRUST_PROXY=1
+    expect(clientAddr({ address: '172.17.0.1', headers: xff }, true)).toBe('1.2.3.4')
   })
 
   it('одно соединение, перешедшее к другому игроку, не оставляет прежнего «в сети»', async () => {

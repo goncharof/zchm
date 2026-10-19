@@ -34,6 +34,7 @@ const server = await createGameServer({
   dataDir: process.env.DATA_DIR ?? path.join(root, 'data', 'rooms'),
   world: world as unknown as WorldMap,
   gm: aiGmFactory({ providers: buildProvidersFromEnv() }),
+  trustProxy: process.env.TRUST_PROXY === '1',
 })
 const chain = server.gm.chain()
 console.log(`Заклятье Чёрного мага: сервер на ${server.url}. Ведущий: ${chain.length ? `${chain.join(' → ')} → сценарный` : 'сценарный (модели ИИ не настроены)'}`)
