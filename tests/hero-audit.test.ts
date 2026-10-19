@@ -6,6 +6,7 @@ import { addToInventory, buy, equip, entryName, poisonWeapon } from '@/engine/in
 import { heroAttack, startCombat } from '@/engine/combat'
 import { seededRng, setRng } from '@/engine/dice'
 import { GameSession, blankGame, migrate } from '@/game/session'
+import { castSpell } from '@/engine/spells'
 
 afterEach(() => setRng(seededRng(1)))
 
@@ -139,6 +140,41 @@ describe('аудит героев', () => {
     heroAttack(melee, w, [w], 'rightHand', melee.monsters[0].uid, idx)
     expect(melee.monsters[0].poison).toBeGreaterThan(0)
     expect(sword.poisoned).toBe(false)
+  })
+
+  it('копия бутылки сохраняет ответ распознавателя; отравленный лук из старого сохранения очищается', () => {
+    const m = createHero('Маг', 'mage', idx)
+    gainXp(m, 2000, idx); m.mana = m.maxMana = 50; m.spellbook = ['mage-udvoenie-zhidkosti']
+    const b = addToInventory(m, 'bottle', '2', 1, { verdict: 'danger' })
+    castSpell({ hero: m, spell: idx.spell('mage-udvoenie-zhidkosti'), idx, heroes: [m], combat: null, targetEntryUid: b.uid })
+    const bottles = m.inventory.filter((e) => e.kind === 'bottle')
+    expect(bottles).toHaveLength(2)
+    expect(bottles.every((e) => e.verdict === 'danger')).toBe(true)
+    const g = blankGame()
+    const t = createHero('Вор', 'thief', idx)
+    const bow = addToInventory(t, 'weapon', 'korotkiy-luk')
+    bow.poisoned = true
+    g.heroes.push(t)
+    migrate(g)
+    expect(bow.poisoned).toBeUndefined()
+  })
+
+  it('отравленные дротики кончились — в руку берётся остаток; промахнувшийся отравленный дротик утерян', () => {
+    const w = createHero('Воин', 'warrior', idx)
+    w.money = 1000
+    const darts = buy(w, 'weapon', 'drotik', idx, 11)
+    equip(w, darts.uid, idx, 'ranged')
+    buy(w, 'item', 'yad', idx)
+    poisonWeapon(w, darts.uid, idx)
+    expect(darts.qty).toBe(10)
+    darts.qty = 1 // остался последний отравленный
+    const { state } = startCombat([{ monsterId: 'troll', count: 1 }], idx)
+    setRng(() => 0) // к18 = 1 — промах
+    heroAttack(state, w, [w], 'ranged', state.monsters[0].uid, idx)
+    const rest = w.inventory.find((e) => e.ref === 'drotik')!
+    expect(rest.poisoned).toBeFalsy()
+    expect(w.equipment.ranged).toBe(rest.uid)
+    expect(state.recover[w.uid]?.drotik ?? 0).toBe(0)
   })
 
   it('в книгу записывается только заклинание своего класса', () => {

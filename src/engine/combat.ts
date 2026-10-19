@@ -249,9 +249,17 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
       arrowRef = w.ammoEntry.ref
       removeFromInventory(hero, w.ammoEntry.uid, 1)
     }
+    let thrownRef: string | undefined
     if (w?.thrown && w.entry) {
-      addRecover(state, hero.uid, w.entry.ref, 1)
+      thrownRef = w.entry.ref
       removeFromInventory(hero, w.entry.uid, 1)
+      // стопка в руке кончилась — в руку берётся следующая такая же (остаток после отравления, подобранные дротики)
+      if (!hero.inventory.includes(w.entry)) {
+        const next = hero.inventory.find((e) => e.kind === 'weapon' && e.ref === thrownRef && e.qty > 0)
+        if (next && w.slot !== 'spell') hero.equipment[w.slot] = next.uid
+      }
+      // брошенное ложится на поле боя; отравленный дротик при промахе утерян (стр. 22) — подбирается только попавший
+      if (!poisonedShot) addRecover(state, hero.uid, thrownRef, 1)
     }
     const r = heroRoll(hero)
     // ХАУСРУЛ: по спящему, парализованному или окаменевшему противнику попадают автоматически
@@ -261,6 +269,7 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
     out.hit = true
     // ХАУСРУЛ: попавшие стрелы можно подобрать после победы, промахнувшиеся теряются
     if (arrowRef) addRecover(state, hero.uid, arrowRef, 1)
+    if (thrownRef && poisonedShot) addRecover(state, hero.uid, thrownRef, 1)
     let total = 0
     const parts: string[] = []
     const rollsCount = w?.doubleDamage ? 2 : 1

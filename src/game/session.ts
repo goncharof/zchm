@@ -63,6 +63,12 @@ export function migrate(g: GameState): GameState {
     h.buffs ??= []
     h.status ??= {}
     h.pendingSpellPicks ??= 0
+    // лук и арбалет больше не смазывают ядом (смазывают стрелы): флаг из старых сохранений снимается
+    for (const e of h.inventory) {
+      if (!e.poisoned) continue
+      const bow = e.kind === 'weapon' ? ['bow', 'crossbow'].includes(idx.weaponById.get(e.ref)?.group ?? '') : e.kind === 'artifact' && idx.artifactByN.get(parseInt(e.ref, 10))?.kind === 'ranged'
+      if (bow) delete e.poisoned
+    }
     // прежние слоты «украшение 1/2» → свой слот у каждого украшения-артефакта
     const eq = h.equipment as Record<string, string | undefined>
     for (const old of ['accessory1', 'accessory2']) {
