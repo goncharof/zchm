@@ -201,6 +201,11 @@ td.inv-actions { text-align: right; white-space: nowrap; }
   .foes.many .hero-down { display: none; }
 }
 
+/* листы героев: на широком экране — в две колонки, чтобы предмет и его кнопки были рядом */
+.sheets { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+.sheets > .card { margin-bottom: 0; }
+@media (min-width: 1100px) { .sheets { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
+
 /* выбор противников: строка «имя + характеристики + счётчик», выбранные и «Начать бой» — внизу окна */
 .pick-list { display: flex; flex-direction: column; }
 .pick-row { display: flex; align-items: center; gap: .6rem; padding: .4rem .2rem; border-bottom: 1px solid var(--line); }

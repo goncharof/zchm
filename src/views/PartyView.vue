@@ -93,5 +93,5 @@ const visibleHeroes = computed(() => (!narrow.value || shown.value === 'all' ? s
     <button v-for="h in store.heroes" :key="h.uid" role="tab" :aria-selected="shown === h.uid" :class="{ active: shown === h.uid, down: h.status.dead }" @click="shown = h.uid">{{ h.name }}</button>
     <button role="tab" :aria-selected="shown === 'all'" :class="{ active: shown === 'all' }" @click="shown = 'all'">Все</button>
   </div>
-  <HeroSheet v-for="h in visibleHeroes" :key="h.uid" :hero="h" />
+  <div class="sheets"><HeroSheet v-for="h in visibleHeroes" :key="h.uid" :hero="h" /></div>
 </template>
