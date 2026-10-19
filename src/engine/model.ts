@@ -150,7 +150,7 @@ export interface MonsterInstance {
   /** тело уже поднято «Оживлением мертвеца» */
   raised?: boolean
   /** защиты от заклинаний героев: Огненный щит поглощает, Отражение магии возвращает заклинание (rounds −1 — до конца боя) */
-  wards?: { kind: 'antimagic' | 'reflect'; level: number; rounds: number; source: string }[]
+  wards?: { kind: 'antimagic' | 'reflect' | 'crystal'; level: number; rounds: number; source: string }[]
   /** бонус к броску попадания (Ловкость, Огненный меч) */
   hitMod?: number
   /** Молитва: прибавка к следующему броску попадания */

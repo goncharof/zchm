@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { idx } from '@/data'
 import { changeLives, createHero, gainXp } from '@/engine/character'
-import { checkEnd, monstersTurn, regrowHeads, startCombat } from '@/engine/combat'
+import { checkEnd, heroAttack, monsterAttack, monsterCast, monstersTurn, regrowHeads, startCombat } from '@/engine/combat'
 import { seededRng, setRng } from '@/engine/dice'
 import { GameSession, blankGame } from '@/game/session'
 
@@ -71,5 +71,37 @@ describe('аудит боя', () => {
     expect(w.level).toBe(12)
     s.startEncounter([{ monsterId: 'ork', count: 1 }])
     expect(s.state.combat!.extraActions[w.uid]).toBe(1)
+  })
+})
+
+describe('аудит боя: Металок и заклинания монстров из Бестиария', () => {
+  it('Металок при 15+ разъедает немагическое оружие в руках вместо удара', () => {
+    expect(idx.monster('metalok').destroysWeapon).toBe(15)
+    const s = new GameSession(blankGame(), null)
+    const w = s.addHero('Воин', 'warrior')
+    w.money = 100
+    s.buyItem(w.uid, 'weapon', 'mech-korotkiy')
+    s.equipItem(w.uid, w.inventory[0].uid)
+    const { state } = startCombat([{ monsterId: 'metalok', count: 1 }], idx)
+    setRng(() => 0.99) // попадание, к18 = 18 ≥ 15
+    const log = monsterAttack(state.monsters[0], w, idx).map((e) => e.text).join(' ')
+    expect(log).toContain('рассыпается ржавчиной')
+    expect(w.inventory.some((e) => e.ref === 'mech-korotkiy')).toBe(false)
+    expect(w.lives).toBe(w.maxLives)
+  })
+
+  it('Чёрный жрец ставит «магический барьер» (Хрустальный щит): герой до 2 уровня натыкается на стену', () => {
+    const { state } = startCombat([{ monsterId: 'chernyy-zhrets', count: 1 }], idx)
+    const priest = state.monsters[0]
+    priest.spells = ['магический барьер']
+    setRng(() => 0) // к6 = 1 — колдует
+    const log = monsterCast(state, priest, [tough()], idx)!.map((e) => e.text).join(' ')
+    expect(log).toContain('Хрустальный щит')
+    expect(priest.wards?.some((w) => w.kind === 'crystal')).toBe(true)
+    const novice = createHero('Воин', 'warrior', idx)
+    state.phase = 'melee'; state.turn = 'heroes'
+    const out = heroAttack(state, novice, [novice], 'unarmed', priest.uid, idx)
+    expect(out.log[0].text).toContain('незримый барьер')
+    expect(priest.lives).toBe(priest.maxLives)
   })
 })

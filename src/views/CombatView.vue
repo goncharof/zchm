@@ -101,7 +101,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
   if (m.quake) out.push(`землетрясение (${m.quake})`)
   if (m.attackMod) out.push(`атаки ${m.attackMod > 0 ? '+' : ''}${m.attackMod}`); if (m.attackMultiplier !== 1) out.push(`атаки ×${m.attackMultiplier}`)
   if (m.hitMod) out.push(`попадание +${m.hitMod}`); if (m.prayer) out.push('молитва')
-  for (const w of m.wards ?? []) out.push(w.kind === 'antimagic' ? `огненный щит${w.rounds > 0 ? ` (${w.rounds})` : ''}` : 'отражение магии')
+  for (const w of m.wards ?? []) out.push(w.kind === 'antimagic' ? `огненный щит${w.rounds > 0 ? ` (${w.rounds})` : ''}` : w.kind === 'crystal' ? `барьер от героев до 2 ур.${w.rounds > 0 ? ` (${w.rounds})` : ''}` : 'отражение магии')
   if (m.summoned) out.push('призван')
   return out.join(', ')
 }

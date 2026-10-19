@@ -234,6 +234,12 @@ export function heroAttack(state: CombatState, hero: Hero, heroes: Hero[], weapo
     return out
   }
   const name = w?.name ?? 'голые руки'
+  const barrier = target.wards?.find((x) => x.kind === 'crystal')
+  if (barrier && hero.level <= 2) {
+    out.log.push(entry(`${hero.name} натыкается на незримый барьер вокруг ${target.name} (${barrier.source}).`, 'miss'))
+    out.log.push(...markActed(state, hero, heroes, idx))
+    return out
+  }
   const prayer = consumePrayer(hero)
   if (prayer) out.log.push(entry(`${hero.name}: молитва услышана, +${prayer} к броску.`, 'spell'))
   const bonus = (ranged ? heroAccuracy(hero, idx) + (w?.accuracyBonus ?? 0) : heroDexterity(hero) + (w?.dexterityBonus ?? 0)) + prayer
@@ -645,9 +651,16 @@ function monsterSpellUse(s: Spell): MonsterSpellUse | null {
   if (e.type === 'heal') return 'heal'
   if (e.type === 'summon') return e.kind === 'elemental' ? 'summon' : null
   if (e.type === 'buff') return e.stat === 'dexterity' || e.stat === 'attacks' ? 'self' : null
-  if (e.type === 'ward') return e.kind === 'antimagic' || e.kind === 'reflect' || e.kind === 'prayer' ? 'self' : null
+  if (e.type === 'ward') return e.kind === 'antimagic' || e.kind === 'reflect' || e.kind === 'prayer' || e.kind === 'crystal' ? 'self' : null
   if (e.type === 'weapon') return 'self'
   return null
+}
+/** ХАУСРУЛ: заклинания из Бестиария, которых нет в Книге заклинаний, — по ближайшему описанию: «магический барьер»
+ *  дословно описан в «Хрустальном щите», «магическое поле» — тот же защитный барьер, «огненная стрела» — огненный снаряд */
+const MONSTER_SPELL_ALIASES: Record<string, string> = {
+  'магический барьер': 'хрустальный щит',
+  'магическое поле': 'хрустальный щит',
+  'огненная стрела': 'огненное копье',
 }
 function monsterSpellOptions(m: MonsterInstance, idx: DataIndex): Spell[] {
   if (!m.spells?.length || !(m.mana ?? 0)) return []
@@ -655,7 +668,7 @@ function monsterSpellOptions(m: MonsterInstance, idx: DataIndex): Spell[] {
   for (const s of idx.data.spells) if (!byName.has(normName(s.name))) byName.set(normName(s.name), s)
   const out: Spell[] = []
   for (const n of m.spells) {
-    const s = byName.get(normName(n))
+    const s = byName.get(MONSTER_SPELL_ALIASES[normName(n)] ?? normName(n))
     if (!s || !monsterSpellUse(s)) continue
     const cost = s.effect.type === 'heal' ? 1 : typeof s.cost === 'number' ? s.cost : m.level
     if (cost <= (m.mana ?? 0)) out.push(s)
@@ -725,6 +738,11 @@ function monsterSelfCast(state: CombatState, m: MonsterInstance, spell: Spell, l
     log.push(entry(`В руках ${m.name} вспыхивает ${e.name}: атаки +4${e.dexterityBonus ? `, попадание +${e.dexterityBonus}` : ''}.`, 'spell'))
   } else if (e.type === 'ward') {
     if (e.kind === 'prayer') { m.prayer = 3; log.push(entry(`${m.name} молится: +3 к следующему броску.`, 'spell')) }
+    else if (e.kind === 'crystal') {
+      // «Хрустальный щит» у монстра: герои до 2 уровня натыкаются на незримую стену (1 раунд за уровень)
+      m.wards = [...(m.wards ?? []), { kind: 'crystal', level: spell.level, rounds: Math.max(1, m.level), source: spell.name }]
+      log.push(entry(`${m.name} окружает себя незримым барьером: героям до 2 уровня его не достать (${Math.max(1, m.level)} раунд(ов)).`, 'spell'))
+    }
     else if (e.kind === 'antimagic') {
       const rounds = Math.max(1, Math.ceil(m.level / 2))
       m.wards = [...(m.wards ?? []), { kind: 'antimagic', level: spell.level, rounds, source: spell.name }]
@@ -942,6 +960,16 @@ export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex):
     return log
   }
   if (!Array.isArray(m.attacks)) return log
+  // Металок: «Уничтожение оружия (кроме магического) — 15» — вместо удара разъедает немагическое оружие в руках
+  if (monster?.destroysWeapon) {
+    const held = (['rightHand', 'leftHand', 'ranged'] as EquipSlot[]).map((s) => target.inventory.find((e) => e.uid === target.equipment[s])).find((e) => e?.kind === 'weapon')
+    const er = held ? k18() : 0
+    if (held && er >= monster.destroysWeapon) {
+      removeFromInventory(target, held.uid, 1)
+      log.push(entry(`${m.name} вцепляется в оружие ${target.name} (к18 = ${er} ≥ ${monster.destroysWeapon}): ${idx.weapon(held.ref).name} рассыпается ржавчиной.`, 'damage'))
+      return log
+    }
+  }
   // дополнительная атака (яд, паралич, окаменение, оледенение) вместо обычного удара; если их несколько —
   // по очереди, срабатывает первая, чей бросок прошёл
   for (const ex of m.extraAttacks ?? []) {
@@ -960,16 +988,6 @@ export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex):
         return log
       }
       log.push(entry(`${m.name} применяет «${rule.name}» (к18 = ${er} ≥ ${ex.threshold}); бросок удачи ${lr}+${luck} < ${rule.luck}.`, 'hit'))
-  // Металок: «Уничтожение оружия (кроме магического) — 15» — вместо удара разъедает немагическое оружие в руках
-  if (monster?.destroysWeapon) {
-    const held = (['rightHand', 'leftHand', 'ranged'] as EquipSlot[]).map((s) => target.inventory.find((e) => e.uid === target.equipment[s])).find((e) => e?.kind === 'weapon')
-    const er = held ? k18() : 0
-    if (held && er >= monster.destroysWeapon) {
-      removeFromInventory(target, held.uid, 1)
-      log.push(entry(`${m.name} вцепляется в оружие ${target.name} (к18 = ${er} ≥ ${monster.destroysWeapon}): ${idx.weapon(held.ref).name} рассыпается ржавчиной.`, 'damage'))
-      return log
-    }
-  }
       applyExtraAttack(target, ex.kind, log)
       return log
     }
