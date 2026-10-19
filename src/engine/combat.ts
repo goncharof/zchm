@@ -960,6 +960,16 @@ export function monsterAttack(m: MonsterInstance, target: Hero, idx: DataIndex):
         return log
       }
       log.push(entry(`${m.name} применяет «${rule.name}» (к18 = ${er} ≥ ${ex.threshold}); бросок удачи ${lr}+${luck} < ${rule.luck}.`, 'hit'))
+  // Металок: «Уничтожение оружия (кроме магического) — 15» — вместо удара разъедает немагическое оружие в руках
+  if (monster?.destroysWeapon) {
+    const held = (['rightHand', 'leftHand', 'ranged'] as EquipSlot[]).map((s) => target.inventory.find((e) => e.uid === target.equipment[s])).find((e) => e?.kind === 'weapon')
+    const er = held ? k18() : 0
+    if (held && er >= monster.destroysWeapon) {
+      removeFromInventory(target, held.uid, 1)
+      log.push(entry(`${m.name} вцепляется в оружие ${target.name} (к18 = ${er} ≥ ${monster.destroysWeapon}): ${idx.weapon(held.ref).name} рассыпается ржавчиной.`, 'damage'))
+      return log
+    }
+  }
       applyExtraAttack(target, ex.kind, log)
       return log
     }

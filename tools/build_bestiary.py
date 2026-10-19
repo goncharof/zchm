@@ -22,6 +22,8 @@ STAT_RE = re.compile(r'^(уровень|атаки|защита|храброст
 EXTRA_RE = re.compile(r'(Окаменение|Оледенение|Паралич|Яд)\s*[–—-]\s*(\d+)', re.IGNORECASE)
 # «Атакует дважды», «Атакуют трижды», «дважды за раунд»
 MULTI_RE = re.compile(r'Атаку(?:ет|ют)\s+(дважды|трижды)', re.IGNORECASE)
+# Металок: «Уничтожение оружия (кроме магического) — 15»
+DESTROY_RE = re.compile(r'Уничтожение оружия[^—–-]*[–—-]\s*(\d+)')
 EXTRA_KIND = {'Окаменение': 'petrify', 'Оледенение': 'freeze', 'Паралич': 'paralysis', 'Яд': 'poison'}
 SPELLS_RE = re.compile(r'Владе\w+\s+заклинани\w+:\s*([^.]+)\.')
 LUCK_RE = re.compile(r'Удача от ([^—–-]+?)\s*[–—-]\s*(\d+)')
@@ -103,6 +105,8 @@ for i in range(2, len(doc) - 1):  # skip cover (p1), credits (p2) and back page 
             entry[key] = stats[k]
     extras = [{'kind': EXTRA_KIND[k.capitalize()], 'threshold': int(v)} for k, v in EXTRA_RE.findall(description)]
     if extras: entry['extraAttacks'] = extras
+    m = DESTROY_RE.search(description)
+    if m: entry['destroysWeapon'] = int(m.group(1))
     m = MULTI_RE.search(description)
     if m: entry['attacksPerRound'] = 2 if m.group(1).lower() == 'дважды' else 3
     m = SPELLS_RE.search(description)

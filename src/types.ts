@@ -176,6 +176,8 @@ export interface Monster {
   extraAttacks?: { kind: ExtraAttackKind; threshold: number }[]
   /** «Атакует дважды/трижды» — атак за раунд */
   attacksPerRound?: number
+  /** «Уничтожение оружия (кроме магического) — N»: при броске к18 ≥ N разъедает оружие в руках */
+  destroysWeapon?: number
   spells?: string[]
   luckSave?: { against: string; threshold: number }
   /** NPC без боевых характеристик (Мерлин, Торговец, Чёрный маг...) */
