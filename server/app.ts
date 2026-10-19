@@ -185,7 +185,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       next()
     })
 
-    async function enter(r: Room, p: Player, ack: (a: Ack) => void) {
+    async function enter(r: Room, p: Player, ack: (a: Ack) => void, token = p.token) {
       // соединение переходит к другому игроку (или в другую комнату) — прежний больше не числится в сети через него
       if (room && player && (room !== r || player !== p)) {
         player.sockets.delete(socket.id)
@@ -197,7 +197,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       player = p
       p.sockets.add(socket.id)
       await socket.join(r.code)
-      const joined: Joined = { code: r.code, playerId: p.id, token: p.token }
+      const joined: Joined = { code: r.code, playerId: p.id, token }
       ack({ ok: true, result: joined })
       socket.emit('state', stateForClients(r.state))
       socket.emit('chat:history', r.chat.slice(-150))
@@ -243,12 +243,13 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
         if (!socket.connected) return
         if (!r) { limiters.badJoin.take(addr); throw new GameError('Комната не найдена') }
         let p = req.token ? r.playerByToken(req.token) : undefined
+        let token = p ? req.token : undefined
         // вход с другого устройства (или после очистки браузера): игрок не в сети с тем же именем — это он, герои при нём.
-        // Хозяина так не занять (его права — только по токену; пропавшего хозяина сменяет «Стать хозяином»), а прежний
-        // токен перестаёт действовать: вошедший получает новый
+        // Хозяина так не занять (его права — только по токену; пропавшего хозяина сменяет «Стать хозяином»). Свой токен
+        // вошедшему не выдаётся — он получает новый, а прежние устройства игрока остаются при нём
         if (!p) {
           p = [...r.players.values()].find((x) => x.sockets.size === 0 && !x.isHost && x.name.trim().toLowerCase() === req.name.trim().toLowerCase())
-          if (p) { p.token = randomUUID(); store.touch(r) }
+          if (p) { token = randomUUID(); p.deviceTokens = [...(p.deviceTokens ?? []), token].slice(-3); store.touch(r) }
         }
         if (!p) {
           if ([...r.players.values()].filter((x) => x.sockets.size > 0).length >= 8) throw new GameError('В комнате уже 8 игроков')
@@ -256,7 +257,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
           ctx.chat(r, { from: 'system', author: 'Игра', text: `${p.name} присоединяется к игре.` })
           store.touch(r)
         }
-        await enter(r, p, ack)
+        await enter(r, p, ack, token)
       } catch (e) { fail(ack, e) }
     })
 

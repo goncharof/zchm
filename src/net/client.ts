@@ -81,6 +81,9 @@ export class NetClient {
     const a = await this.joinRaw(s.code, s.name, s.token)
     if (!this.joined) return
     if (a.ok) {
+      // токен устарел (игрок вошёл по имени) — сервер выдал новый: запомнить его для следующих переподключений
+      const j = a.result as Joined
+      if (j.token !== s.token) { this.joined = { ...s, token: j.token }; saveSession(this.joined) }
       this.statusCbs.forEach((cb) => cb('online'))
       this.releaseGate()
       return

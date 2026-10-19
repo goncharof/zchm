@@ -48,6 +48,43 @@ describe('сервер в интернете', () => {
     expect(again.token).not.toBe(g.token)
   })
 
+  it('второе устройство игрока не отнимает его у первого: телефон после обрыва возвращается к своим героям', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
+    const host = client(s), phone = client(s)
+    const { code } = await host.c.create('Алиса', 'book')
+    const g = await phone.c.join(code, 'Боб')
+    phone.c.socket.disconnect()
+    await until(() => host.room.players.find((p) => p.name === 'Боб')?.online === false)
+    const laptop = client(s)
+    expect((await laptop.c.join(code, 'боб')).playerId).toBe(g.playerId)
+    // телефон снова в сети, пока ноутбук за столом: тот же игрок, а не второй «Боб» без героев
+    const back = client(s)
+    expect((await back.c.join(code, 'Боб', g.token)).playerId).toBe(g.playerId)
+    await until(() => host.room.players.length === 2 && host.room.players.filter((p) => p.name === 'Боб').length === 1)
+  })
+
+  it('устаревший токен после переподключения заменяется выданным сервером', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
+    const host = client(s), first = client(s)
+    const { code } = await host.c.create('Алиса', 'book')
+    await first.c.join(code, 'Боб')
+    first.c.socket.disconnect()
+    const stale = client(s)
+    const j = await stale.c.join(code, 'боб')
+    stale.c.socket.disconnect()
+    // ещё три устройства по имени — токен второго уходит из последних трёх
+    for (let i = 0; i < 3; i++) {
+      await until(() => host.room.players.find((p) => p.name === 'Боб')?.online === false)
+      const d = client(s); await d.c.join(code, 'боб'); d.c.socket.disconnect()
+    }
+    await until(() => host.room.players.find((p) => p.name === 'Боб')?.online === false)
+    const saved = () => (stale.c as unknown as { joined: { token: string } }).joined.token
+    expect(saved()).toBe(j.token)
+    stale.c.socket.connect()
+    await until(() => saved() !== j.token)
+    await until(() => host.room.players.find((p) => p.name === 'Боб')?.online === true)
+  })
+
   it('одно соединение, перешедшее к другому игроку, не оставляет прежнего «в сети»', async () => {
     const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
     const host = client(s), walker = client(s)

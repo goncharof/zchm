@@ -20,6 +20,8 @@ export interface Player {
   id: string
   name: string
   token: string
+  /** токены других устройств игрока (вход по имени), последние три — прежние устройства не теряют игрока */
+  deviceTokens?: string[]
   isHost: boolean
   heroUids: string[]
   sockets: Set<string>
@@ -143,7 +145,7 @@ export class Room {
     return p
   }
   playerByToken(token: string): Player | undefined {
-    return [...this.players.values()].find((p) => p.token === token)
+    return [...this.players.values()].find((p) => p.token === token || !!p.deviceTokens?.includes(token))
   }
   heroOwned(heroUid: string): boolean {
     return [...this.players.values()].some((p) => p.heroUids.includes(heroUid))
