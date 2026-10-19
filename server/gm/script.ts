@@ -153,6 +153,7 @@ function spellReply(room: Room, spell: NonNullable<GmEvent['spell']>): string {
     })
     return [`${spell.hero} читает силу противников:`, ...lines].join('\n')
   }
+  if (spell.id === 'mage-nevidimost' || spell.id === 'priest-otvorot-mertvetsov') return `«${spell.name}» действует до ближайшего боя — там движок учтёт его сам. Удастся ли обойти встречу, решите по тексту книги (сценарный ведущий этого не решает).`
   return `«${spell.name}»: сценарный ведущий такие заклинания не отыгрывает — исход решите сами по описанию заклинания (ИИ-ведущий, когда он доступен, разыграет его по тексту книги).`
 }
 

@@ -55,11 +55,12 @@ export function resolveCost(spell: Spell, hero: Hero, param?: number): number {
 }
 
 /** Заклинания, которые имеют смысл вне боя. Усиления и защиты отмеряют раунды боя («лишь во время боя», «в мирное время…
- *  ни к чему не приведет»): вне боя их время не идёт, и наложенные заранее не кончались бы. Исключения — «Удача» и «Молитва»,
- *  они ждут следующего броска */
+ *  ни к чему не приведет»): вне боя их время не идёт, и наложенные заранее не кончались бы. Исключения — «Удача» и «Молитва»
+ *  (ждут следующего броска), «Невидимость» и «Отворот мертвецов» — ими как раз избегают боя: держатся до ближайшей схватки,
+ *  там отсчитывают свои раунды и снимаются после неё */
 export function usableOutOfCombat(spell: Spell): boolean {
   const e = spell.effect
-  if (e.type === 'ward') return e.kind === 'luck' || e.kind === 'prayer'
+  if (e.type === 'ward') return e.kind === 'luck' || e.kind === 'prayer' || e.kind === 'invisible' || e.kind === 'undead'
   if (spell.id === DRAGON) return true
   return ['heal', 'restore-all', 'cure', 'resurrect', 'identify', 'create-bottle', 'duplicate-bottle', 'restore-mana', 'initiative', 'manual'].includes(e.type)
 }

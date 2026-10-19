@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { idx } from '@/data'
 import { createHero, gainXp, heroDefense } from '@/engine/character'
-import { alliesTurn, makeAlly, monsterAttack, monstersTurn, startCombat } from '@/engine/combat'
+import { alliesTurn, cleanupAfterCombat, makeAlly, monsterAttack, monstersTurn, startCombat } from '@/engine/combat'
 import { canCast, castSpell } from '@/engine/spells'
 import { seededRng, setRng } from '@/engine/dice'
 import type { Hero } from '@/engine/model'
@@ -26,6 +26,18 @@ describe('аудит заклинаний героев', () => {
     expect(m.buffs).toEqual([])
     const p = caster('priest', 60000, 'priest-udacha')
     expect(cast(p, 'priest-udacha').ok).toBe(true)
+  })
+
+  it('«Невидимость» вне боя держится до ближайшей схватки и снимается после неё', () => {
+    const m = caster('mage', 6000, 'mage-nevidimost')
+    expect(cast(m, 'mage-nevidimost', { targetHeroUid: m.uid }).ok).toBe(true)
+    expect(m.buffs.some((b) => b.ward === 'invisible')).toBe(true)
+    const { state } = startCombat([{ monsterId: 'ork', count: 1 }], idx)
+    state.phase = 'melee'; state.turn = 'monsters'
+    monstersTurn(state, [m], idx)
+    expect(m.lives).toBe(m.maxLives)
+    cleanupAfterCombat([m])
+    expect(m.buffs.some((b) => b.ward === 'invisible')).toBe(false)
   })
 
   it('повторная «Сила» обновляет действие, а не складывается; «Слабость» дважды — атаки вдвое один раз', () => {
