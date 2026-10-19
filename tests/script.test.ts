@@ -39,6 +39,16 @@ async function setup() {
   return { s, c, j, chat, get state() { return state! } }
 }
 const lastGm = (chat: ChatMessage[]) => [...chat].reverse().find((m) => m.from === 'gm')!
+/** выиграть начатый бой и закончить его: ведущий предлагает исходы по книге */
+async function winFight(g: { s: GameServer; j: { code: string }; c: NetClient; chat: ChatMessage[]; state: GameState }) {
+  await until(() => !!g.state.combat)
+  const room = (await g.s.store.get(g.j.code))!
+  for (const m of room.state.combat!.monsters) m.dead = true
+  checkEnd(room.state.combat!, room.state.heroes)
+  await g.c.call('endCombat', [])
+  await until(() => lastGm(g.chat).text.includes('Что дальше по книге'))
+  return lastGm(g.chat)
+}
 /** партия на нужном узле карты (войти можно только туда, где она стоит) */
 async function goTo(g: { s: GameServer; j: { code: string } }, nodeId: string) { (await g.s.store.get(g.j.code))!.state.worldNodeId = nodeId }
 
@@ -167,7 +177,10 @@ describe('сценарный ведущий', () => {
     await g.c.chat('31', true)
     await until(() => /помещение 31/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
-    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '▸ Если убиваете дракона')!.id)
+    expect(scene.choices!.map((c) => c.label)).not.toContain('▸ Если убиваете дракона')
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label.startsWith('⚔ Бой:'))!.id)
+    const after = await winFight(g)
+    await g.c.choose(after.id, after.choices!.find((c) => c.label === '▸ Если убиваете дракона')!.id)
     await until(() => /Минотавр требует/.test(lastGm(g.chat).text))
     expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('⚔ Бой: Минотавр')
   })
@@ -178,12 +191,27 @@ describe('сценарный ведущий', () => {
     await g.c.chat('24', true)
     await until(() => /помещение 24/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
-    expect(scene.choices!.some((c) => c.label === '⚔ Бой: Драконид')).toBe(true)
-    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '▸ Если убиваете драконида')!.id)
+    expect(scene.choices!.some((c) => c.label === '▸ Если убиваете драконида')).toBe(false)
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '⚔ Бой: Драконид')!.id)
+    const after = await winFight(g)
+    await g.c.choose(after.id, after.choices!.find((c) => c.label === '▸ Если убиваете драконида')!.id)
     await until(() => /Короля Золотого города/i.test(lastGm(g.chat).text))
     const labels = lastGm(g.chat).choices!.map((c) => c.label)
     expect(labels.some((l) => l.startsWith('⚔'))).toBe(false)
     expect(labels).toContain('Взять бутылку (6)')
+  })
+
+  it('исходы боя и проверки удачи не видны до боя и броска: их текст и награды не взять заранее', async () => {
+    const g = await setup()
+    await g.c.call('enterLocation', ['zolotoy-gorod'])
+    await g.c.chat('2', true)
+    await until(() => /помещение 2\b/.test(lastGm(g.chat)?.text ?? ''))
+    const scene = lastGm(g.chat)
+    const labels = scene.choices!.map((c) => c.label)
+    expect(labels).toContain('▸ Если вы решили помочь стражникам, бросьте кубик')
+    expect(labels).not.toContain('▸ Если вы выходите из схватки победителем')
+    expect(labels).not.toContain('▸ Если лестница не откинута')
+    expect(scene.text).not.toContain('по бутылке (5)')
   })
 
   it('одинаковые бутылки в сцене берутся одной кнопкой', async () => {

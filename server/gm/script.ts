@@ -198,9 +198,14 @@ export class ScriptedGm {
     const scene = segs.filter((g) => g.kind === 'scene')
     const sceneText = scene.flatMap((g) => g.blocks.map(blockText)).join('\n')
     const offers: Offer[] = []
+    // исходы боя и проверки удачи («Если выигрываете», «Если лестница не откинута») появляются после боя или броска,
+    // иначе их текст и награды открыты заранее; без кнопки боя или проверки в параграфе ветка остаётся вариантом
+    const canFight = segs.some((g) => (g.hints?.monsters ?? []).some((m) => !idx.monsterById.get(m)?.special))
+    const canLuck = segs.some((g) => (g.hints?.luck ?? []).length > 0)
+    const later = (g: ParagraphSegment) => (g.when === 'win' || g.when === 'lose' ? canFight : !!g.when && canLuck)
     segs.forEach((g, i) => {
       if (g.kind === 'scene') offers.push(...fresh(room, [...hintOffers(g.hints, { loc: loc.id, n, seg: i }, 's', g.blocks.map(blockText).join('\n')), ...rollOffers(g.blocks, loc.id, n, i)]))
-      else if (!g.blocks.length) return
+      else if (!g.blocks.length || later(g)) return
       else offers.push({ label: `▸ ${g.label}`, action: { t: 'branch', loc: loc.id, n, seg: i } })
     })
     const notes = segs.filter((g) => g.kind === 'branch' && !g.blocks.length).map((g) => g.label)
@@ -223,7 +228,9 @@ export class ScriptedGm {
         room.script = { ...room.script, locationId: loc?.id ?? null, n: null }
         this.say(room, `Вы входите: «${loc?.name ?? ''}». Назовите номер помещения или нажмите его на плане.`)
       } else if (ev.type === 'combatEnd') {
-        const f = room.script.fight
+        // бой начат не кнопкой ведущего (экран боя) — исходы берутся из параграфа, где стоит партия
+        const here = room.script.locationId && room.script.n != null ? { loc: room.script.locationId, n: room.script.n } : undefined
+        const f = room.script.fight ?? here
         delete room.script.fight
         const offers = f && ev.outcome ? outcomeOffers(f.loc, f.n, ev.outcome === 'victory' ? 'win' : 'lose') : []
         if (offers.length) this.say(room, `${ev.text} Что дальше по книге:`, [...offers, { label: 'Идти дальше', action: { t: 'next' } }])
