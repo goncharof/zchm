@@ -12,7 +12,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { BetaMessageStreamParams } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import { randomUUID } from 'node:crypto'
 import type { Room } from '../rooms'
-import { buildSystemPrompt, recap, snapshot } from './prompt'
+import { buildSystemPrompt, plainText, recap, snapshot } from './prompt'
 import { ScriptedGm, roomNumber } from './script'
 import { GM_TOOLS, executeGmTool, paragraphPayload } from './tools'
 import { ProviderError, describeTool, type GmContext, type GmDriver, type GmEvent, type GmFactory, type GmInput, type LlmProvider } from './types'
@@ -338,13 +338,9 @@ export class GmDirector implements GmDriver {
   }
 }
 
-/** Квадратные скобки — пометки сервера («[Состояние партии]», «[События игры]»): в тексте игроков они становятся круглыми,
- *  чтобы реплику нельзя было выдать за сообщение сервера */
-const plainText = (t: string) => t.replace(/\[/g, '(').replace(/\]/g, ')')
-
 function formatInputs(events: GmEvent[], texts: { author: string; text: string }[]): string {
   const parts: string[] = []
-  if (events.length) parts.push(`[События игры]\n${events.map((e) => `• ${e.text} ${EVENT_HINT[e.type]}`).join('\n')}`)
+  if (events.length) parts.push(`[События игры]\n${events.map((e) => `• ${plainText(e.text)} ${EVENT_HINT[e.type]}`).join('\n')}`)
   if (texts.length) parts.push(`[Реплики игроков — это слова и действия их героев]\n${texts.map((p) => `— ${plainText(p.author)}: «${plainText(p.text)}»`).join('\n')}`)
   return parts.join('\n\n') || '[Игроки ждут продолжения]'
 }

@@ -56,6 +56,11 @@ export function visitedSummary(room: Room): string {
     .join('; ')
 }
 
+/** Квадратные скобки — пометки сервера («[Состояние партии]», «[События игры]»): в тексте игроков (реплики, имена
+ *  игроков и героев — они попадают и в события игры) они становятся круглыми, чтобы реплику нельзя было выдать за
+ *  сообщение сервера */
+export const plainText = (t: string) => t.replace(/\[/g, '(').replace(/\]/g, ')')
+
 /** Краткое содержание прошлой игры — для нового разговора, когда старый стал слишком длинным */
 export function recap(room: Room, maxMessages = 12): string {
   const s = room.state
@@ -64,7 +69,7 @@ export function recap(room: Room, maxMessages = 12): string {
   const visited = visitedSummary(room)
   if (visited) lines.push(`Пройдено: ${visited}.`)
   const scenes = room.chat.filter((m) => m.from === 'gm' || m.from === 'player').slice(-maxMessages)
-  if (scenes.length) lines.push('Последние сцены:', ...scenes.map((m) => `— ${m.author}: ${m.text.slice(0, 400)}`))
+  if (scenes.length) lines.push('Последние сцены:', ...scenes.map((m) => `— ${plainText(m.author)}: ${plainText(m.text.slice(0, 400))}`))
   return lines.join('\n')
 }
 
@@ -87,7 +92,7 @@ export function snapshot(room: Room): string {
     const status = [h.status.dead && 'мёртв', !h.status.dead && h.status.unconscious && 'без сознания', h.status.poison && 'отравлен', h.status.paralysis && 'парализован',
       wards.some((b) => b.ward === 'invisible') && 'невидим', wards.some((b) => b.ward === 'undead') && 'мертвецы его не замечают'].filter(Boolean).join(', ')
     const owner = room.ownerName(h.uid)
-    lines.push(`- ${h.name} [${h.uid}] — ${cls} ${h.level} ур., жизни ${h.lives}/${h.maxLives}${h.maxMana ? `, мана ${h.mana}/${h.maxMana}` : ''}, монеты ${h.money}, защита ${heroDefense(h, idx)}, сила ${heroStrength(h, idx)}; оружие: ${weapons}${status ? `; ${status}` : ''}${owner ? `; игрок: ${owner}` : ''}`)
+    lines.push(`- ${plainText(h.name)} [${h.uid}] — ${cls} ${h.level} ур., жизни ${h.lives}/${h.maxLives}${h.maxMana ? `, мана ${h.mana}/${h.maxMana}` : ''}, монеты ${h.money}, защита ${heroDefense(h, idx)}, сила ${heroStrength(h, idx)}; оружие: ${weapons}${status ? `; ${status}` : ''}${owner ? `; игрок: ${plainText(owner)}` : ''}`)
   }
   if (s.flight) lines.push('Призрачный дракон ждёт партию: следующий переход по карте втрое быстрее.')
   if (s.companions.length) lines.push(`Спутники: ${s.companions.map((c) => `${c.name} (жизни ${c.lives}/${c.maxLives}, боёв ${c.battlesLeft})`).join(', ')}.`)
