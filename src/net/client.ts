@@ -145,13 +145,34 @@ export class NetClient {
     return a.result as T
   }
 
+  /** Связь для первого входа: сервер не отвечает — отказ за несколько секунд, а не после 15-секундного ожидания ответа */
+  private reachServer(ms = 4000): Promise<void> {
+    if (this.socket.connected) return Promise.resolve()
+    return new Promise((resolve, reject) => {
+      const done = (err?: string) => {
+        clearTimeout(timer)
+        this.socket.off('connect', onConnect)
+        this.socket.off('connect_error', onError)
+        if (err) reject(Object.assign(new Error(err), { name: 'GameError' }))
+        else resolve()
+      }
+      const onConnect = () => done()
+      const onError = () => done('Сервер игры недоступен — проверьте адрес или запустите сервер')
+      const timer = setTimeout(() => done('Сервер игры не отвечает'), ms)
+      this.socket.on('connect', onConnect)
+      this.socket.on('connect_error', onError)
+    })
+  }
+
   async create(name: string, gm: GmMode, state?: GameState): Promise<Joined> {
+    await this.reachServer()
     const j = this.unwrap(await this.ask(this.socket.timeout(TIMEOUT_MS).emitWithAck('room:create', { name, gm, state }))) as Joined
     this.joined = { code: j.code, token: j.token, name }
     saveSession(this.joined)
     return j
   }
   async join(code: string, name: string, token?: string): Promise<Joined> {
+    await this.reachServer()
     const a = await this.joinRaw(code, name, token)
     // комнаты больше нет — забыть сохранённый вход, чтобы обновление страницы не пыталось снова
     if (!a.ok && /не найдена/.test(a.error ?? '')) saveSession(null)

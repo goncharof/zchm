@@ -54,12 +54,12 @@ function copyLink() {
             <option v-for="(label, k) in GM_LABEL" :key="k" :value="k">{{ label }}</option>
           </select>
           <label v-if="store.started" class="row small" style="gap:.3rem"><input type="checkbox" v-model="withParty" /> взять текущую партию</label>
-          <button class="primary" :disabled="store.connecting" @click="create">Создать комнату</button>
+          <button class="primary" :disabled="store.connecting" @click="create">{{ store.connecting ? 'Подключаемся…' : 'Создать комнату' }}</button>
         </div>
         <div class="card tight">
           <h3>Войти по коду</h3>
           <input v-model="code" maxlength="8" placeholder="Код комнаты" style="text-transform:uppercase;width:100%;margin-bottom:.4rem" @keyup.enter="join" />
-          <button :disabled="store.connecting" @click="join">Войти</button>
+          <button :disabled="store.connecting" @click="join">{{ store.connecting ? 'Подключаемся…' : 'Войти' }}</button>
         </div>
       </div>
       <p class="small muted" style="margin-top:.4rem">ИИ-ведущий использует бесплатные облачные модели, настроенные на сервере (или Claude по ключу). Если ни одна не отвечает, ход ведёт сценарный ведущий по Книге Жизни — с кнопками вариантов.</p>
