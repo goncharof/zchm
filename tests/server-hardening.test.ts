@@ -7,7 +7,7 @@ import { NetClient } from '@/net/client'
 import { GameSession, blankGame } from '@/game/session'
 import { createGameServer, type GameServer } from '../server/app'
 import { aiGmFactory } from '../server/gm/ai'
-import { executeGmTool } from '../server/gm/tools'
+import { changeBudget, executeGmTool } from '../server/gm/tools'
 import type { LlmProvider } from '../server/gm/types'
 
 const W = world as unknown as WorldMap
@@ -104,14 +104,31 @@ describe('сервер в интернете', () => {
     expect(g.state.log.at(-1)!.text.length).toBe(500)
   })
 
-  it('за один ход модель меняет игру не больше 8 раз', async () => {
+  it('изменений игры за ход — не больше бюджета; неудачные вызовы его не тратят', async () => {
     const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
     const c = client(s)
     const { code } = await c.c.create('Ира', 'ai')
     await c.c.call('quickStart', [])
     const room = (await s.store.get(code))!
     room.gmChanges = 0
-    const results = Array.from({ length: 10 }, () => executeGmTool(room, 'change_money', { hero: room.state.heroes[0].name, delta: 10 }))
-    expect(results.filter((r) => !r.isError)).toHaveLength(8)
+    const budget = changeBudget(room)
+    expect(budget).toBe(Math.max(8, 3 * room.state.heroes.length))
+    // опечатка в имени героя бюджет не тратит
+    expect(executeGmTool(room, 'change_money', { hero: 'Нектоневедомый', delta: 10 }).isError).toBe(true)
+    const results = Array.from({ length: budget + 2 }, () => executeGmTool(room, 'change_money', { hero: room.state.heroes[0].name, delta: 10 }))
+    expect(results.filter((r) => !r.isError)).toHaveLength(budget)
+    expect(results.at(-1)!.content).toMatch(/Слишком много изменений/)
+  })
+
+  it('партия из шести героев: каждый теряет жизнь и получает монеты за один ход', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
+    const c = client(s)
+    const { code } = await c.c.create('Ира', 'ai')
+    await c.c.call('quickStart', [])
+    const room = (await s.store.get(code))!
+    while (room.state.heroes.length < 6) room.state.heroes.push({ ...structuredClone(room.state.heroes[0]), uid: `x${room.state.heroes.length}`, name: `Герой${room.state.heroes.length}` })
+    room.gmChanges = 0
+    const out = room.state.heroes.flatMap((h) => [executeGmTool(room, 'change_lives', { hero: h.name, delta: -1 }), executeGmTool(room, 'change_money', { hero: h.name, delta: 25 })])
+    expect(out.filter((r) => r.isError)).toEqual([])
   })
 })

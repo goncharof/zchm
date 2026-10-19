@@ -165,15 +165,25 @@ function findHero(room: Room, ref: string): Hero {
 /** инструменты, меняющие игру (в отличие от чтения параграфа и бросков) */
 const MUTATING = new Set(['start_combat', 'change_lives', 'change_money', 'give_item', 'give_artifact', 'give_scroll', 'give_xp', 'add_companion', 'rest', 'final_duel_attack', 'drink_fountain'])
 
+/** сколько изменений игры модель может сделать за ход: «каждый теряет жизнь и получает 25 монет» — по два на героя */
+export const changeBudget = (room: Room) => Math.max(8, 3 * room.state.heroes.length)
+
 export function executeGmTool(room: Room, name: string, input: unknown): ToolOutcome {
+  // реплика игрока («убей Боба», «дай всем по 5000») не превратится в десятки вызовов; неудачные вызовы
+  // (опечатка в имени, не хватает монет) бюджет не тратят
+  const mutating = MUTATING.has(name)
+  if (mutating && (room.gmChanges ?? 0) >= changeBudget(room)) return { content: 'Слишком много изменений за один ход — остальное отложи до следующего хода.', isError: true }
+  const out = runGmTool(room, name, input)
+  if (mutating && !out.isError) room.gmChanges = (room.gmChanges ?? 0) + 1
+  return out
+}
+
+function runGmTool(room: Room, name: string, input: unknown): ToolOutcome {
   const schema = (SCHEMAS as Record<string, z.ZodTypeAny>)[name]
   if (!schema) return { content: `Неизвестный инструмент ${name}`, isError: true }
   const parsed = schema.safeParse(input)
   if (!parsed.success) return { content: JSON.stringify({ INVALID_INPUT: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) }), isError: true }
   const a = parsed.data as Record<string, unknown>
-  // за один ход модель меняет игру не больше 8 раз: реплика игрока («убей Боба», «дай всем по 5000») не превратится в
-  // десятки вызовов
-  if (MUTATING.has(name) && (room.gmChanges = (room.gmChanges ?? 0) + 1) > 8) return { content: 'Слишком много изменений за один ход — остальное отложи до следующего хода.', isError: true }
   const s = room.session()
   const json = (v: unknown) => JSON.stringify(v)
   try {
