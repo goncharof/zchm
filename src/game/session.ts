@@ -327,7 +327,12 @@ export class GameSession {
   }
 
   // ---------- трактир ----------
+  /** Путь, отдых и переход в другую локацию — не посреди боя (команды приходят и по сети) */
+  private noFight(): void {
+    if (this.combat && !this.combat.finished) throw new GameError('Сначала закончите бой')
+  }
   restAll(days: number): void {
+    this.noFight()
     const d = Math.floor(Number(days))
     days = Number.isFinite(d) ? Math.max(1, Math.min(30, d)) : 1
     for (const h of this.heroes) {
@@ -343,9 +348,12 @@ export class GameSession {
   // ---------- мир и локации ----------
   travelTo(nodeId: string): void {
     if (!this.world || !this.state.worldNodeId) throw new GameError('Карта мира не загружена')
+    this.noFight()
     const route = shortestRoute(this.world, this.state.worldNodeId, nodeId)
     if (!route) throw new GameError('Туда нет дороги')
-    const allMounted = this.heroes.length > 0 && this.heroes.every((h) => h.inventory.some((e) => e.kind === 'item' && e.ref === 'kon'))
+    // верхом — если конь есть у каждого живого (погибших везут)
+    const living = this.heroes.filter((h) => !h.status.dead)
+    const allMounted = living.length > 0 && living.every((h) => h.inventory.some((e) => e.kind === 'item' && e.ref === 'kon'))
     const days = allMounted ? Math.ceil(route.days / 2) : route.days
     const road = idx.locationById.get('doroga')
     const encounters = rollRoadEncounters(days, road ? road.paragraphs.map((p) => p.n) : [])
@@ -359,6 +367,7 @@ export class GameSession {
   }
   enterLocation(locationId: string): void {
     if (!idx.locationById.has(locationId)) throw new GameError('Нет такой локации')
+    this.noFight()
     // войти можно туда, где стоит партия на карте (ведущий в одиночной игре — куда угодно)
     if (this.world && this.state.worldNodeId && !this.state.gmMode) {
       const node = this.world.nodes.find((n) => n.id === this.state.worldNodeId)

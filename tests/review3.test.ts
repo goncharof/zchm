@@ -142,6 +142,21 @@ describe('третье ревью', () => {
     expect(p.xp).toBe(0)
   })
 
+  it('посреди боя не уйти в путь и не отдохнуть; погибший без коня не мешает ехать верхом', () => {
+    const s = new GameSession(blankGame(), W)
+    const a = s.addHero('Воин', 'warrior')
+    const d = s.addHero('Вор', 'thief')
+    s.startEncounter([{ monsterId: 'ork', count: 1 }])
+    const far = W.nodes.find((n) => n.id !== 'zolotoy-gorod' && n.locationId)!
+    expect(() => s.travelTo(far.id)).toThrow(/закончите бой/)
+    expect(() => s.restAll(1)).toThrow(/закончите бой/)
+    s.abortCombat()
+    s.giveItem(a.uid, 'item', 'kon')
+    d.lives = -10; d.status.dead = true
+    s.travelTo(far.id)
+    expect(s.state.log.at(-1)!.text).toContain('верхом')
+  })
+
   it('больше шести героев не добавить и по сети', () => {
     const s = new GameSession(blankGame(), W)
     s.setAllowDuplicateClasses(true)
