@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { gameData } from '@/data'
 import type { EncounterSpec } from '@/engine/combat'
+import { onEscape } from '@/ui/escape'
 
 const emit = defineEmits<{ start: [specs: EncounterSpec[]]; close: [] }>()
 const q = ref('')
@@ -14,16 +15,20 @@ const specs = computed<EncounterSpec[]>(() => Object.entries(picked.value).filte
 function add(id: string, d: number) {
   picked.value[id] = Math.max(0, (picked.value[id] ?? 0) + d)
 }
+// окно: Esc закрывает, курсор сразу в поиске (не на телефоне — там всплывёт клавиатура)
+const search = ref<HTMLInputElement | null>(null)
+onEscape(() => emit('close'))
+onMounted(() => { if (!window.matchMedia?.('(pointer: coarse)').matches) search.value?.focus() })
 </script>
 
 <template>
   <div class="modal-back" @click.self="emit('close')">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Выбор противников">
       <div class="row between">
         <h3>Выбор противников</h3>
         <button class="small" @click="emit('close')">Закрыть</button>
       </div>
-      <input v-model="q" placeholder="Поиск по бестиарию…" style="width: 100%; margin: .5rem 0" />
+      <input ref="search" v-model="q" placeholder="Поиск по бестиарию…" aria-label="Поиск по бестиарию" style="width: 100%; margin: .5rem 0" />
       <div class="pick-list">
         <div v-for="m in list" :key="m.id" class="pick-row" :class="{ picked: (picked[m.id] ?? 0) > 0 }">
           <div class="pick-name"><b>{{ m.name }}</b>

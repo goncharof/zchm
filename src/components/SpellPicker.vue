@@ -3,10 +3,12 @@ import { computed } from 'vue'
 import { gameData, idx } from '@/data'
 import type { Hero } from '@/engine/model'
 import { useGameStore } from '@/stores/game'
+import { onEscape } from '@/ui/escape'
 
 const props = defineProps<{ hero: Hero }>()
 const emit = defineEmits<{ close: [] }>()
 const store = useGameStore()
+onEscape(() => emit('close'))
 const caster = computed(() => idx.cls(props.hero.classId).caster)
 const options = computed(() => gameData.spells.filter((s) => s.caster === caster.value && s.level <= props.hero.level && !props.hero.spellbook.includes(s.id)))
 function pick(id: string) {
@@ -17,7 +19,7 @@ function pick(id: string) {
 
 <template>
   <div class="modal-back" @click.self="emit('close')">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" :aria-label="`${hero.name}: новое заклинание`">
       <div class="row between">
         <h3>{{ hero.name }}: новое заклинание (осталось выборов: {{ hero.pendingSpellPicks }})</h3>
         <button class="small" @click="emit('close')">Позже</button>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { gameData } from '@/data'
 import type { Monster } from '@/types'
+import { onEscape } from '@/ui/escape'
 import { attacksStr } from '@/ui/format'
 
 const q = ref('')
@@ -11,9 +12,7 @@ const RANGES: Record<string, [number, number]> = { '1-2': [1, 2], '3-5': [3, 5],
 const open = ref<Monster | null>(null)
 const base = import.meta.env.BASE_URL
 // Esc закрывает карточку монстра
-const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') open.value = null }
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onEscape(() => { open.value = null })
 const list = computed(() => {
   const s = q.value.trim().toLowerCase()
   const out = gameData.bestiary.filter((m) => {
@@ -35,7 +34,7 @@ const EXTRA: Record<string, string> = { petrify: 'окаменение', freeze:
   <div class="row between" style="margin-bottom:.6rem">
     <h1>Бестиарий <span class="badge">{{ list.length }} из {{ gameData.bestiary.length }}</span></h1>
     <div class="row">
-      <input v-model="q" placeholder="Поиск…" />
+      <input v-model="q" placeholder="Поиск…" aria-label="Поиск по бестиарию" />
       <select v-model="level"><option value="all">все уровни</option><option value="1-2">1–2</option><option value="3-5">3–5</option><option value="6-9">6–9</option><option value="10-12">10–12</option><option value="npc">персонажи</option></select>
       <select v-model="sort"><option value="name">по имени</option><option value="level">по уровню</option></select>
     </div>
@@ -49,7 +48,7 @@ const EXTRA: Record<string, string> = { petrify: 'окаменение', freeze:
     </div>
   </div>
   <div v-if="open" class="modal-back" @click.self="open = null">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" :aria-label="open.name">
       <div class="row between"><h2>{{ open.name }}</h2><button class="small" @click="open = null">Закрыть</button></div>
       <div class="monster-detail">
         <img :src="base + open.image" :alt="open.name" />
