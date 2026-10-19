@@ -354,7 +354,10 @@ export class GameSession {
     // верхом — если конь есть у каждого живого (погибших везут)
     const living = this.heroes.filter((h) => !h.status.dead)
     const allMounted = living.length > 0 && living.every((h) => h.inventory.some((e) => e.kind === 'item' && e.ref === 'kon'))
-    const days = allMounted ? Math.ceil(route.days / 2) : route.days
+    // призрачный дракон несёт всю партию: три клетки за день (стр. 39), на один переход
+    const flying = !!this.state.flight
+    const days = flying ? Math.ceil(route.days / 3) : allMounted ? Math.ceil(route.days / 2) : route.days
+    delete this.state.flight
     const road = idx.locationById.get('doroga')
     const encounters = rollRoadEncounters(days, road ? road.paragraphs.map((p) => p.n) : [])
     this.state.day += days
@@ -363,7 +366,7 @@ export class GameSession {
     this.state.pendingRoad.push(...encounters)
     const target = this.world.nodes.find((n) => n.id === nodeId)
     const legs = route.nodes.length - 1
-    this.log(`Переход: ${legs} ${plural(legs, 'участок', 'участка', 'участков')} дороги, ${days} ${plural(days, 'день', 'дня', 'дней')} пути${allMounted ? ' верхом' : ''}. Прибытие — ${target?.name ?? nodeId}, день ${this.state.day}.${encounters.length ? ` В пути ${plural(encounters.length, 'случилась', 'случились', 'случилось')} ${encounters.length} ${plural(encounters.length, 'встреча', 'встречи', 'встреч')}: «Дорога», ${encounters.map((n) => `§ ${n}`).join(', ')}.` : ''}`)
+    this.log(`Переход: ${legs} ${plural(legs, 'участок', 'участка', 'участков')} дороги, ${days} ${plural(days, 'день', 'дня', 'дней')} пути${flying ? ' на призрачном драконе' : allMounted ? ' верхом' : ''}. Прибытие — ${target?.name ?? nodeId}, день ${this.state.day}.${encounters.length ? ` В пути ${plural(encounters.length, 'случилась', 'случились', 'случилось')} ${encounters.length} ${plural(encounters.length, 'встреча', 'встречи', 'встреч')}: «Дорога», ${encounters.map((n) => `§ ${n}`).join(', ')}.` : ''}`)
   }
   enterLocation(locationId: string): void {
     if (!idx.locationById.has(locationId)) throw new GameError('Нет такой локации')
@@ -612,9 +615,10 @@ export class GameSession {
     // из присланного по сети — только цели и параметр: герой, партия и бой берутся из состояния, а не из запроса
     const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
     const res = castSpell({
-      hero: h, spell: idx.spell(spellId), idx, heroes: this.heroes, combat: this.combat, fromScroll: !!scroll,
+      hero: h, spell: idx.spell(spellId), idx, heroes: this.heroes, combat: this.combat, fromScroll: !!scroll, flightReady: !!this.state.flight,
       targetUid: str(opts.targetUid), targetHeroUid: str(opts.targetHeroUid), targetEntryUid: str(opts.targetEntryUid), param: opts.param,
     })
+    if (res.ok && res.flight) this.state.flight = h.uid
     if (res.ok && scroll) {
       inv.removeFromInventory(h, scroll.uid, 1)
       res.log.push({ t: Date.now(), text: 'Свиток рассыпается в холодном белом огне.', kind: 'spell' })

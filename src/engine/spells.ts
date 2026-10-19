@@ -24,6 +24,8 @@ export interface CastInput {
   param?: number
   /** читается по свитку (стр. 21): заклинания нет в книге, постоянная цена в мане не нужна; свиток убирает сессия */
   fromScroll?: boolean
+  /** призрачный дракон для перелёта уже вызван (сессия) */
+  flightReady?: boolean
 }
 
 export interface CastResult {
@@ -34,6 +36,8 @@ export interface CastResult {
   damage: number
   levelUps: LevelUp[]
   escaped?: boolean
+  /** «Призрачный дракон» вне боя: следующий переход партия пролетает втрое быстрее (сессия запоминает) */
+  flight?: boolean
 }
 
 const L = (hero: Hero) => Math.max(1, hero.level)
@@ -56,6 +60,7 @@ export function resolveCost(spell: Spell, hero: Hero, param?: number): number {
 export function usableOutOfCombat(spell: Spell): boolean {
   const e = spell.effect
   if (e.type === 'ward') return e.kind === 'luck' || e.kind === 'prayer'
+  if (spell.id === DRAGON) return true
   return ['heal', 'restore-all', 'cure', 'resurrect', 'identify', 'create-bottle', 'duplicate-bottle', 'restore-mana', 'initiative', 'manual'].includes(e.type)
 }
 
@@ -64,6 +69,8 @@ export function needsMonsterTarget(spell: Spell): boolean {
   return (e.type === 'damage' && e.targets === 'one') || (e.type === 'debuff' && e.scope === 'one') || (e.type === 'control' && e.targets === 'one') || e.type === 'drain-mana' || spell.id === BOULDERS
 }
 
+/** «Призрачный дракон»: вне боя — перелёт (три клетки за день, стр. 39), в бою — союзник */
+const DRAGON = 'mage-prizrachnyy-drakon'
 /** «Валуны»: до 8 уровня — один валун, с 8 — два, с 10 — три (первый — в выбранную цель) */
 const BOULDERS = 'mage-valuny'
 const boulderCount = (level: number) => (level >= 10 ? 3 : level >= 8 ? 2 : 1)
@@ -542,6 +549,14 @@ export function castSpell(input: CastInput): CastResult {
       break
     }
     case 'summon': {
+      if (spell.id === DRAGON && !combat) {
+        spend()
+        // дракон уже ждёт — второй не нужен, опыта нет (иначе вызов между отдыхами стал бы фермой опыта)
+        if (input.flightReady) effective = false
+        res.flight = true
+        log(entries, `${hero.name} вызывает призрачного дракона: следующий переход партия пролетит втрое быстрее (три клетки за день).`)
+        break
+      }
       if (needCombat()) return res
       if (effect.kind === 'zombie' && !combat!.monsters.some((m) => m.dead && !m.raised)) return fail('Нужен мертвец: сначала одолейте кого-нибудь')
       spend()

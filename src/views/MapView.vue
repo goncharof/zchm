@@ -17,7 +17,9 @@ const mounted = computed(() => {
   const living = store.heroes.filter((h) => !h.status.dead)
   return living.length > 0 && living.every((h) => h.inventory.some((e) => e.kind === 'item' && e.ref === 'kon'))
 })
-const days = computed(() => (route.value ? (mounted.value ? Math.ceil(route.value.days / 2) : route.value.days) : 0))
+const flying = computed(() => !!store.game?.flight)
+const days = computed(() => (route.value ? (flying.value ? Math.ceil(route.value.days / 3) : mounted.value ? Math.ceil(route.value.days / 2) : route.value.days) : 0))
+const how = computed(() => (flying.value ? 'на драконе' : mounted.value ? 'верхом' : ''))
 const current = computed(() => store.worldNode)
 
 const routeSegments = computed(() => {
@@ -83,9 +85,9 @@ function enter(locationId: string) {
       </div>
       <div class="card map-route-card" v-if="selected && selected.id !== current?.id">
         <h3>{{ selected.name }}</h3>
-        <p v-if="route">Путь: {{ route.nodes.length - 1 }} {{ plural(route.nodes.length - 1, 'участок', 'участка', 'участков') }} дороги, <b>{{ days }} {{ plural(days, 'день', 'дня', 'дней') }}</b><span v-if="mounted"> (верхом)</span>.</p>
+        <p v-if="route">Путь: {{ route.nodes.length - 1 }} {{ plural(route.nodes.length - 1, 'участок', 'участка', 'участков') }} дороги, <b>{{ days }} {{ plural(days, 'день', 'дня', 'дней') }}</b><span v-if="how"> ({{ how }})</span>.</p>
         <p v-else class="muted">Дороги туда нет.</p>
-        <p class="small muted">Перемещаться можно только по дорогам, 1 клетка в день (верхом — 2). За каждый день пути возможна случайная встреча.</p>
+        <p class="small muted">Перемещаться можно только по дорогам, 1 клетка в день (верхом — 2, на призрачном драконе — 3). За каждый день пути возможна случайная встреча.</p>
         <button class="primary" :disabled="!route" @click="go">Отправиться</button>
       </div>
       <div class="card" v-if="store.game?.pendingRoad.length">
@@ -97,7 +99,7 @@ function enter(locationId: string) {
       </div>
       <!-- телефон: выбранный путь — плашкой над нижней панелью -->
       <div v-if="selected && selected.id !== current?.id" class="map-action">
-        <div class="grow"><b>{{ selected.name }}</b><div class="small muted">{{ route ? `${days} ${plural(days, 'день', 'дня', 'дней')} пути${mounted ? ', верхом' : ''}` : 'дороги туда нет' }}</div></div>
+        <div class="grow"><b>{{ selected.name }}</b><div class="small muted">{{ route ? `${days} ${plural(days, 'день', 'дня', 'дней')} пути${how ? `, ${how}` : ''}` : 'дороги туда нет' }}</div></div>
         <button class="ghost icon" aria-label="Отменить выбор" @click="selectedId = null">✕</button>
         <button class="primary" :disabled="!route" @click="go">Отправиться</button>
       </div>

@@ -74,6 +74,27 @@ describe('аудит приключения', () => {
     expect(rollSides([{ values: [1] }, { values: [18] }])).toBe(18)
   })
 
+  it('призрачный дракон несёт партию: следующий переход втрое быстрее, повторный вызов опыта не даёт', () => {
+    const s = new GameSession(blankGame(), W)
+    const m = s.addHero('Маг', 'mage')
+    s.giveXp(m.uid, 100000); s.giveXp(m.uid, 100000)
+    m.spellbook.push('mage-prizrachnyy-drakon'); m.mana = m.maxMana = 100
+    const xp = m.xp
+    expect(s.cast(m.uid, 'mage-prizrachnyy-drakon').ok).toBe(true)
+    expect(s.state.flight).toBe(m.uid)
+    const gained = m.xp - xp
+    expect(gained).toBeGreaterThan(0)
+    s.cast(m.uid, 'mage-prizrachnyy-drakon')
+    expect(m.xp - xp).toBe(gained)
+    const far = W.nodes.find((n) => n.id === 'zamok-chernogo-maga')!
+    const day = s.state.day
+    s.travelTo(far.id)
+    const walked = s.state.log.at(-1)!.text
+    expect(walked).toContain('на призрачном драконе')
+    expect(s.state.flight).toBeUndefined()
+    expect(s.state.day - day).toBeLessThanOrEqual(5)
+  })
+
   it('в зале Чёрного мага ветка «Если попадаете» больше не выдаёт корону и артефакт второй раз', () => {
     const p = idx.locationById.get('zamok-chernogo-maga')!.paragraphs.find((x) => x.n === 13)!
     const branch = p.segments!.find((g) => g.label === 'Если попадаете в Черного мага')!
