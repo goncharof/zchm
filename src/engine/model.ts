@@ -216,6 +216,8 @@ export interface CombatState {
   initiative?: { heroes: number; monsters: number }
   /** откуда начался бой — чтобы вернуться */
   returnTo?: string
+  /** этап Книги Жизни «локация:номер:этап», где начат бой: итог отмечается в state.claimed (src/game/tree.ts) */
+  bookPlace?: string
   finished?: 'victory' | 'fled' | 'defeat'
   /** опыт, начисленный за бой (для сводки) */
   xpEarned: Record<string, number>

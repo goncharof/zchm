@@ -235,6 +235,44 @@ export interface ParagraphSegment {
   when?: 'win' | 'lose' | 'luckOk' | 'luckFail'
 }
 
+/** Когда открывается этап параграфа: enter — вместе с родителем (у корня — при входе), choice — по выбору игроков,
+ *  win/lose/flee — по итогу боя родителя, ok/fail — по проверке удачи родителя, roll — по броску его списка */
+export type NodeOn = 'enter' | 'choice' | 'win' | 'lose' | 'flee' | 'ok' | 'fail' | { roll: number[] }
+
+/** Дословный кусок текста книги; gm — пометка ведущего, игрокам не показывается */
+export interface BookText { t: string; gm?: true }
+
+/** Последствие, которое наступает само, когда этап открыт */
+export type BookEffect =
+  | { lives: number | 'death' | 'half'; who?: 'actor' | 'each' }
+  | { heal: number | 'all'; who?: 'actor' | 'each' }
+  | { xp: number; who?: 'actor' | 'each' }
+  | { coins: number | 'half' | 'all' }
+
+/** Этап параграфа (docs/BOOK_STRUCTURE.md, разделы 3 и 7) */
+export interface BookNode {
+  /** стабильный в параграфе: на него ссылаются отметки прохождения и ключи наград */
+  id: string
+  on: NodeOn
+  /** условие из книги («Если вы его освобождаете») или короткая метка интерфейса («Открыть сундук») */
+  label?: string
+  text: BookText[]
+  /** намёк игрокам, не текст книги: «Похоже, он что-то охраняет» */
+  teaser?: string
+  /** механика: монстры — бой, luck — проверка удачи, находки, цены, таверна, лавка */
+  hints?: ParagraphHints
+  /** предмет, который заменяет проверку удачи («только магическими отмычками или удача — 12») */
+  passWith?: string
+  /** список исходов броска: дети с on.roll; key — место отметки броска (по умолчанию id), repeat — бросают много раз */
+  dice?: { sides: number; key?: string; repeat?: true }
+  effects?: BookEffect[]
+  /** кто здесь, но не враг: торговец, пленник, стражники-союзники (id бестиария или имя) */
+  npcs?: string[]
+  /** выбрали один вариант — остальные закрываются */
+  exclusive?: true
+  then?: BookNode[]
+}
+
 export interface Paragraph {
   n: number
   /** полный текст — только у параграфов без разметки; у размеченных собирается из segments (src/game/book.ts) */
@@ -242,6 +280,8 @@ export interface Paragraph {
   hints?: ParagraphHints
   /** разбиение на сцену и ветки (tools/segment.py); нет — параграф без выборов */
   segments?: ParagraphSegment[]
+  /** дерево этапов, размеченное вручную (tools/book/<локация>.json); остальные получают его из segments на лету */
+  tree?: BookNode
 }
 
 export interface Location {

@@ -2,7 +2,7 @@
  * Текст параграфов Книги Жизни. У размеченных параграфов (сцена и ветки) полного текста в данных нет —
  * он собирается из сегментов, чтобы не хранить книгу дважды.
  */
-import type { Paragraph, ParagraphSegment, SegmentBlock } from '@/types'
+import type { BookNode, Paragraph, ParagraphSegment, SegmentBlock } from '@/types'
 
 /** Текст блока: обычный абзац или список вариантов броска */
 export function blockText(b: SegmentBlock): string {
@@ -19,9 +19,18 @@ export function sceneText(p: Paragraph): string {
   return paragraphSegments(p).filter((g) => g.kind === 'scene').flatMap((g) => g.blocks.map(blockText)).join('\n')
 }
 
+/** Полный текст дерева этапов: «условие — текст», у исходов броска — «выпавшие числа — текст» */
+export function treeText(n: BookNode): string {
+  const body = n.text.map((x) => x.t).join(' ')
+  const head = typeof n.on === 'object' ? n.on.roll.join(', ') : n.label
+  const own = head ? `${head}${body ? ` — ${body}` : ''}` : body
+  return [own, ...(n.then ?? []).map(treeText)].filter(Boolean).join(' ')
+}
+
 /** Полный текст: сцена и ветки в виде «условие — исход» */
 export function paragraphText(p: Paragraph): string {
   if (p.text !== undefined) return p.text
+  if (p.tree) return treeText(p.tree)
   return paragraphSegments(p).map((g) => {
     const body = g.blocks.map(blockText).join(' ')
     return g.kind === 'branch' ? `${g.label}${body ? ` — ${body}` : ''}` : body

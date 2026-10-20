@@ -426,18 +426,22 @@ export class GameSession {
     }
     return { roll: heroRoll(h) + consumePrayer(h), blessed: false }
   }
-  luckCheck(heroUid: string, target: number): { ok: boolean; roll: number; luck: number } {
+  /** place — этап книги «локация:номер:этап»: итог проверки отмечается, и открываются её исходы */
+  luckCheck(heroUid: string, target: number, place?: string): { ok: boolean; roll: number; luck: number } {
     const h = this.hero(heroUid)
     target = this.int(target, 100)
+    const at = place == null ? undefined : this.bookPlace(place)
     const lr = this.luckRoll(h)
     if (lr.blessed) {
       this.log(`${h.name}: боги даруют удачу — проверка ${target} пройдена без броска.`, 'luck')
+      if (at) this.mark(`${at}:ok`)
       return { ok: true, roll: 18, luck: heroLuck(h, idx) }
     }
     const r = lr.roll
     const luck = heroLuck(h, idx)
     const ok = r + luck >= target
     this.log(`${h.name} бросает удачу ${target}: к18 = ${r}${luck ? ` + ${luck}` : ''} — ${ok ? 'удача!' : 'неудача'}.`, 'luck')
+    if (at) this.mark(`${at}:${ok ? 'ok' : 'fail'}`)
     return { ok, roll: r, luck }
   }
   findArtifact(heroUid: string): number | null {
@@ -532,6 +536,24 @@ export class GameSession {
     claimed.push(key)
     return true
   }
+  /** Этап книги «локация:номер:этап» (команда приходит и по сети): место должно существовать */
+  private bookPlace(place: string): string {
+    place = String(place)
+    const [loc, n, ...rest] = place.split(':')
+    if (place.length > 120 || !rest.length || !/^[\w.:-]+$/.test(rest.join(':')) || !idx.locationById.get(loc)?.paragraphs.some((p) => p.n === Number(n))) throw new GameError('Нет такого места в книге')
+    return place
+  }
+  private mark(key: string): void {
+    const claimed = (this.state.claimed ??= [])
+    if (claimed.includes(key)) return
+    if (claimed.length >= 3000) throw new GameError('Слишком много отметок')
+    claimed.push(key)
+  }
+  /** Отметка прохождения параграфа по этапам (src/game/tree.ts): выбран вариант этапа (open) или итог задан вручную */
+  bookMark(place: string, what: string): void {
+    if (!['open', 'won', 'lost', 'fled', 'ok', 'fail'].includes(String(what))) throw new GameError('Неверная отметка')
+    this.mark(`${this.bookPlace(place)}:${what}`)
+  }
   /** Снять отметку, если награду выдать не удалось (нет связи, герой убран) — иначе она пропала бы навсегда */
   unclaim(key: string): void {
     const claimed = this.state.claimed ?? []
@@ -577,12 +599,15 @@ export class GameSession {
     // только нужные поля: лишнее из сетевого запроса в бой не попадает
     return specs.map((s) => ({ monsterId: String(s.monsterId), count: Number(s.count) }))
   }
-  startEncounter(specs: EncounterSpec[], returnTo?: string): void {
+  /** place — этап книги, где начат бой: его итог отмечается при завершении боя и открывает исходы этапа */
+  startEncounter(specs: EncounterSpec[], returnTo?: string, place?: string): void {
     specs = this.specs(specs)
+    const at = place == null ? undefined : this.bookPlace(place)
     if (this.combat && !this.combat.finished) throw new GameError('Бой уже идёт')
     // прошлый бой окончен, но не закрыт: сначала подвести его итог (подобрать стрелы, засчитать бой спутникам, снять статусы)
     if (this.combat) this.endCombat()
     const { state, log: entries } = startCombat(specs, idx, returnTo)
+    if (at) state.bookPlace = at
     // второе действие воина 12 уровня — и в раунде дистанции
     grantRoundActions(state, this.heroes, idx)
     const owner = this.heroes.find((h) => !h.status.dead)?.uid ?? ''
@@ -704,6 +729,7 @@ export class GameSession {
         this.log(`${c.name} выполнил уговор и уходит своей дорогой.`)
       }
     }
+    if (combat.bookPlace) this.mark(`${combat.bookPlace}:${combat.finished === 'victory' ? 'won' : combat.finished === 'fled' ? 'fled' : 'lost'}`)
     this.logAll(finishCombat(combat, this.heroes, idx))
     this.state.combat = null
   }
@@ -747,7 +773,7 @@ export const COMMANDS = {
   drink: 'owner', identifyBottle: 'owner', copyScroll: 'owner', learnSpell: 'owner', useAntidote: 'owner', useParalysisPotion: 'owner', poisonWeapon: 'owner',
   adjustLives: 'gm', adjustMana: 'gm', adjustMoney: 'gm', giveXp: 'gm', giveItem: 'gm',
   restAll: 'party', travelTo: 'party', enterLocation: 'party', leaveLocation: 'party', markVisited: 'party', dismissRoad: 'party',
-  rollDie: 'party', rollDice: 'party', claim: 'gm', unclaim: 'gm', luckCheck: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
+  rollDie: 'party', rollDice: 'party', claim: 'gm', unclaim: 'gm', bookMark: 'gm', luckCheck: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
   addCompanion: 'gm', dismissCompanion: 'party',
   startEncounter: 'gm', addMonstersToCombat: 'gm', abortCombat: 'gm',
   attack: 'owner', cast: 'owner', flee: 'owner', skip: 'owner',
