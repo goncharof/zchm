@@ -75,9 +75,11 @@ describe('сценарный ведущий', () => {
 
     const branch = scene.choices!.find((c) => c.label.startsWith('▸'))!
     await g.c.choose(scene.id, branch.id)
-    await until(() => /дарит вам \(6\)/.test(lastGm(g.chat).text))
+    // номер бутылки игрокам не показывается: «(6)» — пометка ведущего
+    await until(() => /дарит вам \(бутылка\)/.test(lastGm(g.chat).text))
     const outcome = lastGm(g.chat)
-    const bottle = outcome.choices!.find((c) => c.label.startsWith('Взять бутылку (6)'))!
+    expect(outcome.text).not.toContain('(6)')
+    const bottle = outcome.choices!.find((c) => c.label === 'Взять бутылку')!
     await g.c.choose(outcome.id, bottle.id)
     await until(() => g.state.heroes.some((h) => h.inventory.some((e) => e.kind === 'bottle')))
 
@@ -198,7 +200,7 @@ describe('сценарный ведущий', () => {
     await until(() => /Короля Золотого города/i.test(lastGm(g.chat).text))
     const labels = lastGm(g.chat).choices!.map((c) => c.label)
     expect(labels.some((l) => l.startsWith('⚔'))).toBe(false)
-    expect(labels).toContain('Взять бутылку (6)')
+    expect(labels).toContain('Взять бутылку')
   })
 
   it('исходы боя и проверки удачи не видны до боя и броска: их текст и награды не взять заранее', async () => {
@@ -224,9 +226,11 @@ describe('сценарный ведущий', () => {
     await g.c.chat('11', true)
     await until(() => /помещение 11/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
-    const take = scene.choices!.find((c) => c.label === 'Взять 5 бутылок (4)')!
+    const take = scene.choices!.find((c) => c.label === 'Взять 5 бутылок')!
     expect(take).toBeDefined()
-    expect(scene.choices!.filter((c) => c.label.includes('(4)'))).toHaveLength(1)
+    // номер бутылки — пометка ведущего: ни на кнопке, ни в тексте сцены его нет
+    expect(scene.choices!.filter((c) => /\(\d\)/.test(c.label))).toHaveLength(0)
+    expect(scene.text).not.toMatch(/\([1-6]\)/)
     await g.c.choose(scene.id, take.id)
     await until(() => /забирает 5 бутылок без этикеток/.test(lastGm(g.chat).text))
     expect(room.state.heroes[0].inventory.filter((e) => e.kind === 'bottle' && e.ref === '4').reduce((n, e) => n + e.qty, 0)).toBe(5)
@@ -253,7 +257,7 @@ describe('сценарный ведущий', () => {
     await until(() => /помещение 14/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
     const labels = scene.choices!.map((c) => c.label)
-    expect(labels).toContain('Купить бутылку (5) за 15 монет (в запасе 4)')
+    expect(labels).toContain('Купить бутылку за 15 монет (в запасе 4)')
     expect(labels.some((l) => l.startsWith('Взять бутылку') || l.startsWith('Заплатить'))).toBe(false)
     const bottles = () => room.state.heroes[0].inventory.filter((e) => e.kind === 'bottle' && e.ref === '5').reduce((n, e) => n + e.qty, 0)
     const before = bottles()
@@ -264,7 +268,7 @@ describe('сценарный ведущий', () => {
     // запас трактирщика убывает: при повторном входе бутылок осталось три
     await g.c.chat('14', true)
     await until(() => g.chat.filter((m) => m.from === 'gm' && /помещение 14/.test(m.text)).length === 2)
-    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('Купить бутылку (5) за 15 монет (в запасе 3)')
+    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('Купить бутылку за 15 монет (в запасе 3)')
   })
 
   it('последствие провала берётся из текста книги', () => {

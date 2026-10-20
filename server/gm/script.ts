@@ -32,10 +32,15 @@ function segmentsAt(loc: string, n: number): ParagraphSegment[] {
   return p ? paragraphSegments(p) : []
 }
 
+/** Номер бутылки в тексте книги — пометка ведущего: герои видят просто бутылку, а что в ней, узнают заклинанием
+ *  «Идентификация предметов», распознавателем (только «опасна или нет») или выпив. Игрокам текст книги показывается
+ *  с «(бутылка)» вместо «(5)» */
+const shown = (t: string) => t.replace(/\(([1-6])\)/g, '(бутылка)')
+
 /** Кнопки веток-исходов параграфа (разметка when: «Если выигрываете», «Если не удалось…» — tools/segment.py и правки) */
 function outcomeOffers(loc: string, n: number, when: NonNullable<ParagraphSegment['when']>, skip?: number): Offer[] {
   return segmentsAt(loc, n).flatMap((g, i) =>
-    g.kind === 'branch' && g.blocks.length && i !== skip && g.when === when ? [{ label: `▸ ${g.label}`, action: { t: 'branch', loc, n, seg: i } as ScriptAction }] : [])
+    g.kind === 'branch' && g.blocks.length && i !== skip && g.when === when ? [{ label: `▸ ${shown(g.label ?? '')}`, action: { t: 'branch', loc, n, seg: i } as ScriptAction }] : [])
 }
 
 export interface LuckPenalty { kind: 'death' | 'lives' | 'half'; amount?: number; text: string }
@@ -89,7 +94,7 @@ function hintOffers(h: ParagraphHints | undefined, place?: Place, tag = 's', tex
   for (const t of h.luck ?? []) out.push({ label: `🎲 Проверка удачи ${t}`, action: { t: 'luck', target: t, ...place } })
   // покупка расходует запас торговца: по ключу на каждую бутылку, из них показывается первая не купленная (fresh)
   for (const sale of sales) {
-    const what = sale.bottles.length > 1 ? `бутылки ${sale.bottles.map((n) => `(${n})`).join(', ')}` : `бутылку (${sale.bottles[0]})`
+    const what = sale.bottles.length > 1 ? `${sale.bottles.length} ${plural(sale.bottles.length, 'бутылку', 'бутылки', 'бутылок')}` : 'бутылку'
     for (let k = 1; k <= sale.stock; k++) out.push({ label: `Купить ${what} за ${coinsWord(sale.price)}`, action: { t: 'buy', bottles: sale.bottles, price: sale.price, once: once(`buy:${sale.bottles.join('+')}#${k}`) } })
   }
   for (const c of h.prices ?? []) out.push({ label: `Заплатить ${coinsWord(c)}`, action: { t: 'pay', amount: c } })
@@ -100,10 +105,9 @@ function hintOffers(h: ParagraphHints | undefined, place?: Place, tag = 's', tex
     seen.set(c, k)
     out.push({ label: `Забрать ${coinsWord(c)}`, action: { t: 'coins', amount: c, once: once(k > 1 ? `coins:${c}#${k}` : `coins:${c}`) } })
   }
-  // одинаковые бутылки — одной кнопкой («Взять 5 бутылок (4)»), раздать можно потом в разделе «Партия»
-  const bottles = new Map<number, number>()
-  for (const b of h.bottles ?? []) bottles.set(b, (bottles.get(b) ?? 0) + 1)
-  for (const [b, qty] of bottles) out.push({ label: qty > 1 ? `Взять ${qty} ${plural(qty, 'бутылку', 'бутылки', 'бутылок')} (${b})` : `Взять бутылку (${b})`, action: { t: 'bottle', n: b, ...(qty > 1 ? { qty } : {}), once: once(`bottle:${b}`) } })
+  // все бутылки находки — одной кнопкой и без номеров («Взять 3 бутылки»), раздать можно потом в разделе «Партия»
+  const bs = h.bottles ?? []
+  if (bs.length) out.push({ label: bs.length > 1 ? `Взять ${bs.length} ${plural(bs.length, 'бутылку', 'бутылки', 'бутылок')}` : 'Взять бутылку', action: { t: 'bottle', ns: bs, once: once(`bottle:${[...new Set(bs)].sort().join('+')}`) } })
   if (h.artifact) out.push({ label: 'Взять артефакт', action: { t: 'artifact', once: once('artifact') } })
   ;(h.scrolls ?? []).forEach((s, i) => out.push({ label: `Взять свиток${s.level !== undefined ? ` ${s.level} ур.` : ''}`, action: { t: 'scroll', caster: s.caster, level: s.level, once: once(`scroll:${i}`) } }))
   if (h.tavern) out.push({ label: 'Отдохнуть сутки (2 монеты)', action: { t: 'rest' } })
@@ -196,7 +200,7 @@ export class ScriptedGm {
     const head = loc.id === 'doroga' ? `В пути (§ ${n}).` : `${loc.name}, помещение ${n}${before ? ' (вы здесь уже были)' : ''}.`
     const segs = paragraphSegments(p)
     const scene = segs.filter((g) => g.kind === 'scene')
-    const sceneText = scene.flatMap((g) => g.blocks.map(blockText)).join('\n')
+    const sceneText = shown(scene.flatMap((g) => g.blocks.map(blockText)).join('\n'))
     const offers: Offer[] = []
     // исходы боя и проверки удачи («Если выигрываете», «Если лестница не откинута») появляются после боя или броска,
     // иначе их текст и награды открыты заранее; без кнопки боя или проверки в параграфе ветка остаётся вариантом
@@ -206,9 +210,9 @@ export class ScriptedGm {
     segs.forEach((g, i) => {
       if (g.kind === 'scene') offers.push(...fresh(room, [...hintOffers(g.hints, { loc: loc.id, n, seg: i }, 's', g.blocks.map(blockText).join('\n')), ...rollOffers(g.blocks, loc.id, n, i)]))
       else if (!g.blocks.length || later(g)) return
-      else offers.push({ label: `▸ ${g.label}`, action: { t: 'branch', loc: loc.id, n, seg: i } })
+      else offers.push({ label: `▸ ${shown(g.label ?? '')}`, action: { t: 'branch', loc: loc.id, n, seg: i } })
     })
-    const notes = segs.filter((g) => g.kind === 'branch' && !g.blocks.length).map((g) => g.label)
+    const notes = segs.filter((g) => g.kind === 'branch' && !g.blocks.length).map((g) => shown(g.label ?? ''))
     offers.push({ label: 'Идти дальше', action: { t: 'next' } })
     this.say(room, [head, sceneText, ...notes.map((t) => `${t}.`)].filter(Boolean).join('\n\n'), offers)
     this.ctx.stateChanged(room)
@@ -289,7 +293,7 @@ export class ScriptedGm {
         if (!seg) throw new GameError('Вариант не найден')
         // в исходах боя упомянутые монстры убраны правками книги; новый противник после победы («2 орка бросаются») остаётся
         const offers = [...fresh(room, [...hintOffers(seg.hints, { loc: a.loc, n: a.n, seg: a.seg }, 's', seg.blocks.map(blockText).join('\n')), ...rollOffers(seg.blocks, a.loc, a.n, a.seg)]), { label: 'Идти дальше', action: { t: 'next' } as ScriptAction }]
-        this.say(room, seg.blocks.map(blockText).join('\n'), offers)
+        this.say(room, shown(seg.blocks.map(blockText).join('\n')), offers)
         return
       }
       case 'roll': {
@@ -300,7 +304,7 @@ export class ScriptedGm {
         const r = s.rollDie(sides, 'Бросок по списку')
         const hit = block.roll.find((o) => o.values.includes(r))
         // награда исхода — своя у каждого варианта списка (в каждом доме деревни — своя), берётся один раз
-        this.say(room, `Выпало ${r}: ${hit?.text ?? 'ничего не происходит'}`, hintOffers(hit?.hints, { loc: a.loc, n: a.n, seg: a.seg }, `r${a.block}.${hit ? block.roll.indexOf(hit) : 0}`, hit?.text))
+        this.say(room, `Выпало ${r}: ${hit ? shown(hit.text) : 'ничего не происходит'}`, hintOffers(hit?.hints, { loc: a.loc, n: a.n, seg: a.seg }, `r${a.block}.${hit ? block.roll.indexOf(hit) : 0}`, hit?.text))
         return
       }
       case 'luck': {
@@ -355,9 +359,10 @@ export class ScriptedGm {
       }
       case 'bottle': {
         const h = needHero()
-        const qty = a.qty ?? 1
-        s.giveItem(h.uid, 'bottle', String(a.n), qty, false)
-        this.say(room, qty > 1 ? `${h.name} забирает ${qty} ${plural(qty, 'бутылку', 'бутылки', 'бутылок')} без этикеток.` : `${h.name} забирает бутылку без этикетки.`)
+        // ns — все бутылки находки; n и qty — кнопки из сохранений до 2026-10-20
+        const ns = a.ns ?? Array<number>(a.qty ?? 1).fill(a.n ?? 0)
+        for (const n of ns) s.giveItem(h.uid, 'bottle', String(n), 1, false)
+        this.say(room, ns.length > 1 ? `${h.name} забирает ${ns.length} ${plural(ns.length, 'бутылку', 'бутылки', 'бутылок')} без этикеток.` : `${h.name} забирает бутылку без этикетки.`)
         return
       }
       case 'artifact': {
