@@ -6,7 +6,8 @@
  *   GEMINI_API_KEY      [GEMINI_MODEL=gemini-3.5-flash]                  — Google AI Studio, бесплатный уровень; можно списком через
  *                       запятую (у каждой модели своя квота). flash-lite не держит правила, 3.8-flash медленная
  *   GROQ_API_KEY        [GROQ_MODEL=openai/gpt-oss-120b]                 — Groq, бесплатный уровень: 8000 токенов в минуту
- *   CEREBRAS_API_KEY    [CEREBRAS_MODEL=gpt-oss-120b]                    — Cerebras, бесплатный уровень (не проверено)
+ *   CEREBRAS_API_KEY    [CEREBRAS_MODEL=gpt-oss-120b]                    — Cerebras: бесплатного уровня нет (с 2026 — $5 на 30 дней
+ *                       после привязки карты, 5 запросов в минуту), не проверено
  *   OPENROUTER_API_KEY  [OPENROUTER_MODEL=nvidia/nemotron-3-super-120b-a12b:free] — OpenRouter, модели :free с поддержкой tools
  *   Модели по умолчанию проверены 2026-10-17; список бесплатных моделей OpenRouter: https://openrouter.ai/api/v1/models
  *   LLM_BASE_URL + LLM_MODEL [LLM_API_KEY, LLM_LABEL] — любая OpenAI-совместимая модель (например, Ollama: http://localhost:11434/v1)
