@@ -1,10 +1,10 @@
 /** Инструменты ИИ-ведущего: схемы для Claude API и исполнение через GameSession. */
 import type Anthropic from '@anthropic-ai/sdk'
-import { sceneText } from '@/game/book'
+import { paragraphTree } from '@/game/tree'
 import { z } from 'zod'
 import { idx } from '@/data'
 import type { Hero } from '@/engine/model'
-import type { ParagraphHints } from '@/types'
+import type { BookNode, ParagraphHints } from '@/types'
 import { GameError } from '@/game/session'
 import type { Room } from '../rooms'
 
@@ -16,7 +16,7 @@ const heroProp = { type: 'string', description: 'Имя героя или его
 export const GM_TOOLS: Tool[] = ([
   {
     name: 'open_paragraph',
-    description: 'Прочитать параграф Книги Жизни (полный текст со скрытыми деталями, ветки решений, подсказки) и отметить его пройденным. Вызывай, когда партия входит в помещение локации или с ней случается встреча в пути (location_id "doroga").',
+    description: 'Прочитать параграф Книги Жизни (этапы: что видно сразу, что открывается по выбору, после боя или проверки удачи, тайные пометки, подсказки) и отметить его пройденным. Вызывай, когда партия входит в помещение локации или с ней случается встреча в пути (location_id "doroga").',
     input_schema: { type: 'object', properties: { location_id: { type: 'string', description: 'id локации из списка' }, n: { type: 'integer', description: 'номер параграфа' } }, required: ['location_id', 'n'], additionalProperties: false },
   },
   {
@@ -120,20 +120,44 @@ function stemRu(w: string): string {
 }
 const stems = (s: string) => s.split(/[\s-]+/).filter(Boolean).map(stemRu)
 
-/** Параграф для ведущего (сцена, ветки, подсказки) — без побочных эффектов: отметку «пройден» ставит тот, кто его
- *  действительно разыгрывает (инструмент open_paragraph или сервер после удачного хода) */
+const WHEN = { win: 'после победы в бою', lose: 'после поражения в бою', flee: 'если герои бежали из боя', ok: 'если проверка удачи прошла', fail: 'если проверка удачи не прошла' } as const
+const has = (h?: ParagraphHints) => !!h && Object.values(h).some((v) => (Array.isArray(v) ? v.length : !!v))
+
+/** Этап параграфа для модели: когда открывается, что видно, что тайно, механика и следующие этапы. Подсказки — свои у
+ *  каждого этапа: награда за победу не должна выглядеть лежащей на виду */
+function stagePayload(n: BookNode): Record<string, unknown> {
+  const on = n.on
+  const when = on === 'enter' ? undefined : on === 'choice' ? `по выбору игроков: «${n.label ?? ''}»` : typeof on === 'object' ? `если на кубике выпало ${on.roll.join(', ')}` : WHEN[on]
+  const visible = n.text.filter((x) => !x.gm).map((x) => x.t).join(' ')
+  const secret = n.text.filter((x) => x.gm).map((x) => x.t)
+  // условие исхода из книги («Если вы выходите из схватки победителем») — часть текста этапа
+  const lead = n.label && on !== 'choice' && on !== 'enter' && typeof on !== 'object' ? `${n.label} — ` : ''
+  const npcs = [...(n.hints?.monsters ?? []).filter((m) => idx.monsterById.get(m)?.special).map((m) => idx.monster(m).name), ...(n.npcs ?? []).map((x) => idx.monsterById.get(x)?.name ?? x)]
+  const kids = n.then ?? []
+  return {
+    ...(when ? { когда: when } : {}),
+    текст: `${lead}${visible}`,
+    ...(secret.length ? { тайное: secret } : {}),
+    ...(n.teaser ? { намёк: n.teaser } : {}),
+    ...(has(n.hints) ? { подсказки: n.hints } : {}),
+    ...(npcs.length ? { не_враги: npcs } : {}),
+    ...(n.passWith ? { проверку_заменяет: idx.itemById.get(n.passWith)?.name ?? n.passWith } : {}),
+    ...(n.dice ? { бросок: `к${n.dice.sides}${n.dice.repeat ? ', бросают для каждого' : ''}` } : {}),
+    ...(n.effects?.length ? { последствия: n.effects } : {}),
+    ...(n.exclusive ? { только_один_вариант: true } : {}),
+    ...(kids.length ? { дальше: kids.map(stagePayload) } : {}),
+  }
+}
+
+/** Параграф для ведущего (дерево этапов, src/game/tree.ts) — без побочных эффектов: отметку «пройден» ставит тот, кто
+ *  его действительно разыгрывает (инструмент open_paragraph или сервер после удачного хода) */
 export function paragraphPayload(room: Room, locationId: string, n: number): string {
   const loc = idx.locationById.get(locationId)
   if (!loc) throw new GameError(`Нет локации ${locationId}`)
   const p = loc.paragraphs.find((x) => x.n === n)
   if (!p) throw new GameError(`В локации «${loc.name}» нет параграфа ${n}`)
   const before = (room.state.visited[loc.id] ?? []).includes(p.n)
-  const WHEN = { win: 'после победы в бою', lose: 'после поражения', luckOk: 'если проверка удачи прошла', luckFail: 'если проверка удачи не прошла' } as const
-  // подсказки — свои у сцены и у каждой ветки: награда за победу не должна выглядеть лежащей на виду
-  const has = (h?: ParagraphHints) => !!h && Object.values(h).some((v) => (Array.isArray(v) ? v.length : !!v))
-  const branches = (p.segments ?? []).filter((g) => g.kind === 'branch').map((g) => ({ если: g.label, ...(g.when ? { когда: WHEN[g.when] } : {}), исход: g.blocks.map((b) => ('text' in b ? b.text : b.roll.map((o) => `${o.values.join(',')} — ${o.text}`).join('; '))).join(' '), ...(has(g.hints) ? { подсказки: g.hints } : {}) }))
-  const scene = (p.segments ? p.segments.find((g) => g.kind === 'scene')?.hints : p.hints) ?? {}
-  return JSON.stringify({ локация: loc.name, параграф: p.n, уже_пройден: before, текст: sceneText(p), подсказки: scene, ветки: branches, напоминание: 'Раскрывай игрокам только то, что видят герои; исходы веток и их подсказки — после их выбора или исхода.' })
+  return JSON.stringify({ локация: loc.name, параграф: p.n, уже_пройден: before, этапы: stagePayload(paragraphTree(p)), напоминание: 'Этап без «когда» герои видят сразу. Остальные раскрывай, только когда наступило их условие: выбор игроков, итог боя, проверки удачи или броска. «тайное» — пометки ведущего, игрокам их не пересказывай.' })
 }
 
 /** Монстр по id или имени, в том числе в падеже и числе из текста («гномы», «рыцарей смерти»).
