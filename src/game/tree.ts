@@ -64,6 +64,11 @@ export function findNode(root: BookNode, id: string): BookNode | undefined {
   return allNodes(root).find((n) => n.id === id)
 }
 
+/** Родитель этапа (у корня — нет) */
+export function parentOf(root: BookNode, id: string): BookNode | undefined {
+  return allNodes(root).find((n) => (n.then ?? []).some((c) => c.id === id))
+}
+
 /** Ключ отметки броска списка этапа */
 export const diceKey = (n: BookNode) => n.dice?.key ?? n.id
 

@@ -39,14 +39,14 @@ async function setup() {
   return { s, c, j, chat, get state() { return state! } }
 }
 const lastGm = (chat: ChatMessage[]) => [...chat].reverse().find((m) => m.from === 'gm')!
-/** выиграть начатый бой и закончить его: ведущий предлагает исходы по книге */
+/** выиграть начатый бой и закончить его: ведущий открывает исходы победы по книге */
 async function winFight(g: { s: GameServer; j: { code: string }; c: NetClient; chat: ChatMessage[]; state: GameState }) {
   await until(() => !!g.state.combat)
   const room = (await g.s.store.get(g.j.code))!
   for (const m of room.state.combat!.monsters) m.dead = true
   checkEnd(room.state.combat!, room.state.heroes)
   await g.c.call('endCombat', [])
-  await until(() => lastGm(g.chat).text.includes('Что дальше по книге'))
+  await until(() => lastGm(g.chat).text.includes('Бой окончен'))
   return lastGm(g.chat)
 }
 /** партия на нужном узле карты (войти можно только туда, где она стоит) */
@@ -144,17 +144,16 @@ describe('сценарный ведущий', () => {
     setRng(() => 0) // к18 = 1 — провал
     await g.c.choose(scene.id, scene.choices!.find((c) => c.label.includes('удачи 8'))!.id)
     await until(() => lastGm(g.chat).text.includes('испытывает удачу'))
+    // исход провала открывается сам, исход удачи остаётся скрытым
     const res = lastGm(g.chat)
-    expect(res.choices!.map((c) => c.label)).toContain('▸ Не перерубаете')
-    expect(res.choices!.map((c) => c.label)).not.toContain('▸ Если перерубаете')
-    await g.c.choose(res.id, res.choices!.find((c) => c.label === '▸ Не перерубаете')!.id)
-    await until(() => /Падаете без чувств/.test(lastGm(g.chat).text))
-    const labels = lastGm(g.chat).choices!.map((c) => c.label)
+    expect(res.text).toMatch(/Не перерубаете — .*Падаете без чувств/)
+    expect(res.text).not.toContain('Если перерубаете')
+    const labels = res.choices!.map((c) => c.label)
     expect(labels).toContain('Забрать 217 монет')
     expect(labels).not.toContain('Забрать 176 монет')
   })
 
-  it('проверка удачи внутри ветки: провал «пробить — удача 9» ведёт в ветку «Не пробиваете»', async () => {
+  it('проверка удачи внутри ветки: провал «пробить — удача 9» открывает ветку «Не пробиваете»', async () => {
     const g = await setup()
     const room = (await g.s.store.get(g.j.code))!
     await g.c.claimHero(room.state.heroes[0].uid)
@@ -169,10 +168,10 @@ describe('сценарный ведущий', () => {
     setRng(() => 0) // к18 = 1 — провал
     await g.c.choose(branch.id, branch.choices!.find((c) => c.label.includes('удачи 9'))!.id)
     await until(() => lastGm(g.chat).text.includes('испытывает удачу'))
-    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('▸ Не пробиваете')
+    expect(lastGm(g.chat).text).toContain('Не пробиваете —')
   })
 
-  it('после победы новый противник предлагается: минотавр требует половину сокровищ', async () => {
+  it('после победы исход открывается сам и предлагает нового противника: минотавр требует половину сокровищ', async () => {
     const g = await setup()
     await goTo(g, 'mertvyy-gorod')
     await g.c.call('enterLocation', ['mertvyy-gorod'])
@@ -182,9 +181,8 @@ describe('сценарный ведущий', () => {
     expect(scene.choices!.map((c) => c.label)).not.toContain('▸ Если убиваете дракона')
     await g.c.choose(scene.id, scene.choices!.find((c) => c.label.startsWith('⚔ Бой:'))!.id)
     const after = await winFight(g)
-    await g.c.choose(after.id, after.choices!.find((c) => c.label === '▸ Если убиваете дракона')!.id)
-    await until(() => /Минотавр требует/.test(lastGm(g.chat).text))
-    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('⚔ Бой: Минотавр')
+    expect(after.text).toMatch(/Если убиваете дракона — .*Минотавр требует/)
+    expect(after.choices!.map((c) => c.label)).toContain('⚔ Бой: Минотавр')
   })
 
   it('ветка-исход боя не предлагает второй бой с теми же монстрами', async () => {
@@ -196,9 +194,8 @@ describe('сценарный ведущий', () => {
     expect(scene.choices!.some((c) => c.label === '▸ Если убиваете драконида')).toBe(false)
     await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '⚔ Бой: Драконид')!.id)
     const after = await winFight(g)
-    await g.c.choose(after.id, after.choices!.find((c) => c.label === '▸ Если убиваете драконида')!.id)
-    await until(() => /Короля Золотого города/i.test(lastGm(g.chat).text))
-    const labels = lastGm(g.chat).choices!.map((c) => c.label)
+    expect(after.text).toMatch(/Короля Золотого города/i)
+    const labels = after.choices!.map((c) => c.label)
     expect(labels.some((l) => l.startsWith('⚔'))).toBe(false)
     expect(labels).toContain('Взять бутылку')
   })
@@ -214,6 +211,42 @@ describe('сценарный ведущий', () => {
     expect(labels).not.toContain('▸ Если вы выходите из схватки победителем')
     expect(labels).not.toContain('▸ Если лестница не откинута')
     expect(scene.text).not.toContain('по бутылке (5)')
+  })
+
+  it('повторный вход после победы: бой не предлагается снова, исход победы виден', async () => {
+    const g = await setup()
+    await g.c.call('enterLocation', ['zolotoy-gorod'])
+    await g.c.chat('24', true)
+    await until(() => /помещение 24/.test(lastGm(g.chat)?.text ?? ''))
+    const scene = lastGm(g.chat)
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '⚔ Бой: Драконид')!.id)
+    await winFight(g)
+    await g.c.chat('24', true)
+    await until(() => /вы здесь уже были/.test(lastGm(g.chat).text))
+    const again = lastGm(g.chat)
+    expect(again.text).toMatch(/Короля Золотого города/i)
+    expect(again.choices!.some((c) => c.label.startsWith('⚔'))).toBe(false)
+  })
+
+  it('бросок по списку открывает свой исход и второй раз не предлагается', async () => {
+    const g = await setup()
+    await g.c.call('enterLocation', ['zolotoy-gorod'])
+    await g.c.chat('2', true)
+    await until(() => /помещение 2\b/.test(lastGm(g.chat)?.text ?? ''))
+    // список исходов не виден до броска
+    expect(lastGm(g.chat).text).not.toContain('приставляют')
+    const scene = lastGm(g.chat)
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label.startsWith('▸ Если вы решили помочь'))!.id)
+    await until(() => lastGm(g.chat).choices?.some((c) => c.label === '🎲 Бросить к6 по списку') ?? false)
+    const branch = lastGm(g.chat)
+    setRng(() => 0.4) // к6 = 3
+    await g.c.choose(branch.id, branch.choices!.find((c) => c.label === '🎲 Бросить к6 по списку')!.id)
+    await until(() => /^Выпало 3 — /.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).text).toContain('приставляют 1 лестницу')
+    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('⚔ Бой: Драконид ×4')
+    await g.c.chat('2', true)
+    await until(() => /вы здесь уже были/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).choices!.some((c) => c.label.startsWith('🎲 Бросить'))).toBe(false)
   })
 
   it('одинаковые бутылки в сцене берутся одной кнопкой', async () => {
@@ -302,7 +335,7 @@ describe('сценарный ведущий', () => {
     await until(() => g.state.heroes.find((h) => h.uid === hero.uid)!.lives === before - 2)
   })
 
-  it('после боя из параграфа предлагается ветка победы', async () => {
+  it('после боя исход победы из параграфа открывается сам', async () => {
     const g = await setup()
     await goTo(g, 'krepost-posledney-nadezhdy')
     await g.c.call('enterLocation', ['krepost-posledney-nadezhdy'])
@@ -319,8 +352,10 @@ describe('сценарный ведущий', () => {
     for (const m of room.state.combat!.monsters) m.dead = true
     checkEnd(room.state.combat!, room.state.heroes)
     await g.c.call('endCombat', [])
-    await until(() => lastGm(g.chat).text.includes('Что дальше по книге'))
-    expect(lastGm(g.chat).choices!.map((c) => c.label)).toEqual(['▸ Побеждаете', 'Идти дальше'])
+    await until(() => lastGm(g.chat).text.includes('Бой окончен'))
+    // исход победы открывается сам — без кнопки «▸ Побеждаете»
+    expect(lastGm(g.chat).text).toContain('Побеждаете —')
+    expect(lastGm(g.chat).choices!.map((c) => c.label)).not.toContain('▸ Побеждаете')
   })
 
   it('награду из помещения можно забрать один раз, даже если войти в него снова', async () => {

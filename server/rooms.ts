@@ -62,19 +62,21 @@ export interface RoomData {
 export interface ScriptState {
   locationId: string | null
   n: number | null
-  /** параграф, из которого начат бой: после боя предлагаются его ветки победы или поражения */
-  fight?: { loc: string; n: number }
+  /** этап книги, где начат бой: после боя открываются его исходы (id нет — бой с экрана боя, исходы корня) */
+  fight?: { loc: string; n: number; id?: string }
   /** одноразовые действия, которые уже сделаны (награды, броски по списку): повторный вход их не повторяет */
   taken?: string[]
 }
 
 /** Действие за кнопкой-вариантом сценарного ведущего (сериализуемое) */
 export type ScriptAction = (
+  /** вариант выбора: этап id параграфа (кнопки до 2026-10-20 — ветка seg) */
+  | { t: 'node'; loc: string; n: number; id: string }
   | { t: 'branch'; loc: string; n: number; seg: number }
-  | { t: 'roll'; loc: string; n: number; seg: number; block: number }
-  | { t: 'luck'; target: number; loc?: string; n?: number; seg?: number }
+  | { t: 'roll'; loc: string; n: number; id?: string; seg?: number; block?: number }
+  | { t: 'luck'; target: number; loc?: string; n?: number; id?: string; seg?: number }
   | { t: 'penalty'; heroUid: string; kind: 'death' | 'lives' | 'half'; amount?: number }
-  | { t: 'fight'; specs: { monsterId: string; count: number }[]; loc?: string; n?: number }
+  | { t: 'fight'; specs: { monsterId: string; count: number }[]; loc?: string; n?: number; id?: string }
   | { t: 'coins'; amount: number }
   | { t: 'pay'; amount: number }
   | { t: 'bottle'; n?: number; qty?: number; ns?: number[] }

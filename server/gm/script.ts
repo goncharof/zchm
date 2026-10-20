@@ -5,8 +5,8 @@
  */
 import { randomUUID } from 'node:crypto'
 import { idx } from '@/data'
-import type { ParagraphHints, ParagraphSegment, SegmentBlock } from '@/types'
-import { blockText, paragraphSegments, rollSides } from '@/game/book'
+import type { BookNode, ParagraphHints } from '@/types'
+import { allNodes, diceKey, findNode, hasResult, nodeFullText, nodeText, openNodes, paragraphTree, parentOf, revealedBy } from '@/game/tree'
 import type { Hero } from '@/engine/model'
 import { GameError } from '@/game/session'
 import { plural } from '@/ui/format'
@@ -23,13 +23,12 @@ interface Offer {
 }
 
 
-/** Где в книге стоит кнопка (для проверок удачи — чтобы найти последствия и ветки-исходы) */
-interface Place { loc: string; n: number; seg: number }
+/** Где в книге стоит кнопка: параграф и этап (src/game/tree.ts) */
+interface Place { loc: string; n: number; id: string }
 
-
-function segmentsAt(loc: string, n: number): ParagraphSegment[] {
+function treeAt(loc: string, n: number): BookNode | undefined {
   const p = idx.locationById.get(loc)?.paragraphs.find((x) => x.n === n)
-  return p ? paragraphSegments(p) : []
+  return p ? paragraphTree(p) : undefined
 }
 
 /** Номер бутылки в тексте книги — пометка ведущего: герои видят просто бутылку, а что в ней, узнают заклинанием
@@ -37,10 +36,11 @@ function segmentsAt(loc: string, n: number): ParagraphSegment[] {
  *  с «(бутылка)» вместо «(5)» */
 const shown = (t: string) => t.replace(/\(([1-6])\)/g, '(бутылка)')
 
-/** Кнопки веток-исходов параграфа (разметка when: «Если выигрываете», «Если не удалось…» — tools/segment.py и правки) */
-function outcomeOffers(loc: string, n: number, when: NonNullable<ParagraphSegment['when']>, skip?: number): Offer[] {
-  return segmentsAt(loc, n).flatMap((g, i) =>
-    g.kind === 'branch' && g.blocks.length && i !== skip && g.when === when ? [{ label: `▸ ${shown(g.label ?? '')}`, action: { t: 'branch', loc, n, seg: i } as ScriptAction }] : [])
+/** Текст этапа для чата: «условие — текст» (у исхода броска — выпавшие числа), без пометок ведущего */
+function nodeSay(node: BookNode): string {
+  const body = nodeText(node)
+  const head = typeof node.on === 'object' ? `Выпало ${node.on.roll.join(', ')}` : node.on === 'enter' ? '' : node.label
+  return shown(head ? `${head}${body ? ` — ${body}` : ''}` : body)
 }
 
 export interface LuckPenalty { kind: 'death' | 'lives' | 'half'; amount?: number; text: string }
@@ -56,8 +56,7 @@ export function luckPenalty(text: string, target: number): LuckPenalty | null {
   return { kind: 'lives', amount, text: `−${amount} ${plural(amount, 'жизнь', 'жизни', 'жизней')}` }
 }
 
-/** Кнопки по подсказкам из текста. place — где в книге (для ключей одноразовых наград и привязки боя), tag — часть
- *  сегмента (сцена/ветка или исход броска), чтобы награды разных частей не путались */
+/** Кнопки по подсказкам из текста. place — этап книги: ключи одноразовых наград, привязка боя и проверки удачи */
 const coinsWord = (n: number) => `${n} ${plural(n, 'монету', 'монеты', 'монет')}`
 
 /** Бутылки на продажу по тексту: «бутылку (5) за 15 монет», «за каждую просит 10 монет», «по 5 монет каждую», «бутылки (4)
@@ -80,16 +79,16 @@ export function bottleSales(text: string, h: ParagraphHints): { bottles: number[
   return kinds.map((n) => ({ bottles: [n], price, stock: kinds.length === 1 && total ? total : stockOf(n) }))
 }
 
-function hintOffers(h: ParagraphHints | undefined, place?: Place, tag = 's', text = ''): Offer[] {
+function hintOffers(h: ParagraphHints | undefined, place?: Place, text = ''): Offer[] {
   if (!h) return []
   const out: Offer[] = []
   const sales = bottleSales(text, h)
   if (sales.length) h = { ...h, prices: [], bottles: [] }
-  const once = (what: string) => (place ? `${place.loc}:${place.n}:${place.seg}:${tag}:${what}` : undefined)
+  const once = (what: string) => (place ? `${place.loc}:${place.n}:${place.id}:${what}` : undefined)
   const fightable = (h.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special)
   if (fightable.length) {
     const specs = fightable.map((m) => ({ monsterId: m, count: h.monsterCounts?.[m] ?? 1 }))
-    out.push({ label: `⚔ Бой: ${specs.map((s) => `${idx.monster(s.monsterId).name}${s.count > 1 ? ` ×${s.count}` : ''}`).join(', ')}`, action: { t: 'fight', specs, ...(place ? { loc: place.loc, n: place.n } : {}) } })
+    out.push({ label: `⚔ Бой: ${specs.map((s) => `${idx.monster(s.monsterId).name}${s.count > 1 ? ` ×${s.count}` : ''}`).join(', ')}`, action: { t: 'fight', specs, ...place } })
   }
   for (const t of h.luck ?? []) out.push({ label: `🎲 Проверка удачи ${t}`, action: { t: 'luck', target: t, ...place } })
   // покупка расходует запас торговца: по ключу на каждую бутылку, из них показывается первая не купленная (fresh)
@@ -114,15 +113,20 @@ function hintOffers(h: ParagraphHints | undefined, place?: Place, tag = 's', tex
   return out
 }
 
-function rollOffers(blocks: SegmentBlock[], loc: string, n: number, seg: number): Offer[] {
-  const out: Offer[] = []
-  blocks.forEach((b, i) => {
-    if ('roll' in b) {
-      const sides = rollSides(b.roll)
-      // бросок по списку — один раз за параграф (иначе перебрасывали бы до награды); списки «для каждого» — сколько угодно
-      out.push({ label: b.repeat ? `🎲 Бросить к${sides} (на каждый)` : `🎲 Бросить к${sides} по списку`, action: { t: 'roll', loc, n, seg, block: i, ...(b.repeat ? {} : { once: `${loc}:${n}:${seg}:roll:${i}` }) } })
-    }
-  })
+/** Кнопки открытого этапа: механика из подсказок (бой — пока не выигран, проверка удачи — пока не пройдена), бросок
+ *  по списку — пока не брошен (списки «для каждого» — сколько угодно), невыбранные варианты-дети */
+function nodeOffers(loc: string, n: number, node: BookNode, claimed: readonly string[], open: Set<string>): Offer[] {
+  const P = `${loc}:${n}`
+  let h = node.hints
+  if (h && hasResult(P, node.id, claimed, 'won')) h = { ...h, monsters: [] }
+  if (h && hasResult(P, node.id, claimed, 'ok')) h = { ...h, luck: [] }
+  const out = hintOffers(h, { loc, n, id: node.id }, nodeFullText(node))
+  const d = node.dice
+  if (d && (d.repeat || !claimed.some((k) => k.startsWith(`${P}:${diceKey(node)}:roll=`)))) out.push({ label: d.repeat ? `🎲 Бросить к${d.sides} (на каждый)` : `🎲 Бросить к${d.sides} по списку`, action: { t: 'roll', loc, n, id: node.id } })
+  const choices = (node.then ?? []).filter((c) => c.on === 'choice')
+  if (!(node.exclusive && choices.some((c) => open.has(c.id)))) {
+    for (const c of choices) if (!open.has(c.id)) out.push({ label: `▸ ${shown(c.label ?? '')}`, action: { t: 'node', loc, n, id: c.id } })
+  }
   return out
 }
 
@@ -187,7 +191,7 @@ export class ScriptedGm {
     return alive.find((h) => own.includes(h.uid)) ?? alive[0]
   }
 
-  /** Открыть параграф: сцена + кнопки */
+  /** Открыть параграф: открытые этапы (при первом входе — сцена) и их кнопки */
   presentParagraph(room: Room, locId: string, n: number): void {
     const loc = idx.locationById.get(locId)
     const p = loc?.paragraphs.find((x) => x.n === n)
@@ -198,24 +202,23 @@ export class ScriptedGm {
     if (loc.id === 'doroga') s.dismissRoad(n)
     room.script = { ...room.script, locationId: loc.id, n }
     const head = loc.id === 'doroga' ? `В пути (§ ${n}).` : `${loc.name}, помещение ${n}${before ? ' (вы здесь уже были)' : ''}.`
-    const segs = paragraphSegments(p)
-    const scene = segs.filter((g) => g.kind === 'scene')
-    const sceneText = shown(scene.flatMap((g) => g.blocks.map(blockText)).join('\n'))
-    const offers: Offer[] = []
-    // исходы боя и проверки удачи («Если выигрываете», «Если лестница не откинута») появляются после боя или броска,
-    // иначе их текст и награды открыты заранее; без кнопки боя или проверки в параграфе ветка остаётся вариантом
-    const canFight = segs.some((g) => (g.hints?.monsters ?? []).some((m) => !idx.monsterById.get(m)?.special))
-    const canLuck = segs.some((g) => (g.hints?.luck ?? []).length > 0)
-    const later = (g: ParagraphSegment) => (g.when === 'win' || g.when === 'lose' ? canFight : !!g.when && canLuck)
-    segs.forEach((g, i) => {
-      if (g.kind === 'scene') offers.push(...fresh(room, [...hintOffers(g.hints, { loc: loc.id, n, seg: i }, 's', g.blocks.map(blockText).join('\n')), ...rollOffers(g.blocks, loc.id, n, i)]))
-      else if (!g.blocks.length || later(g)) return
-      else offers.push({ label: `▸ ${shown(g.label ?? '')}`, action: { t: 'branch', loc: loc.id, n, seg: i } })
-    })
-    const notes = segs.filter((g) => g.kind === 'branch' && !g.blocks.length).map((g) => shown(g.label ?? ''))
-    offers.push({ label: 'Идти дальше', action: { t: 'next' } })
-    this.say(room, [head, sceneText, ...notes.map((t) => `${t}.`)].filter(Boolean).join('\n\n'), offers)
+    const nodes = openNodes(paragraphTree(p), `${loc.id}:${n}`, room.state.claimed)
+    this.sayNodes(room, loc.id, n, [head], nodes)
     this.ctx.stateChanged(room)
+  }
+
+  /** Рассказать открывшиеся этапы с их кнопками */
+  private sayNodes(room: Room, loc: string, n: number, head: string[], nodes: BookNode[], extra: Offer[] = []): void {
+    const claimed = room.state.claimed ?? []
+    const tree = treeAt(loc, n)
+    const open = new Set(tree ? openNodes(tree, `${loc}:${n}`, claimed).map((x) => x.id) : [])
+    const text = nodes.map((x) => {
+      const said = nodeSay(x)
+      // намёк, пока бой этапа не выигран: «Похоже, он что-то охраняет»
+      return x.teaser && !hasResult(`${loc}:${n}`, x.id, claimed, 'won') ? [said, x.teaser].filter(Boolean).join('\n\n') : said
+    })
+    const offers = [...extra, ...fresh(room, nodes.flatMap((x) => nodeOffers(loc, n, x, claimed, open))), { label: 'Идти дальше', action: { t: 'next' } as ScriptAction }]
+    this.say(room, [...head, ...text].filter(Boolean).join('\n\n'), offers)
   }
 
   /** События игры и реплики игроков */
@@ -232,12 +235,20 @@ export class ScriptedGm {
         room.script = { ...room.script, locationId: loc?.id ?? null, n: null }
         this.say(room, `Вы входите: «${loc?.name ?? ''}». Назовите номер помещения или нажмите его на плане.`)
       } else if (ev.type === 'combatEnd') {
-        // бой начат не кнопкой ведущего (экран боя) — исходы берутся из параграфа, где стоит партия
+        // бой начат не кнопкой ведущего (экран боя) — итог относится к параграфу, где стоит партия, и открывает исходы корня
         const here = room.script.locationId && room.script.n != null ? { loc: room.script.locationId, n: room.script.n } : undefined
-        const f = room.script.fight ?? here
+        const f: { loc: string; n: number; id?: string } | undefined = room.script.fight ?? here
         delete room.script.fight
-        const offers = f && ev.outcome ? outcomeOffers(f.loc, f.n, ev.outcome === 'victory' ? 'win' : 'lose') : []
-        if (offers.length) this.say(room, `${ev.text} Что дальше по книге:`, [...offers, { label: 'Идти дальше', action: { t: 'next' } }])
+        const tree = f ? treeAt(f.loc, f.n) : undefined
+        const what = ev.outcome === 'victory' ? 'won' : ev.outcome === 'fled' ? 'fled' : 'lost'
+        let shownNodes: BookNode[] = []
+        if (f && tree && ev.outcome) {
+          const at = `${f.loc}:${f.n}:${f.id ?? tree.id}`
+          // итог боя с кнопки этапа отметила сессия (endCombat); бой с экрана боя отмечается здесь
+          if (f.id === undefined) room.session().bookMark(at, what)
+          shownNodes = revealedBy(tree, `${f.loc}:${f.n}`, room.state.claimed ?? [], `${at}:${what}`)
+        }
+        if (f && shownNodes.length) this.sayNodes(room, f.loc, f.n, [ev.text], shownNodes)
         else this.say(room, `${ev.text} Продолжайте: выберите вариант выше или назовите номер следующего помещения.`)
       } else if (ev.type === 'spell' && ev.spell) {
         this.say(room, spellReply(room, ev.spell))
@@ -288,37 +299,57 @@ export class ScriptedGm {
     const hero = this.actor(room, playerId)
     const needHero = () => { if (!hero) throw new GameError('В партии нет живых героев'); return hero }
     switch (a.t) {
+      case 'node':
       case 'branch': {
-        const seg = idx.locationById.get(a.loc)?.paragraphs.find((x) => x.n === a.n)?.segments?.[a.seg]
-        if (!seg) throw new GameError('Вариант не найден')
-        // в исходах боя упомянутые монстры убраны правками книги; новый противник после победы («2 орка бросаются») остаётся
-        const offers = [...fresh(room, [...hintOffers(seg.hints, { loc: a.loc, n: a.n, seg: a.seg }, 's', seg.blocks.map(blockText).join('\n')), ...rollOffers(seg.blocks, a.loc, a.n, a.seg)]), { label: 'Идти дальше', action: { t: 'next' } as ScriptAction }]
-        this.say(room, shown(seg.blocks.map(blockText).join('\n')), offers)
+        // кнопки до 2026-10-20 ссылались на ветку seg — у дерева из старой разметки это этап с тем же номером
+        const id = a.t === 'node' ? a.id : String(a.seg)
+        const tree = treeAt(a.loc, a.n)
+        const node = tree && findNode(tree, id)
+        if (!tree || !node || node.on !== 'choice') throw new GameError('Вариант не найден')
+        const P = `${a.loc}:${a.n}`
+        const before = new Set(openNodes(tree, P, room.state.claimed).map((x) => x.id))
+        if (before.has(id)) throw new GameError('Этот вариант уже выбран')
+        if (!before.has(parentOf(tree, id)?.id ?? '')) throw new GameError('Этот вариант пока недоступен')
+        s.bookMark(`${P}:${id}`, 'open')
+        this.sayNodes(room, a.loc, a.n, [], openNodes(tree, P, room.state.claimed).filter((x) => !before.has(x.id)))
         return
       }
       case 'roll': {
-        const seg = idx.locationById.get(a.loc)?.paragraphs.find((x) => x.n === a.n)?.segments?.[a.seg]
-        const block = seg?.blocks[a.block]
-        if (!block || !('roll' in block)) throw new GameError('Список не найден')
-        const sides = rollSides(block.roll)
-        const r = s.rollDie(sides, 'Бросок по списку')
-        const hit = block.roll.find((o) => o.values.includes(r))
-        // награда исхода — своя у каждого варианта списка (в каждом доме деревни — своя), берётся один раз
-        this.say(room, `Выпало ${r}: ${hit ? shown(hit.text) : 'ничего не происходит'}`, hintOffers(hit?.hints, { loc: a.loc, n: a.n, seg: a.seg }, `r${a.block}.${hit ? block.roll.indexOf(hit) : 0}`, hit?.text))
+        const tree = treeAt(a.loc, a.n)
+        const P = `${a.loc}:${a.n}`
+        // кнопки до 2026-10-20: список block части seg
+        const node = tree && (a.id !== undefined ? findNode(tree, a.id) : allNodes(tree).find((x) => !!x.dice && diceKey(x) === `${a.seg}:${a.block}`))
+        const d = node?.dice
+        if (!tree || !node || !d) throw new GameError('Список не найден')
+        const r = s.rollDie(d.sides, 'Бросок по списку')
+        const hit = (node.then ?? []).find((c) => typeof c.on === 'object' && c.on.roll.includes(r))
+        if (d.repeat) {
+          // список «для каждого» бросают много раз; награда исхода — своя у каждого варианта и берётся один раз
+          this.say(room, `Выпало ${r}: ${hit ? shown(nodeText(hit)) : 'ничего не происходит'}`, hit ? fresh(room, nodeOffers(a.loc, a.n, hit, room.state.claimed ?? [], new Set())) : [])
+          return
+        }
+        // бросок по списку — один раз (иначе перебрасывали бы до награды)
+        s.claim(`${P}:${diceKey(node)}:roll=${r}`)
+        const opened = revealedBy(tree, P, room.state.claimed ?? [], `${P}:${diceKey(node)}:roll=${r}`)
+        if (!opened.length) { this.say(room, `Выпало ${r}: ничего не происходит.`); return }
+        this.sayNodes(room, a.loc, a.n, [], opened.map((x, i) => (i === 0 && x === hit ? { ...x, on: { roll: [r] } } : x)))
         return
       }
       case 'luck': {
         const h = needHero()
-        const r = s.luckCheck(h.uid, a.target)
+        const tree = a.loc !== undefined && a.n !== undefined ? treeAt(a.loc, a.n) : undefined
+        const id = a.id ?? (a.seg !== undefined ? String(a.seg) : undefined)
+        const node = tree && id !== undefined ? findNode(tree, id) : undefined
+        const P = `${a.loc}:${a.n}`
+        const before = tree ? new Set(openNodes(tree, P, room.state.claimed).map((x) => x.id)) : new Set<string>()
+        const r = s.luckCheck(h.uid, a.target, node ? `${P}:${node.id}` : undefined)
         const head = `${h.name} испытывает удачу (${a.target}): к18 = ${r.roll}${r.luck ? ` + ${r.luck}` : ''} — ${r.ok ? 'удача!' : 'неудача.'}`
-        if (a.loc === undefined || a.n === undefined) { this.say(room, head); return }
-        // ветки-исходы этого параграфа и последствие провала из текста
-        const offers = outcomeOffers(a.loc, a.n, r.ok ? 'luckOk' : 'luckFail', a.seg)
-        const seg = a.seg !== undefined ? segmentsAt(a.loc, a.n)[a.seg] : undefined
-        const text = seg ? [seg.kind === 'branch' ? seg.label : '', ...seg.blocks.map(blockText)].join(' ') : ''
-        const pen = r.ok ? null : luckPenalty(text, a.target)
-        if (pen) offers.unshift({ label: `Принять последствия: ${pen.text}`, action: { t: 'penalty', heroUid: h.uid, kind: pen.kind, amount: pen.amount } })
-        this.say(room, pen ? `${head} По книге: иначе — ${pen.text}.` : head, offers)
+        if (!tree || !node) { this.say(room, head); return }
+        // исходы этой проверки и последствие провала из текста этапа
+        const pen = r.ok ? null : luckPenalty([node.label ?? '', nodeFullText(node)].join(' '), a.target)
+        const extra: Offer[] = pen ? [{ label: `Принять последствия: ${pen.text}`, action: { t: 'penalty', heroUid: h.uid, kind: pen.kind, amount: pen.amount } }] : []
+        const opened = openNodes(tree, P, room.state.claimed).filter((x) => !before.has(x.id))
+        this.sayNodes(room, a.loc!, a.n!, [pen ? `${head} По книге: иначе — ${pen.text}.` : head], opened, extra)
         return
       }
       case 'penalty': {
@@ -330,11 +361,13 @@ export class ScriptedGm {
         return
       }
       case 'fight': {
-        s.startEncounter(a.specs)
-        // бой привязан к своему параграфу (а не к последнему показанному: в пути их бывает несколько подряд)
+        // бой привязан к своему этапу (а не к последнему показанному параграфу: в пути их бывает несколько подряд);
+        // его итог отметит сессия и откроет исходы этапа
+        const at = a.loc && a.n !== undefined && a.id !== undefined ? `${a.loc}:${a.n}:${a.id}` : undefined
+        s.startEncounter(a.specs, undefined, at)
         const loc = a.loc ?? room.script.locationId
         const n = a.n ?? room.script.n
-        if (loc && n !== null && n !== undefined) room.script.fight = { loc, n }
+        if (loc && n !== null && n !== undefined) room.script.fight = at ? { loc, n, id: a.id } : { loc, n }
         this.say(room, `Бой! Противники: ${room.state.combat?.monsters.map((m) => m.name).join(', ')}. Сражайтесь на экране боя.`)
         return
       }
