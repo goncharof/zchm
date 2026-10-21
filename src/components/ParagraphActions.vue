@@ -51,7 +51,8 @@ async function reward(key: string, give: (h: string) => Promise<boolean>) {
 }
 async function luck(target: number) {
   const h = need(); if (!h) return
-  const r = await store.luckCheck(h, target)
+  // место в книге: итог проверки отмечается и открывает её исходы (src/game/tree.ts)
+  const r = await store.luckCheck(h, target, props.place)
   if (!r) return
   lastLuck.value = `${store.hero(h).name}: к18 = ${r.roll}${r.luck ? ` + ${r.luck}` : ''} против ${target} — ${r.ok ? 'удача!' : 'неудача'}`
 }
@@ -59,7 +60,7 @@ function fight(ids: string[]) {
   const specs = ids.map((monsterId) => ({ monsterId, count: counts.value[monsterId] ?? 1 })).filter((s) => s.count > 0)
   if (specs.length) emit('fight', specs)
 }
-const has = computed(() => !!props.hints && Object.keys(props.hints).length > 0)
+const has = computed(() => !!props.hints && Object.values(props.hints).some((v) => (Array.isArray(v) ? v.length : !!v)))
 </script>
 
 <template>

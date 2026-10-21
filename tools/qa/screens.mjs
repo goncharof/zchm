@@ -103,9 +103,10 @@ async function run(label, viewport) {
   if (await finish.count()) await finish.click()
 
   await page.goto(BASE + '#/location/zolotoy-gorod?p=2'); await page.waitForSelector('.branch-head')
+  // по этапам: выбор открывает ветку, бросок — свой исход
   await page.locator('.branch-head').first().click()
-  await page.getByRole('button', { name: /^Бросить к/ }).first().click()
-  await page.locator('.branch-head').nth(2).click()
+  await page.getByRole('button', { name: /Бросить к/ }).first().click()
+  await page.getByRole('button', { name: /Брошено/ }).first().waitFor()
   await shot('09b-branches')
 
   await page.goto(BASE + '#/bestiary'); await page.waitForSelector('.thumb')

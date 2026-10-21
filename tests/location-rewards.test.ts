@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { createApp, h, nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import ParagraphActions from '@/components/ParagraphActions.vue'
-import RollBlock from '@/components/RollBlock.vue'
+import BookStages from '@/components/BookStages.vue'
+import { idx } from '@/data'
+import type { Paragraph } from '@/types'
+import { setRng } from '@/engine/dice'
 import { useGameStore } from '@/stores/game'
 
 const flush = async () => { await nextTick(); await new Promise((r) => setTimeout(r, 10)); await nextTick() }
@@ -43,21 +46,45 @@ describe('награды Книги Жизни без ведущего', () => {
 
   it('обычный список бросают один раз, список «на каждый» — снова', async () => {
     localStorage.clear()
-    const options = [{ values: [1, 2, 3], text: 'ничего' }, { values: [4, 5, 6], text: 'находка' }]
-    const once = mount(RollBlock, () => ({ options, place: 'doroga:54:0:1' }))
+    const roll = (repeat: boolean): Paragraph => ({ n: 54, segments: [{ kind: 'scene', blocks: [{ text: 'Перед вами черепа.' }, { roll: [{ values: [1, 2, 3], text: 'ничего' }, { values: [4, 5, 6], text: 'находка' }], ...(repeat ? { repeat: true } : {}) }] }] })
+    let paragraph = roll(false)
+    const once = mount(BookStages, () => ({ loc: 'doroga', locName: 'Дорога', paragraph, heroUid: '' }))
     const store = useGameStore()
     store.newGame()
     once.app.mount(once.el); await flush()
-    button(once.el, 'Бросить').click(); await flush()
+    button(once.el, 'Бросить к6').click(); await flush()
     expect(button(once.el, 'Брошено').disabled).toBe(true)
+    // выпавший исход открылся этапом, остальные скрыты
+    expect(once.el.textContent).toMatch(/Выпало (1, 2, 3|4, 5, 6)/)
+    expect(once.el.textContent?.includes('ничего') !== once.el.textContent?.includes('находка')).toBe(true)
     once.app.unmount()
-    const many = createApp({ render: () => h(RollBlock, { options, place: 'doroga:54:0:1', repeat: true }) }).use(once.pinia)
+    paragraph = roll(true)
+    const many = createApp({ render: () => h(BookStages, { loc: 'doroga', locName: 'Дорога', paragraph, heroUid: '' }) }).use(once.pinia)
     const el2 = document.createElement('div'); document.body.appendChild(el2)
     many.mount(el2); await flush()
-    const roll = button(el2, 'Бросить')
-    expect(roll.disabled).toBe(false)
-    roll.click(); await flush(); roll.click(); await flush()
+    const b = button(el2, 'Бросить к6 (на каждый)')
+    expect(b.disabled).toBe(false)
+    b.click(); await flush(); b.click(); await flush()
     expect(store.game!.log.filter((e) => e.text.includes('к6 =')).length).toBeGreaterThanOrEqual(3)
     many.unmount()
+  })
+
+  it('по этапам: вариант открывается выбором, исход провала проверки — сам, исход удачи скрыт', async () => {
+    localStorage.clear()
+    const paragraph = idx.locationById.get('upokoische')!.paragraphs.find((p) => p.n === 26)!
+    let heroUid = ''
+    const m = mount(BookStages, () => ({ loc: 'upokoische', locName: 'Упокоище', paragraph, heroUid }))
+    const store = useGameStore()
+    store.newGame()
+    heroUid = (await store.addHero('Конан', 'warrior'))!.uid
+    m.app.mount(m.el); await flush()
+    expect(m.el.textContent).not.toContain('Падаете без чувств')
+    const luck = button(m.el, 'Бросок удачи 8')
+    setRng(() => 0) // к18 = 1 — провал
+    luck.click(); await flush()
+    expect(m.el.textContent).toContain('Падаете без чувств')
+    expect(m.el.textContent).not.toContain('Если перерубаете')
+    expect(m.errors).toEqual([])
+    m.app.unmount()
   })
 })
