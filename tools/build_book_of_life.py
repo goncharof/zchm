@@ -327,6 +327,157 @@ def apply_overrides(locations, issues):
                 t['when'] = when
 
 
+BOOK_DIR = os.path.join(os.path.dirname(__file__), 'book')
+DATA = os.path.join(ROOT, 'src', 'data')
+NODE_ON = {'enter', 'choice', 'win', 'lose', 'flee', 'ok', 'fail'}
+NODE_KEYS = {'id', 'on', 'label', 'text', 'teaser', 'hints', 'passWith', 'dice', 'effects', 'npcs', 'exclusive', 'goto', 'then'}
+HINT_KEYS = {'luck', 'bottles', 'coins', 'prices', 'monsters', 'monsterCounts', 'artifact', 'tavern', 'shop', 'scrolls', 'items'}
+
+
+def _norm(x):
+    return ' '.join(x.lower().replace('ё', 'е').split())
+
+
+def check_tree(tree, text, ctx, ns):
+    """Ошибки дерева этапов: схема, ссылки на бестиарий, предметы и помещения, покрытие текста книги.
+    Куски text ищутся в тексте параграфа дословно (без учёта регистра, пробелов и знаков по краям); вместе с условиями
+    веток, найденными в тексте, они должны покрыть весь параграф — ни одна фраза книги не теряется."""
+    errs, ids, pieces = [], set(), []
+    monsters, items = ctx['monsters'], ctx['items']
+
+    def walk(n, parent):
+        where = f'этап {n.get("id")!r}'
+        if not isinstance(n, dict) or set(n) - NODE_KEYS:
+            errs.append(f'{where}: лишние поля {sorted(set(n) - NODE_KEYS) if isinstance(n, dict) else n}')
+            return
+        if not isinstance(n.get('id'), str) or not re.fullmatch(r'[\w.:-]+', n['id']) or n['id'] in ids:
+            errs.append(f'{where}: id пустой, с недопустимыми знаками или повторяется')
+        ids.add(n.get('id'))
+        on = n.get('on')
+        roll = isinstance(on, dict) and set(on) == {'roll'} and all(isinstance(v, int) for v in on['roll'])
+        if not (on in NODE_ON or roll):
+            errs.append(f'{where}: неизвестное on {on!r}')
+        if parent is None and on != 'enter':
+            errs.append('корень должен открываться при входе (on: enter)')
+        if roll and not (parent and parent.get('dice')):
+            errs.append(f'{where}: исход броска у этапа без dice')
+        if roll and parent and parent.get('dice') and any(not 1 <= v <= parent['dice'].get('sides', 6) for v in on['roll']):
+            errs.append(f'{where}: число вне кубика')
+        if on == 'choice' and not n.get('label'):
+            errs.append(f'{where}: у выбора нет label')
+        for t in n.get('text', []):
+            if not isinstance(t, dict) or not isinstance(t.get('t'), str) or set(t) - {'t', 'gm'}:
+                errs.append(f'{where}: кусок текста {t!r}')
+            else:
+                pieces.append(t['t'])
+        if n.get('label'):
+            pieces.append(('label', n['label']))
+        h = n.get('hints') or {}
+        if set(h) - HINT_KEYS:
+            errs.append(f'{where}: неизвестные подсказки {sorted(set(h) - HINT_KEYS)}')
+        for m in h.get('monsters', []) + [x for x in n.get('npcs', []) if x in monsters or re.fullmatch(r'[a-z-]+', x)]:
+            if m not in monsters:
+                errs.append(f'{where}: нет монстра {m}')
+        for it in h.get('items', []):
+            if it.get('id') not in items.get(it.get('kind'), set()):
+                errs.append(f'{where}: нет вещи {it}')
+        if n.get('passWith') and n['passWith'] not in items['item']:
+            errs.append(f'{where}: нет предмета {n["passWith"]}')
+        if n.get('passWith') and not h.get('luck'):
+            errs.append(f'{where}: passWith без проверки удачи')
+        for e in n.get('effects', []):
+            kinds = set(e) & {'lives', 'xp', 'coins', 'companion'}
+            if len(kinds) != 1 or set(e) - {'lives', 'xp', 'coins', 'companion', 'who', 'battles'} or e.get('who', 'actor') not in ('actor', 'each'):
+                errs.append(f'{where}: последствие {e}')
+            elif 'companion' in e and e['companion'] not in monsters:
+                errs.append(f'{where}: нет монстра-спутника {e["companion"]}')
+        if 'goto' in n and n['goto'] not in ns:
+            errs.append(f'{where}: нет помещения {n["goto"]}')
+        if n.get('dice') and (set(n['dice']) - {'sides', 'key', 'repeat'} or n['dice'].get('sides') not in (3, 6, 18)):
+            errs.append(f'{where}: dice {n["dice"]}')
+        for c in n.get('then', []):
+            walk(c, n)
+
+    walk(tree, None)
+    # покрытие текста: сначала длинные куски, чтобы короткий не съел часть длинного
+    rest = _norm(text)
+    strip = lambda x: _norm(x).strip(' .,;:!?—–-()«»"')
+    texts = sorted((p for p in pieces if isinstance(p, str)), key=len, reverse=True)
+    for t in texts:
+        k = strip(t)
+        if k and k in rest:
+            rest = rest.replace(k, ' ', 1)
+        elif k:
+            errs.append(f'кусок не найден в тексте книги: «{t[:70]}»')
+    for _, label in (p for p in pieces if not isinstance(p, str)):
+        k = strip(label)
+        if k and k in rest:
+            rest = rest.replace(k, ' ', 1)
+    left = ' '.join(rest.split())
+    if re.search(r'[^\W\d_]', left):
+        errs.append(f'текст книги не покрыт: «{left[:120]}»')
+    return errs
+
+
+def tree_hints(tree):
+    """Сводные подсказки параграфа по дереву: монстры и проверки удачи (для обзора и проверок данных)."""
+    mons, luck = [], []
+    stack = [tree]
+    while stack:
+        n = stack.pop()
+        h = n.get('hints') or {}
+        mons += [m for m in h.get('monsters', []) if m not in mons]
+        luck += [v for v in h.get('luck', []) if v not in luck]
+        stack += n.get('then', [])
+    return {k: v for k, v in (('monsters', mons), ('luck', luck)) if v}
+
+
+def apply_trees(locations, raw, issues):
+    """Деревья этапов, размеченные вручную (tools/book/<локация>.json: номер → корень), подменяют эвристическую
+    разметку параграфа. Правка того же параграфа в book_overrides.json после этого устарела."""
+    if not os.path.isdir(BOOK_DIR):
+        return
+    load = lambda name: json.load(open(os.path.join(DATA, name), encoding='utf-8'))
+    ctx = {'monsters': {m['id'] for m in json.load(open(BESTIARY, encoding='utf-8'))},
+           'items': {'weapon': {x['id'] for x in load('weapons.json')}, 'armor': {x['id'] for x in load('armor.json')},
+                     'item': {x['id'] for x in load('items.json')}}}
+    with open(OVERRIDES, encoding='utf-8') as f:
+        overridden = set(json.load(f))
+    by_id = {l['id']: l for l in locations}
+    for fname in sorted(os.listdir(BOOK_DIR)):
+        if not fname.endswith('.json'):
+            continue
+        loc_id = fname[:-5]
+        loc = by_id.get(loc_id)
+        if not loc:
+            issues.append(f'дерево {fname}: нет такой локации')
+            continue
+        with open(os.path.join(BOOK_DIR, fname), encoding='utf-8') as f:
+            data = json.load(f)
+        ns = {p['n'] for p in loc['paragraphs']}
+        for key, tree in data.items():
+            if key.startswith('_'):
+                continue
+            p = next((x for x in loc['paragraphs'] if str(x['n']) == key), None)
+            if not p:
+                issues.append(f'дерево {loc_id}:{key}: нет такого параграфа')
+                continue
+            errs = check_tree(tree, raw[(loc_id, p['n'])], ctx, ns)
+            if errs:
+                issues.extend(f'дерево {loc_id}:{key}: {e}' for e in errs)
+                continue
+            p.pop('segments', None)
+            p.pop('text', None)
+            p['tree'] = tree
+            h = tree_hints(tree)
+            if h:
+                p['hints'] = h
+            else:
+                p.pop('hints', None)
+            if f'{loc_id}:{key}' in overridden:
+                issues.append(f'правка {loc_id}:{key} устарела: параграф размечен деревом (tools/book/{fname})')
+
+
 MONSTER_PATTERNS = None
 # слова перед суммой, означающие плату, а не находку: «за 15 монет», «просит 10 монет», «по 5 монет»
 PAY_WORDS = {'за', 'по', 'просит', 'требует', 'мне', 'щель', 'брось', 'бросьте', 'заплатить', 'заплатите', 'плата',
@@ -417,7 +568,7 @@ def hints_for(text):
 
 def main():
     doc = pdfium.PdfDocument(PDF)
-    locations, issues = [], []
+    locations, issues, raw = [], [], {}
     for order, (name, first, last) in enumerate(CHAPTERS, start=1):
         has_plan = name != 'Дорога'
         loc = {'id': slug(name), 'name': name, 'order': order}
@@ -429,6 +580,7 @@ def main():
         loc['pages'] = [first, last]
         paras = parse_chapter(doc, name, first, last, has_plan, issues)
         for p in paras:
+            raw[(loc['id'], p['n'])] = p['text']
             h = hints_for(p['text'])
             if h:
                 p['hints'] = h
@@ -444,10 +596,12 @@ def main():
         print(f'{order:2d}. {name:28s} стр. {first:2d}-{last:2d}  параграфов: {len(paras):3d}  '
               f'нумерация {"ok" if ok else "BROKEN"}  план: {size}')
     apply_overrides(locations, issues)
+    apply_trees(locations, raw, issues)
     with open(OUT_JSON, 'w', encoding='utf-8') as w:
         json.dump(locations, w, ensure_ascii=False, indent=1)
     allp = [p for l in locations for p in l['paragraphs']]
-    print(f"\nсегменты: {sum(1 for p in allp if p.get('segments'))} параграфов с ветками/бросками из {len(allp)}, "
+    print(f"\nдеревья: {sum(1 for p in allp if p.get('tree'))} параграфов размечены вручную (tools/book)")
+    print(f"сегменты: {sum(1 for p in allp if p.get('segments'))} параграфов с ветками/бросками из {len(allp)}, "
           f"веток {sum(1 for p in allp for g in p.get('segments', []) if g['kind'] == 'branch')}")
     print(f'\n-> {OUT_JSON}')
     if issues:

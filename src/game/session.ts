@@ -15,7 +15,8 @@ import { makeAlly, cleanupAfterCombat, grantRoundActions, heroRoll, endHeroesTur
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
 import { TROPHIES, takeLootItem } from '@/engine/loot'
 import { plural } from '@/ui/format'
-import { REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
+import { effectLabel, findNode, paragraphTree } from './tree'
+import { DEAD_AT, REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
 
 export const LOG_CAP = 500
 const LOG_KINDS: NonNullable<LogEntry['kind']>[] = ['hit', 'miss', 'damage', 'spell', 'info', 'xp', 'death', 'flee', 'luck']
@@ -554,6 +555,43 @@ export class GameSession {
     if (!['open', 'won', 'lost', 'fled', 'ok', 'fail'].includes(String(what))) throw new GameError('Неверная отметка')
     this.mark(`${this.bookPlace(place)}:${what}`)
   }
+  /** Последствия этапа книги (урон, лечение, опыт, монеты, спутник) — один раз, отметка `место:fx`. Берутся из данных
+   *  книги, а не из команды: по сети приходит только место. heroUid — герой, который действует */
+  bookEffects(place: string, heroUid?: string): string[] {
+    const at = this.bookPlace(place)
+    const [loc, n, ...rest] = at.split(':')
+    const p = idx.locationById.get(loc)!.paragraphs.find((x) => x.n === Number(n))!
+    const node = findNode(paragraphTree(p), rest.join(':'))
+    if (!node?.effects?.length) throw new GameError('У этого этапа нет последствий')
+    if ((this.state.claimed ?? []).includes(`${at}:fx`)) throw new GameError('Последствия уже применены')
+    const alive = this.heroes.filter((h) => !h.status.dead)
+    const actor = alive.find((h) => h.uid === heroUid) ?? alive[0]
+    this.mark(`${at}:fx`)
+    const out: string[] = []
+    for (const e of node.effects) {
+      const who = 'who' in e && e.who === 'each' ? alive : actor ? [actor] : []
+      if ('lives' in e) {
+        for (const h of who) {
+          const v = e.lives
+          const delta = v === 'death' ? DEAD_AT - h.lives : v === 'half' ? -Math.ceil(Math.max(0, h.lives) / 2) : v === 'full' ? h.maxLives - h.lives : typeof v === 'object' ? -roll(v.dice) : v
+          this.adjustLives(h.uid, delta)
+          out.push(v === 'death' ? `${h.name} погибает.` : `${h.name}: ${delta >= 0 ? '+' : '−'}${Math.abs(delta)} ${plural(Math.abs(delta), 'жизнь', 'жизни', 'жизней')} (осталось ${h.lives}).`)
+        }
+      } else if ('xp' in e) {
+        for (const h of who) { this.giveXp(h.uid, e.xp); out.push(`${h.name} получает ${e.xp} опыта.`) }
+      } else if ('coins' in e) {
+        for (const h of who) {
+          const delta = e.coins === 'half' ? -Math.floor(h.money / 2) : e.coins === 'all' ? -h.money : Math.max(e.coins, -h.money)
+          this.adjustMoney(h.uid, delta)
+          out.push(`${h.name}: ${delta >= 0 ? '+' : '−'}${Math.abs(delta)} ${plural(Math.abs(delta), 'монета', 'монеты', 'монет')} (всего ${h.money}).`)
+        }
+      } else {
+        this.addCompanion(e.companion, e.battles ?? 3)
+        out.push(`К партии присоединяется ${effectLabel(e).replace(/^спутник: /, '')}.`)
+      }
+    }
+    return out
+  }
   /** Снять отметку, если награду выдать не удалось (нет связи, герой убран) — иначе она пропала бы навсегда */
   unclaim(key: string): void {
     const claimed = this.state.claimed ?? []
@@ -773,7 +811,7 @@ export const COMMANDS = {
   drink: 'owner', identifyBottle: 'owner', copyScroll: 'owner', learnSpell: 'owner', useAntidote: 'owner', useParalysisPotion: 'owner', poisonWeapon: 'owner',
   adjustLives: 'gm', adjustMana: 'gm', adjustMoney: 'gm', giveXp: 'gm', giveItem: 'gm',
   restAll: 'party', travelTo: 'party', enterLocation: 'party', leaveLocation: 'party', markVisited: 'party', dismissRoad: 'party',
-  rollDie: 'party', rollDice: 'party', claim: 'gm', unclaim: 'gm', bookMark: 'gm', luckCheck: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
+  rollDie: 'party', rollDice: 'party', claim: 'gm', unclaim: 'gm', bookMark: 'gm', bookEffects: 'gm', luckCheck: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
   addCompanion: 'gm', dismissCompanion: 'party',
   startEncounter: 'gm', addMonstersToCombat: 'gm', abortCombat: 'gm',
   attack: 'owner', cast: 'owner', flee: 'owner', skip: 'owner',

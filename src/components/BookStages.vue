@@ -2,14 +2,15 @@
 import { computed, ref, watch } from 'vue'
 import type { BookNode, Paragraph } from '@/types'
 import type { EncounterSpec } from '@/engine/combat'
-import { diceKey, hasResult, nodeText, openNodes, paragraphTree } from '@/game/tree'
+import { idx } from '@/data'
+import { diceKey, effectLabel, hasResult, nodeText, openNodes, paragraphTree } from '@/game/tree'
 import { useGameStore } from '@/stores/game'
 import ParagraphActions from './ParagraphActions.vue'
 
 /** Параграф по этапам (одиночная игра и живой ведущий): открытые этапы с их действиями и невыбранные варианты.
  *  Исходы боя, проверки удачи и броска по списку открываются сами — по отметкам прохождения в state.claimed */
 const props = defineProps<{ loc: string; locName: string; paragraph: Paragraph; heroUid: string }>()
-const emit = defineEmits<{ fight: [specs: EncounterSpec[], place: string] }>()
+const emit = defineEmits<{ fight: [specs: EncounterSpec[], place: string]; goto: [n: number] }>()
 const store = useGameStore()
 
 const P = computed(() => `${props.loc}:${props.paragraph.n}`)
@@ -61,6 +62,17 @@ async function roll(n: BookNode) {
   await store.claim(`${P.value}:${diceKey(n)}:roll=${r}`)
 }
 const teaser = (n: BookNode) => n.teaser && !hasResult(P.value, n.id, claimed.value, 'won')
+/** проверку удачи заменяет предмет: у кого он есть */
+const passHolder = (n: BookNode) => n.passWith && n.hints?.luck?.length && !hasResult(P.value, n.id, claimed.value, 'ok')
+  ? store.heroes.find((h) => !h.status.dead && h.inventory.some((e) => e.kind === 'item' && e.ref === n.passWith)) : undefined
+const effectsDone = (n: BookNode) => claimed.value.includes(`${place(n)}:fx`)
+const effects = (n: BookNode) => (n.effects ?? []).map(effectLabel).join(', ')
+const lastEffects = ref<Record<string, string>>({})
+async function applyEffects(n: BookNode) {
+  const lines = await store.bookEffects(place(n), props.heroUid)
+  if (lines) lastEffects.value = { ...lastEffects.value, [n.id]: lines.join(' ') }
+}
+const npcName = (x: string) => idx.monsterById.get(x)?.name ?? x
 </script>
 
 <template>
@@ -68,7 +80,14 @@ const teaser = (n: BookNode) => n.teaser && !hasResult(P.value, n.id, claimed.va
     <div v-if="head(n)" class="stage-head">{{ head(n) }}</div>
     <p v-if="nodeText(n)" class="paragraph-text">{{ nodeText(n) }}</p>
     <p v-if="teaser(n)" class="small muted" style="font-style:italic">{{ n.teaser }}</p>
+    <div v-if="n.npcs?.length" class="row" style="margin-top:.3rem"><span v-for="x in n.npcs" :key="x" class="badge">{{ npcName(x) }}</span></div>
     <ParagraphActions :hints="hints(n)" :hero-uid="heroUid" :place="place(n)" @fight="(s) => emit('fight', s, place(n))" />
+    <div v-if="passHolder(n) || n.effects?.length || n.goto !== undefined" class="row" style="margin-top:.45rem">
+      <button v-if="passHolder(n)" class="small" @click="store.bookMark(place(n), 'ok')">🗝 Открыть: {{ idx.itemById.get(n.passWith!)?.name }} ({{ passHolder(n)!.name }})</button>
+      <button v-if="n.effects?.length && !effectsDone(n)" class="small danger" @click="applyEffects(n)">Последствия: {{ effects(n) }}</button>
+      <span v-else-if="n.effects?.length" class="small muted">Последствия применены: {{ lastEffects[n.id] ?? effects(n) }}</span>
+      <button v-if="n.goto !== undefined" class="small" @click="emit('goto', n.goto!)">Перейти в помещение {{ n.goto }} →</button>
+    </div>
     <div v-if="n.dice" class="row" style="margin-top:.45rem">
       <button class="small primary" :disabled="!n.dice.repeat && rolled(n) !== null" @click="roll(n)">
         {{ !n.dice.repeat && rolled(n) !== null ? `Брошено: ${rolled(n)}` : `🎲 Бросить к${n.dice.sides}${n.dice.repeat ? ' (на каждый)' : ''}` }}

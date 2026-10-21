@@ -60,6 +60,7 @@ function fight(ids: string[]) {
   const specs = ids.map((monsterId) => ({ monsterId, count: counts.value[monsterId] ?? 1 })).filter((s) => s.count > 0)
   if (specs.length) emit('fight', specs)
 }
+const itemName = (it: { kind: 'weapon' | 'armor' | 'item'; id: string }) => (it.kind === 'weapon' ? idx.weaponById : it.kind === 'armor' ? idx.armorById : idx.itemById).get(it.id)?.name ?? it.id
 const has = computed(() => !!props.hints && Object.values(props.hints).some((v) => (Array.isArray(v) ? v.length : !!v)))
 </script>
 
@@ -84,6 +85,7 @@ const has = computed(() => !!props.hints && Object.values(props.hints).some((v) 
     <template v-for="(b, i) in hints?.bottles ?? []" :key="'b' + i"><button class="small" :disabled="isTaken(rewardKey('b', b, hints?.bottles, i))" @click="reward(rewardKey('b', b, hints?.bottles, i), (h) => store.cmdOk('giveItem', h, 'bottle', String(b), 1, false))">Взять бутылку ({{ b }})</button></template>
     <button v-if="hints?.artifact" class="small" :disabled="isTaken('art')" @click="reward('art', (h) => store.cmdOk('findArtifact', h))">Найти артефакт (к18)</button>
     <template v-for="(s, i) in hints?.scrolls ?? []" :key="'s' + i"><button class="small" :disabled="isTaken(rewardKey('s', `${s.caster ?? ''}${s.level ?? ''}`, (hints?.scrolls ?? []).map((x) => `${x.caster ?? ''}${x.level ?? ''}`), i))" @click="reward(rewardKey('s', `${s.caster ?? ''}${s.level ?? ''}`, (hints?.scrolls ?? []).map((x) => `${x.caster ?? ''}${x.level ?? ''}`), i), (h) => store.cmdOk('giveScroll', h, s.caster as Caster | undefined, s.level))">Свиток{{ s.caster ? ` ${casterName(s.caster)}а` : '' }}{{ s.level ? ` ${s.level} ур.` : '' }}</button></template>
+    <template v-for="(it, i) in hints?.items ?? []" :key="'it' + i"><button class="small" :disabled="isTaken(`i:${it.kind}:${it.id}#${i}`)" @click="reward(`i:${it.kind}:${it.id}#${i}`, (h) => store.cmdOk('giveItem', h, it.kind, it.id, it.qty ?? 1))">Взять: {{ itemName(it) }}{{ (it.qty ?? 1) > 1 ? ` ×${it.qty}` : '' }}</button></template>
     <span v-for="m in npcs" :key="'npc' + m" class="badge" :title="idx.monsterById.get(m)?.description">{{ idx.monsterById.get(m)?.name }}</span>
   </div>
   <p v-if="lastLuck" class="small" style="color:var(--note);margin:.3rem 0 0">{{ lastLuck }}</p>

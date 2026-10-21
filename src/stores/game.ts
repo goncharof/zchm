@@ -307,6 +307,7 @@ export const useGameStore = defineStore('game', () => {
     claim: (key: string) => cmd('claim', key),
     unclaim: (key: string) => cmd('unclaim', key),
     bookMark: (place: string, what: string) => cmd('bookMark', place, what),
+    bookEffects: (place: string, heroUid?: string) => cmd('bookEffects', place, heroUid),
     finalDuelAttack: (heroUid: string) => cmd('finalDuelAttack', heroUid),
     drinkFountain: () => cmd('drinkFountain'),
     addCompanion: (monsterId: string, battles = 3) => cmd('addCompanion', monsterId, battles),

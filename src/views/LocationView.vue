@@ -153,7 +153,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
 
           <div v-if="gm && !revealed" class="row"><span class="muted">Режим ведущего: текст скрыт от игроков.</span><button class="small" @click="revealed = true">Показать текст</button></div>
           <template v-else-if="!fullText">
-            <BookStages :loc="loc.id" :loc-name="loc.name" :paragraph="paragraph" :hero-uid="heroUid" @fight="startFight" />
+            <BookStages :loc="loc.id" :loc-name="loc.name" :paragraph="paragraph" :hero-uid="heroUid" @fight="startFight" @goto="(n) => { done(); open(n) }" />
             <p v-if="staged" class="small muted" style="margin-top:.5rem">Варианты со стрелкой — выбор партии. Исходы боя, проверки удачи и броска откроются сами.</p>
           </template>
           <template v-else>

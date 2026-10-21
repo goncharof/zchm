@@ -212,6 +212,8 @@ export interface ParagraphHints {
   shop?: boolean
   /** свитки: уровень и тип заклинания, если указан */
   scrolls?: { caster?: Caster; level?: number }[]
+  /** вещи из таблиц правил (ручная разметка дерева): оружие, доспехи, предметы */
+  items?: { kind: 'weapon' | 'armor' | 'item'; id: string; qty?: number }[]
 }
 
 export interface RollOption {
@@ -242,12 +244,14 @@ export type NodeOn = 'enter' | 'choice' | 'win' | 'lose' | 'flee' | 'ok' | 'fail
 /** Дословный кусок текста книги; gm — пометка ведущего, игрокам не показывается */
 export interface BookText { t: string; gm?: true }
 
-/** Последствие, которое наступает само, когда этап открыт */
+/** Последствие этапа (применяется один раз, GameSession.bookEffects). who: actor — герой, который действует (по
+ *  умолчанию), each — каждый живой герой. lives: изменение жизней, death — смерть, half — половина жизней, full — все
+ *  жизни, { dice: 6 } — минус к6 жизней; coins: отрицательное — потеря, half/all — половина или все деньги */
 export type BookEffect =
-  | { lives: number | 'death' | 'half'; who?: 'actor' | 'each' }
-  | { heal: number | 'all'; who?: 'actor' | 'each' }
+  | { lives: number | 'death' | 'half' | 'full' | { dice: number }; who?: 'actor' | 'each' }
   | { xp: number; who?: 'actor' | 'each' }
-  | { coins: number | 'half' | 'all' }
+  | { coins: number | 'half' | 'all'; who?: 'actor' | 'each' }
+  | { companion: string; battles?: number }
 
 /** Этап параграфа (docs/BOOK_STRUCTURE.md, разделы 3 и 7) */
 export interface BookNode {
@@ -270,6 +274,8 @@ export interface BookNode {
   npcs?: string[]
   /** выбрали один вариант — остальные закрываются */
   exclusive?: true
+  /** переход в другое помещение той же локации («летит в центр города (локация 41)») */
+  goto?: number
   then?: BookNode[]
 }
 

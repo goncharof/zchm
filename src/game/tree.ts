@@ -4,7 +4,8 @@
  * его на лету из старой разметки (сцена и ветки). Что уже открыто, считается из отметок прохождения в `state.claimed`.
  */
 import { idx } from '@/data'
-import type { BookNode, NodeOn, Paragraph, ParagraphHints, ParagraphSegment } from '@/types'
+import type { BookEffect, BookNode, NodeOn, Paragraph, ParagraphHints, ParagraphSegment } from '@/types'
+import { plural } from '@/ui/format'
 import { paragraphSegments, rollSides } from './book'
 
 /** В подсказках есть монстр, с которым можно сразиться (не Мерлин, не торговец) */
@@ -135,3 +136,28 @@ export function nodeFullText(n: BookNode): string {
 export function hasResult(place: string, id: string, claimed: readonly string[], ...what: BookResult[]): boolean {
   return what.some((w) => claimed.includes(`${place}:${id}:${w}`))
 }
+
+/** Последствие словами для кнопки и журнала: «−2 жизни каждому», «спутник: дварф на 3 боя» */
+export function effectLabel(e: BookEffect): string {
+  const each = 'who' in e && e.who === 'each' ? ' каждому' : ''
+  if ('lives' in e) {
+    const v = e.lives
+    if (v === 'death') return `смерть${each}`
+    if (v === 'half') return `половина жизней${each}`
+    if (v === 'full') return `все жизни восстановлены${each}`
+    if (typeof v === 'object') return `−1к${v.dice} жизней${each}`
+    return `${v < 0 ? '−' : '+'}${Math.abs(v)} ${plural(Math.abs(v), 'жизнь', 'жизни', 'жизней')}${each}`
+  }
+  if ('xp' in e) return `+${e.xp} опыта${each}`
+  if ('coins' in e) {
+    const v = e.coins
+    if (v === 'half') return `половина денег${each}`
+    if (v === 'all') return `все деньги${each}`
+    return `${v < 0 ? '−' : '+'}${Math.abs(v)} ${plural(Math.abs(v), 'монета', 'монеты', 'монет')}${each}`
+  }
+  const m = idx.monsterById.get(e.companion)
+  return `спутник: ${m?.name ?? e.companion} на ${e.battles ?? 3} ${plural(e.battles ?? 3, 'бой', 'боя', 'боёв')}`
+}
+
+/** Опасное последствие — его принимают кнопкой, а не применяют сами */
+export const deadlyEffect = (e: BookEffect) => 'lives' in e && (e.lives === 'death' || e.lives === 'half')
