@@ -229,7 +229,10 @@ export class ScriptedGm {
       else if (x.effects?.length && !(room.state.claimed ?? []).includes(`${P}:${x.id}:fx`)) {
         const label = x.effects.map(effectLabel).join(', ')
         if (x.effects.some(deadlyEffect)) offers.unshift({ label: `Принять последствия: ${label}`, action: { t: 'effects', loc, n, id: x.id, heroUid: actor?.uid } })
-        else parts.push(`По книге: ${label}. ${s.bookEffects(`${P}:${x.id}`, actor?.uid).join(' ')}`)
+        else {
+          try { parts.push(`По книге: ${label}. ${s.bookEffects(`${P}:${x.id}`, actor?.uid).join(' ')}`) }
+          catch (e) { parts.push(`По книге: ${label}. ${(e as Error).message}`) }
+        }
       }
       return parts.filter(Boolean).join('\n\n')
     })

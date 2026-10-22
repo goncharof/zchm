@@ -140,7 +140,7 @@ describe('сценарный ведущий', () => {
     await g.c.chat('17', true)
     await until(() => /помещение 17/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
-    const pay = scene.choices!.find((c) => c.label === 'Заплатить 10 монет')!
+    const pay = scene.choices!.find((c) => c.label === '▸ Отдать 10 монет')!
     // жрец быстрого старта потратил все 40 монет на палицу: платить нечем
     const priest = g.state.heroes.find((h) => h.classId === 'priest')!
     expect(priest.money).toBe(0)
