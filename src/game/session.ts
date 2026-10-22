@@ -19,6 +19,8 @@ import { effectLabel, findNode, paragraphTree } from './tree'
 import { DEAD_AT, REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
 
 export const LOG_CAP = 500
+/** Больше всего противников в одном бою (и одного вида) */
+export const MAX_FOES = 60
 const LOG_KINDS: NonNullable<LogEntry['kind']>[] = ['hit', 'miss', 'damage', 'spell', 'info', 'xp', 'death', 'flee', 'luck']
 
 /** Ожидаемая ошибка игры (нет дороги, не хватает монет…): показывается игроку как уведомление */
@@ -639,17 +641,18 @@ export class GameSession {
   }
 
   // ---------- бой ----------
-  /** Состав боя из команды: монстры из бестиария, разумное число (команду может прислать любой клиент) */
+  /** Состав боя из команды: монстры из бестиария, разумное число (команду может прислать любой клиент). Предел — 60 на
+   *  бой и на один вид: самая большая схватка книги — 60 орков (Крепость рыцарей, § 41) */
   private specs(specs: EncounterSpec[]): EncounterSpec[] {
     if (!Array.isArray(specs) || !specs.length || specs.length > 10) throw new GameError('Неверный состав боя')
     let total = 0
     for (const s of specs) {
       if (!idx.monsterById.has(String(s?.monsterId))) throw new GameError(`Нет такого монстра: ${s?.monsterId}`)
       const n = Number(s.count)
-      if (!Number.isInteger(n) || n < 1 || n > 50) throw new GameError('Неверное число монстров')
+      if (!Number.isInteger(n) || n < 1 || n > MAX_FOES) throw new GameError('Неверное число монстров')
       total += n
     }
-    if (total > 60) throw new GameError('Слишком много монстров для одного боя')
+    if (total > MAX_FOES) throw new GameError('Слишком много монстров для одного боя')
     // только нужные поля: лишнее из сетевого запроса в бой не попадает
     return specs.map((s) => ({ monsterId: String(s.monsterId), count: Number(s.count) }))
   }

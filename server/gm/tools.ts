@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { idx } from '@/data'
 import type { Hero } from '@/engine/model'
 import type { BookNode, ParagraphHints } from '@/types'
-import { GameError } from '@/game/session'
+import { GameError, MAX_FOES } from '@/game/session'
 import type { Room } from '../rooms'
 
 type Tool = Anthropic.Beta.BetaTool
@@ -91,7 +91,7 @@ const SCHEMAS = {
   open_paragraph: z.object({ location_id: z.string(), n: z.number().int() }),
   roll_luck: z.object({ hero: Hero, target: z.number().int().min(1).max(40) }),
   roll_dice: z.object({ formula: z.string().max(20) }),
-  start_combat: z.object({ monsters: z.array(z.object({ id: z.string(), count: z.number().int().min(1).max(30) })).min(1).max(8) }),
+  start_combat: z.object({ monsters: z.array(z.object({ id: z.string(), count: z.number().int().min(1).max(MAX_FOES) })).min(1).max(8) }),
   change_lives: z.object({ hero: Hero, delta: z.number().int().min(-100).max(100), reason: z.string().max(200).optional() }),
   change_money: z.object({ hero: Hero, delta: z.number().int().min(-5000).max(5000), reason: z.string().max(200).optional() }),
   give_item: z.object({ hero: Hero, kind: z.enum(['bottle', 'weapon', 'armor', 'item']), ref: z.string().max(60), qty: z.number().int().min(1).max(50).default(1) }),

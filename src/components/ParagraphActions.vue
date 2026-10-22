@@ -5,6 +5,7 @@ import type { Caster, ParagraphHints } from '@/types'
 import type { EncounterSpec } from '@/engine/combat'
 import { useGameStore } from '@/stores/game'
 import { casterName } from '@/ui/format'
+import { MAX_FOES } from '@/game/session'
 import { Swords } from 'lucide-vue-next'
 
 /** Кнопки действий по подсказкам из текста: удача, бой, монеты, бутылки, артефакт, свитки */
@@ -68,7 +69,7 @@ const has = computed(() => !!props.hints && Object.values(props.hints).some((v) 
   <div v-if="has" class="row" style="margin-top:.45rem">
     <template v-for="t in hints?.luck ?? []" :key="'l' + t"><button class="small" @click="luck(t)">Бросок удачи {{ t }}</button></template>
     <template v-for="m in fightable" :key="m">
-      <span class="row" style="gap:.2rem"><input type="number" min="0" max="30" v-model.number="counts[m]" style="width:3.4rem" class="small" :aria-label="`Сколько: ${idx.monsterById.get(m)?.name}`" :title="'Сколько противников'" /><span class="small muted" aria-hidden="true">×</span><button class="small danger" @click="fight([m])"><Swords :size="15" />Бой: {{ idx.monsterById.get(m)?.name }}</button></span>
+      <span class="row" style="gap:.2rem"><input type="number" min="0" :max="MAX_FOES" v-model.number="counts[m]" style="width:3.4rem" class="small" :aria-label="`Сколько: ${idx.monsterById.get(m)?.name}`" :title="'Сколько противников'" /><span class="small muted" aria-hidden="true">×</span><button class="small danger" @click="fight([m])"><Swords :size="15" />Бой: {{ idx.monsterById.get(m)?.name }}</button></span>
     </template>
     <button v-if="fightable.length > 1" class="small danger" @click="fight(fightable)"><Swords :size="15" />Бой со всеми вместе</button>
     <details v-if="fightable.length" class="small" style="display:inline-block">
