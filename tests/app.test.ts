@@ -57,7 +57,7 @@ describe('приложение монтируется и проходит по �
 
     store.startEncounter([{ monsterId: 'zombi', count: 1 }], '/location/zolotoy-gorod?p=1')
     await router.push('/combat'); await flush()
-    expect(html()).toContain('Раунд 1'); expect(html()).toContain('Зомби')
+    expect(el.textContent).toMatch(/Раунд\s*1/); expect(html()).toContain('Зомби')
     store.toMelee(); await flush()
     let guard = 0
     while (store.combat && !store.combat.finished && guard++ < 200) {
