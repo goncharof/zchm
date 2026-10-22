@@ -10,8 +10,9 @@ mkdirSync(OUT, { recursive: true })
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 const problems = []
 
-async function run(label, viewport) {
-  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1 })
+async function run(label, viewport, touch = false) {
+  // touch: телефон с касаниями — без наведения мышью, pointer: coarse (крупные кнопки, поля 16 px)
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, ...(touch ? { isMobile: true, hasTouch: true } : {}) })
   const page = await ctx.newPage()
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') problems.push(`[${label}] console.${m.type()}: ${m.text()}`) })
   page.on('pageerror', (e) => problems.push(`[${label}] pageerror: ${e.message}`))
@@ -122,6 +123,8 @@ async function run(label, viewport) {
 }
 
 await run('desktop', { width: 1280, height: 800 })
-await run('mobile', { width: 390, height: 844 })
+await run('mobile', { width: 390, height: 844 }, true)
+// телефон в альбомной ориентации: шапка уезжает при прокрутке, нижняя панель ниже
+await run('landscape', { width: 844, height: 390 }, true)
 await browser.close()
 console.log(problems.length ? problems.join('\n') : 'Проблем не найдено')
