@@ -135,12 +135,15 @@ function stagePayload(n: BookNode): Record<string, unknown> {
   const lead = n.label && on !== 'choice' && on !== 'enter' && !(typeof on === 'object' && 'roll' in on) ? `${n.label} — ` : ''
   const npcs = [...(n.hints?.monsters ?? []).filter((m) => idx.monsterById.get(m)?.special).map((m) => idx.monster(m).name), ...(n.npcs ?? []).map((x) => idx.monsterById.get(x)?.name ?? x)]
   const kids = n.then ?? []
+  // особые (Мерлин, торговец, Рот…) — в «не_враги», а не среди монстров подсказок: с ними не дерутся
+  const fightable = (n.hints?.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special)
+  const hints = n.hints && fightable.length !== (n.hints.monsters ?? []).length ? { ...n.hints, monsters: fightable } : n.hints
   return {
     ...(when ? { когда: when } : {}),
     текст: `${lead}${visible}`,
     ...(secret.length ? { тайное: secret } : {}),
     ...(n.teaser ? { намёк: n.teaser } : {}),
-    ...(has(n.hints) ? { подсказки: n.hints } : {}),
+    ...(has(hints) ? { подсказки: hints } : {}),
     ...(npcs.length ? { не_враги: npcs } : {}),
     ...(n.passWith ? { проверку_заменяет: idx.itemById.get(n.passWith)?.name ?? n.passWith } : {}),
     ...(n.dice ? { бросок: `к${n.dice.sides}${n.dice.repeat ? ', бросают для каждого' : ''}` } : {}),
