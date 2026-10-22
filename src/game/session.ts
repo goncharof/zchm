@@ -597,7 +597,7 @@ export class GameSession {
         for (const h of who) { this.giveXp(h.uid, e.xp); out.push(`${h.name} получает ${e.xp} опыта.`) }
       } else if ('coins' in e) {
         for (const h of who) {
-          const delta = e.coins === 'half' ? -Math.floor(h.money / 2) : e.coins === 'all' ? -h.money : Math.max(e.coins, -h.money)
+          const delta = e.coins === 'half' ? -Math.floor(h.money / 2) : e.coins === 'third' ? -Math.floor(h.money / 3) : e.coins === 'all' ? -h.money : Math.max(e.coins, -h.money)
           this.adjustMoney(h.uid, delta)
           out.push(`${h.name}: ${delta >= 0 ? '+' : '−'}${Math.abs(delta)} ${plural(Math.abs(delta), 'монета', 'монеты', 'монет')} (всего ${h.money}).`)
         }

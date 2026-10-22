@@ -159,6 +159,7 @@ export function effectLabel(e: BookEffect): string {
   if ('coins' in e) {
     const v = e.coins
     if (v === 'half') return `половина денег${each}`
+    if (v === 'third') return `треть денег${each}`
     if (v === 'all') return `все деньги${each}`
     return `${v < 0 ? '−' : '+'}${Math.abs(v)} ${plural(Math.abs(v), 'монета', 'монеты', 'монет')}${each}`
   }
