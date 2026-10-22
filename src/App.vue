@@ -32,6 +32,9 @@ onMounted(async () => {
 
 const locationLink = computed(() => (store.location ? `/location/${store.location.id}` : null))
 const onTable = computed(() => route.path === '/table')
+// чат уже на экране: за столом и в локации, где вместо текста книги — ведущий (как hideText в LocationView);
+// плавающая кнопка там не нужна и закрывала бы «Готов» и поле реплики
+const chatOnScreen = computed(() => onTable.value || (route.path.startsWith('/location/') && (store.aiGm || (store.online && !store.isGm))))
 watch(() => route.fullPath, () => { more.value = false; refMenu.value = false; if (route.path === '/table') chatOpen.value = false })
 // меню «Справочник» и плавающий чат закрываются щелчком мимо и клавишей Esc
 const moreRef = ref<HTMLElement | null>(null)
@@ -143,7 +146,7 @@ const onlineCount = computed(() => store.room?.players.filter((p) => p.online).l
   </template>
 
   <!-- чат с любого экрана -->
-  <button v-if="store.online && !onTable && !chatOpen" class="chat-fab icon-btn" title="Чат" aria-label="Открыть чат" @click="chatOpen = true">
+  <button v-if="store.online && !chatOnScreen && !chatOpen" class="chat-fab icon-btn" title="Чат" aria-label="Открыть чат" @click="chatOpen = true">
     <MessageCircle :size="24" /><span v-if="unread" class="count">{{ unread > 99 ? '99+' : unread }}</span>
   </button>
   <section v-if="chatOpen && store.online && !onTable" class="chat-panel" aria-label="Чат">

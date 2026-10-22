@@ -66,7 +66,7 @@ body {
 }
 ::selection { background: rgba(196, 30, 58, .45); color: #fff; }
 a { color: var(--stone-hi); text-decoration: none; }
-a:hover { text-decoration: underline; text-underline-offset: 3px; }
+@media (hover: hover) { a:hover { text-decoration: underline; text-underline-offset: 3px; } }
 img { max-width: 100%; height: auto; display: block; }
 p { margin: 0 0 .75rem; }
 :focus-visible { outline: 2px solid var(--stone-hi); outline-offset: 2px; }
@@ -89,8 +89,10 @@ button, .btn {
   transition: background .15s, border-color .15s, transform .05s, box-shadow .15s;
   -webkit-tap-highlight-color: transparent;
 }
-button:hover:not(:disabled), .btn:hover { background: var(--surface-3); border-color: var(--stone); }
-button:active:not(:disabled) { transform: translateY(1px); }
+/* подсветка при наведении — только у мыши: на тач-экране она остаётся на нажатой кнопке; отклик касания — вспышка */
+@media (hover: hover) { button:hover:not(:disabled), .btn:hover { background: var(--surface-3); border-color: var(--stone); } }
+button:active:not(:disabled), .btn:active { transform: translateY(1px); }
+@media (hover: none) { button:active:not(:disabled), .btn:active { filter: brightness(1.25); } }
 button:disabled { opacity: .42; cursor: not-allowed; }
 button.primary {
   background: linear-gradient(180deg, var(--blood-2), var(--blood)); border-color: #e8475f; color: var(--blood-ink);
@@ -99,11 +101,11 @@ button.primary {
 /* неактивная главная кнопка — нейтральная и читаемая (а не бледно-красная): причина подписана рядом */
 button.primary:disabled { background: var(--surface-2); border-color: var(--line-2); color: var(--muted); opacity: 1; }
 button.primary:disabled .muted { color: var(--faint); }
-button.primary:hover:not(:disabled) { background: linear-gradient(180deg, #ec4a64, #cf2440); border-color: #f0667b; }
+@media (hover: hover) { button.primary:hover:not(:disabled) { background: linear-gradient(180deg, #ec4a64, #cf2440); border-color: #f0667b; } }
 button.danger { background: transparent; border-color: rgba(255, 107, 107, .55); color: var(--danger); }
-button.danger:hover:not(:disabled) { background: rgba(255, 107, 107, .1); border-color: var(--danger); }
+@media (hover: hover) { button.danger:hover:not(:disabled) { background: rgba(255, 107, 107, .1); border-color: var(--danger); } }
 button.ghost { background: transparent; border-color: transparent; }
-button.ghost:hover:not(:disabled) { background: var(--surface-2); border-color: var(--line); }
+@media (hover: hover) { button.ghost:hover:not(:disabled) { background: var(--surface-2); border-color: var(--line); } }
 button.small { font-size: .82rem; padding: .3rem .65rem; min-height: 32px; border-radius: 8px; }
 button.icon { padding: 0; width: 40px; min-height: 40px; border-radius: 10px; }
 button.primary .muted { color: rgba(255, 244, 242, .75); }
@@ -174,6 +176,7 @@ td.inv-actions { text-align: right; white-space: nowrap; }
 }
 /* выпадающие списки не шире своей строки (длинные названия заклинаний и свитков) */
 .row > select { max-width: 100%; min-width: 0; }
+.spell-row > select:first-child { flex: 1 1 12rem; }
 
 /* ---------- бой: противники ---------- */
 .foe-hp { display: none; }
@@ -241,7 +244,7 @@ table.shop td:last-child button + button { margin-left: .3rem; }
 /* ---------- вкладки (сегменты) ---------- */
 .tabs { display: flex; gap: .25rem; flex-wrap: wrap; margin-bottom: .85rem; padding: .25rem; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; width: fit-content; max-width: 100%; }
 .tabs button { background: transparent; border-color: transparent; min-height: 34px; }
-.tabs button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; }
+@media (hover: hover) { .tabs button:hover:not(:disabled) { background: var(--surface-2); border-color: transparent; } }
 .tabs button.active { background: var(--surface-3); color: var(--ink); border-color: var(--line-2); box-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset; }
 
 /* ---------- журнал ---------- */
@@ -290,7 +293,7 @@ table.shop td:last-child button + button { margin-left: .3rem; }
   border-radius: 999px; padding: .12rem .55rem; font-size: .72rem; font-weight: 550; white-space: nowrap; cursor: pointer; color: var(--ink);
   min-height: 0; box-shadow: 0 2px 8px rgba(0, 0, 0, .5);
 }
-.map-node:hover:not(:disabled) { background: var(--surface-3); border-color: var(--stone-hi); }
+@media (hover: hover) { .map-node:hover:not(:disabled) { background: var(--surface-3); border-color: var(--stone-hi); } }
 .map-node.junction { padding: 0; width: 12px; height: 12px; border-color: var(--faint); }
 /* палец промахивается мимо мелкой метки — невидимое поле вокруг расширяет область нажатия */
 @media (pointer: coarse) { .map-node::after { content: ''; position: absolute; inset: -9px -4px; } }
@@ -322,7 +325,7 @@ table.shop td:last-child button + button { margin-left: .3rem; }
 .branch { margin: .5rem 0; border-left: 3px solid var(--line-2); padding-left: .7rem; }
 .branch.open { border-left-color: var(--blood-2); }
 .branch-head { background: var(--surface-2); border: 1px dashed var(--line-2); text-align: left; width: 100%; justify-content: flex-start; color: var(--ink); font-weight: 600; }
-.branch-head:hover:not(:disabled) { border-style: solid; border-color: var(--stone); }
+@media (hover: hover) { .branch-head:hover:not(:disabled) { border-style: solid; border-color: var(--stone); } }
 .branch-body { margin-top: .5rem; }
 
 /* ---------- уведомление ---------- */
@@ -345,7 +348,7 @@ table.shop td:last-child button + button { margin-left: .3rem; }
   display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .7rem; border-radius: 10px; color: var(--muted);
   font-weight: 550; font-size: .9rem; white-space: nowrap; border: 1px solid transparent; background: transparent; min-height: 0;
 }
-.nav-link:hover { color: var(--ink); background: var(--surface-2); text-decoration: none; }
+@media (hover: hover) { .nav-link:hover { color: var(--ink); background: var(--surface-2); text-decoration: none; } }
 .nav-link.router-link-active, .nav-link.active { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
 .nav-link.hot { color: #fff; background: linear-gradient(180deg, var(--blood-2), var(--blood)); border-color: #e8475f; animation: pulse 2s infinite; }
 .nav-link.hot-online { color: var(--stone-hi); }
@@ -377,7 +380,7 @@ table.shop td:last-child button + button { margin-left: .3rem; }
   display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .1rem .5rem; flex: none; min-width: 150px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: .3rem .6rem .35rem .35rem; color: var(--ink);
 }
-.hero-pill:hover { border-color: var(--line-2); text-decoration: none; }
+@media (hover: hover) { .hero-pill:hover { border-color: var(--line-2); text-decoration: none; } }
 .hero-pill img { grid-row: span 2; width: 30px; height: 30px; border-radius: 50%; object-fit: cover; object-position: top; background: var(--parchment); border: 1px solid var(--line-2); }
 .hero-pill .nm { font-size: .8rem; font-weight: 650; display: flex; justify-content: space-between; gap: .5rem; white-space: nowrap; }
 .hero-pill .nm span { color: var(--brass); font-weight: 550; font-size: .74rem; }
@@ -441,7 +444,7 @@ button.voted { outline: 2px solid var(--ok); outline-offset: 1px; }
   background: linear-gradient(180deg, var(--blood-2), var(--blood)); border: 1px solid #f0667b; color: #fff;
   box-shadow: 0 10px 30px rgba(196, 30, 58, .45);
 }
-.chat-fab:hover:not(:disabled) { background: linear-gradient(180deg, #ec4a64, #cf2440); }
+@media (hover: hover) { .chat-fab:hover:not(:disabled) { background: linear-gradient(180deg, #ec4a64, #cf2440); } }
 .chat-fab .count { top: 0; right: 0; background: var(--ink); color: var(--blood); }
 .chat-panel {
   position: fixed; z-index: 58; top: calc(var(--topbar-h) + 8px); right: 12px; bottom: 12px; width: min(420px, calc(100vw - 24px));
@@ -500,7 +503,8 @@ details.add-hero > summary::-webkit-details-marker { display: none; }
 }
 /* вырез экрана (viewport-fit=cover): отступы не меньше безопасной зоны */
 main.page, .topbar-inner, .party-bar-inner { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
-@media (max-width: 900px) {
+/* телефон: до 900 px, а в альбомной ориентации — любой ширины (низкий тач-экран) */
+@media (max-width: 900px), (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
   :root { --topbar-h: 52px; }
   body { font-size: 15px; }
   main.page { padding: .9rem 14px calc(var(--tabbar-h) + 1.5rem + var(--safe-b)); }
@@ -519,7 +523,6 @@ main.page, .topbar-inner, .party-bar-inner { padding-left: max(16px, env(safe-ar
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--faint);
     font-size: .68rem; font-weight: 600; background: transparent; border: none; border-radius: 0; min-height: 0; padding: 0; position: relative;
   }
-  .tabbar a:hover { text-decoration: none; color: var(--ink); }
   .tabbar a.router-link-active { color: var(--ink); }
   .tabbar a.router-link-active::before { content: ''; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--blood-2); }
   .tabbar a.hot { color: var(--blood-2); }
@@ -531,6 +534,12 @@ main.page, .topbar-inner, .party-bar-inner { padding-left: max(16px, env(safe-ar
   .hide-sm { display: none !important; }
   .send-lbl { display: none; }
   .table-chat .gm-chat-log { height: max(240px, calc(100dvh - 360px)) !important; }
+  /* поле реплики за столом и в локации — у нижней панели, пока на экране чат (не нужно листать к нему) */
+  .table-chat .composer, .loc-text .composer {
+    position: sticky; bottom: calc(var(--tabbar-h) + var(--safe-b)); z-index: 5;
+    margin-top: .4rem; padding: .45rem 0; background: var(--surface); border-top: 1px solid var(--line);
+  }
+  .table-chat .composer { background: var(--bg); }
   /* телефон: обложка — фон баннера под логотипом, кнопки на первом экране */
   .hero-cover {
     grid-template-columns: 1fr; text-align: center; margin: -.9rem -14px 1rem; padding: 170px 16px 0;
@@ -544,9 +553,8 @@ main.page, .topbar-inner, .party-bar-inner { padding-left: max(16px, env(safe-ar
   .modal-back { align-items: flex-end; padding: 0; }
   /* карта шире экрана, листается вбок; выбранный путь — плашкой над нижней панелью */
   .map-scroll { overflow-x: auto; overscroll-behavior-x: contain; border-radius: var(--radius); scrollbar-width: thin; }
-  .map-scroll .map-wrap { width: 780px; max-width: none; }
+  .map-scroll .map-wrap { width: max(780px, 100%); max-width: none; }
   .map-scroll .map-node { font-size: .7rem; padding: .1rem .45rem; border-width: 1.5px; }
-  .map-hint { display: block; }
   .map-route-card { display: none; }
   .map-action {
     display: flex; align-items: center; gap: .5rem; position: fixed; left: 10px; right: 10px; z-index: 44;
@@ -555,6 +563,26 @@ main.page, .topbar-inner, .party-bar-inner { padding-left: max(16px, env(safe-ar
   }
   .map-action .grow { flex: 1; min-width: 0; }
   .modal { max-height: 92dvh; border-radius: 18px 18px 0 0; padding-bottom: calc(1rem + var(--safe-b)); }
+}
+@media (max-width: 807px) { .map-hint { display: block; } }
+/* телефон в альбомной ориентации: шапка с полосой партии уезжает при прокрутке, нижняя панель ниже — тексту больше места */
+@media (orientation: landscape) and (max-height: 500px) and (pointer: coarse) {
+  :root { --tabbar-h: 50px; }
+  .topbar { position: relative; }
+  .hero-switch { top: 0; }
+  .loc-text { scroll-margin-top: .5rem; }
+  .tabbar a, .tabbar button { gap: 1px; }
+  .tabbar .count { top: 2px; }
+  /* экран низкий: прилипшее поле реплики закрыло бы чат — чат и поле помещаются на экран вместе */
+  .table-chat .composer, .loc-text .composer { position: static; }
+  .table-chat .gm-chat-log, .loc-text .gm-chat-log { height: max(150px, calc(100dvh - var(--tabbar-h) - 150px)) !important; }
+  /* главная: обложка слева, кнопки на первом экране */
+  .hero-cover { grid-template-columns: 150px 1fr; gap: 1rem; text-align: left; margin: 0 0 1rem; padding: 0; background: none; }
+  .hero-cover .cover { display: block; }
+  .hero-cover .logo { margin: 0 0 .3rem; max-width: 360px; }
+  .hero-cover .muted { display: none; }
+  .hero-cover .cta { justify-content: flex-start; }
+  .hero-cover .cta button { flex: 0 1 auto; }
 }
 @media (max-width: 640px) {
   h1 { font-size: 1.5rem; }
@@ -576,6 +604,8 @@ main.page, .topbar-inner, .party-bar-inner { padding-left: max(16px, env(safe-ar
 }
 @media (pointer: coarse) {
   button, .btn { min-height: 42px; }
+  /* iOS приближает страницу, если шрифт поля мельче 16 px (чат, имя героя, код комнаты) */
+  input, select, textarea, .small:is(input, select, textarea) { font-size: 16px; }
   button.small { min-height: 36px; }
   /* раскрывающиеся блоки («Другие действия», «＋ спутник») — палец попадает с первого раза */
   details > summary { min-height: 40px; padding-block: .55rem; }

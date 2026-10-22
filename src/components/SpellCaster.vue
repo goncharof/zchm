@@ -41,7 +41,7 @@ function cast() {
 </script>
 
 <template>
-  <div class="row" v-if="spells.length || scrolls.length">
+  <div class="row spell-row" v-if="spells.length || scrolls.length">
     <select v-model="form.spellId" class="small">
       <option value="">Заклинание…</option>
       <option v-for="s in spells" :key="s.id" :value="s.id">{{ s.level }} ур. {{ s.name }} ({{ resolveCost(s, hero, form.param) }} маны)</option>
