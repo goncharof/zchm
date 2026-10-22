@@ -400,7 +400,7 @@ def check_tree(tree, text, ctx, ns):
             errs.append(f'{where}: неизвестное действие {n["action"]}')
         if 'goto' in n and n['goto'] not in ns:
             errs.append(f'{where}: нет помещения {n["goto"]}')
-        if n.get('dice') and (set(n['dice']) - {'sides', 'key', 'repeat'} or n['dice'].get('sides') not in (3, 6, 18)):
+        if n.get('dice') and (set(n['dice']) - {'sides', 'key', 'repeat'} or not 2 <= n['dice'].get('sides', 0) <= 100):
             errs.append(f'{where}: dice {n["dice"]}')
         for c in n.get('then', []):
             walk(c, n)

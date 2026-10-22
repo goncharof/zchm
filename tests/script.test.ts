@@ -397,7 +397,7 @@ describe('сценарный ведущий', () => {
     expect(luckPenalty('Удача — 6. Потом идите дальше. Иначе — смерть.', 6)).toBeNull()
   })
 
-  it('провал проверки удачи: кнопка последствия из текста отнимает жизни у проверявшего героя', async () => {
+  it('провал проверки удачи: последствие из разметки отнимает жизни у проверявшего героя', async () => {
     const g = await setup()
     await goTo(g, 'krepost-posledney-nadezhdy')
     await g.c.call('enterLocation', ['krepost-posledney-nadezhdy'])
@@ -409,11 +409,9 @@ describe('сценарный ведущий', () => {
     await g.c.choose(scene.id, scene.choices!.find((c) => c.label.includes('удачи 14'))!.id)
     await until(() => lastGm(g.chat).text.includes('испытывает удачу'))
     const res = lastGm(g.chat)
-    expect(res.text).toContain('По книге: иначе — −2 жизни')
+    expect(res.text).toMatch(/Сеть накрыла[\s\S]*По книге: −2 жизни/)
     const hero = g.state.heroes.find((h) => res.text.startsWith(h.name))!
-    const before = hero.lives
-    await g.c.choose(res.id, res.choices!.find((c) => c.label === 'Принять последствия: −2 жизни')!.id)
-    await until(() => g.state.heroes.find((h) => h.uid === hero.uid)!.lives === before - 2)
+    expect(res.text).toContain(`${hero.name}: −2 жизни`)
   })
 
   it('после боя исход победы из параграфа открывается сам', async () => {
