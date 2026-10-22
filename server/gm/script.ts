@@ -216,7 +216,7 @@ export class ScriptedGm {
 
   /** Рассказать открывшиеся этапы с их кнопками. Последствия этапов применяются сами (один раз, отметка в сессии);
    *  смерть и потеря половины жизней — кнопкой. jump — этапы открылись только что: переход в другое помещение выполняется */
-  private sayNodes(room: Room, loc: string, n: number, head: string[], nodes: BookNode[], extra: Offer[] = [], playerId?: string, jump = true): void {
+  private sayNodes(room: Room, loc: string, n: number, head: string[], nodes: BookNode[], extra: Offer[] = [], playerId?: string, jump = true, done: Record<string, string[]> = {}): void {
     const s = room.session()
     const P = `${loc}:${n}`
     const actor = this.actor(room, playerId)
@@ -225,7 +225,8 @@ export class ScriptedGm {
       const parts = [nodeSay(x)]
       // намёк, пока бой этапа не выигран: «Похоже, он что-то охраняет»
       if (x.teaser && !hasResult(P, x.id, room.state.claimed ?? [], 'won')) parts.push(x.teaser)
-      if (x.effects?.length && !(room.state.claimed ?? []).includes(`${P}:${x.id}:fx`)) {
+      if (done[x.id]) parts.push(`По книге: ${x.effects!.map(effectLabel).join(', ')}. ${done[x.id].join(' ')}`)
+      else if (x.effects?.length && !(room.state.claimed ?? []).includes(`${P}:${x.id}:fx`)) {
         const label = x.effects.map(effectLabel).join(', ')
         if (x.effects.some(deadlyEffect)) offers.unshift({ label: `Принять последствия: ${label}`, action: { t: 'effects', loc, n, id: x.id, heroUid: actor?.uid } })
         else parts.push(`По книге: ${label}. ${s.bookEffects(`${P}:${x.id}`, actor?.uid).join(' ')}`)
@@ -333,8 +334,11 @@ export class ScriptedGm {
         const before = new Set(openNodes(tree, P, room.state.claimed).map((x) => x.id))
         if (before.has(id)) throw new GameError('Этот вариант уже выбран')
         if (!before.has(parentOf(tree, id)?.id ?? '')) throw new GameError('Этот вариант пока недоступен')
+        // последствия выбранного варианта (плата, урон) — сразу и до отметки: не хватило монет — вариант остаётся
+        const done: Record<string, string[]> = {}
+        if (node.effects?.length && !node.effects.some(deadlyEffect)) done[id] = s.bookEffects(`${P}:${id}`, this.actor(room, playerId)?.uid)
         s.bookMark(`${P}:${id}`, 'open')
-        this.sayNodes(room, a.loc, a.n, [], openNodes(tree, P, room.state.claimed).filter((x) => !before.has(x.id)), [], playerId)
+        this.sayNodes(room, a.loc, a.n, [], openNodes(tree, P, room.state.claimed).filter((x) => !before.has(x.id)), [], playerId, true, done)
         return
       }
       case 'pass': {
@@ -371,7 +375,7 @@ export class ScriptedGm {
         const hit = (node.then ?? []).find((c) => typeof c.on === 'object' && c.on.roll.includes(r))
         if (d.repeat) {
           // список «для каждого» бросают много раз; награда исхода — своя у каждого варианта и берётся один раз
-          this.say(room, `Выпало ${r}: ${hit ? shown(nodeText(hit)) : 'ничего не происходит'}`, hit ? fresh(room, nodeOffers(a.loc, a.n, hit, room.state.claimed ?? [], new Set(), room.state.heroes)) : [])
+          this.say(room, `Выпало ${r}: ${hit ? shown(nodeText(hit) || hit.label || '') : 'ничего не происходит'}`, hit ? fresh(room, nodeOffers(a.loc, a.n, hit, room.state.claimed ?? [], new Set(), room.state.heroes)) : [])
           return
         }
         // бросок по списку — один раз (иначе перебрасывали бы до награды)

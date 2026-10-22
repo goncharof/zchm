@@ -411,7 +411,7 @@ def check_tree(tree, text, ctx, ns):
             rest = rest.replace(k, ' ', 1)
         elif k and k not in full:
             errs.append(f'кусок не найден в тексте книги: «{t[:70]}»')
-    for _, label in (p for p in pieces if not isinstance(p, str)):
+    for _, label in sorted((p for p in pieces if not isinstance(p, str)), key=lambda x: len(x[1]), reverse=True):
         k = strip(label)
         if k and k in rest:
             rest = rest.replace(k, ' ', 1)

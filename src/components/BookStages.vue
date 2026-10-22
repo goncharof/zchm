@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { BookNode, Paragraph } from '@/types'
 import type { EncounterSpec } from '@/engine/combat'
 import { idx } from '@/data'
-import { diceKey, effectLabel, hasResult, nodeText, openNodes, paragraphTree } from '@/game/tree'
+import { deadlyEffect, diceKey, effectLabel, hasResult, nodeText, openNodes, paragraphTree } from '@/game/tree'
 import { useGameStore } from '@/stores/game'
 import ParagraphActions from './ParagraphActions.vue'
 
@@ -41,6 +41,12 @@ function choices(n: BookNode): BookNode[] {
   return kids.filter((c) => !openIds.value.has(c.id))
 }
 async function choose(c: BookNode) {
+  // последствия выбранного варианта (плата, урон) — сразу; не хватило монет — вариант не открывается
+  if (c.effects?.length && !c.effects.some(deadlyEffect)) {
+    const lines = await store.bookEffects(place(c), props.heroUid)
+    if (!lines) return
+    lastEffects.value = { ...lastEffects.value, [c.id]: lines.join(' ') }
+  }
   await store.bookMark(place(c), 'open')
   void store.note(`${props.locName}, § ${props.paragraph.n}: ${c.label ?? 'выбор'}.`)
 }
@@ -95,7 +101,7 @@ const npcName = (x: string) => idx.monsterById.get(x)?.name ?? x
       <span v-if="n.dice.repeat && repeatRoll[n.id] !== undefined" class="small">Выпало <b>{{ repeatRoll[n.id] }}</b>{{ repeatHit(n) ? '' : ': ничего не происходит' }}</span>
     </div>
     <div v-if="n.dice?.repeat && repeatHit(n)" class="stage">
-      <p class="paragraph-text">{{ nodeText(repeatHit(n)!) }}</p>
+      <p v-if="nodeText(repeatHit(n)!) || repeatHit(n)!.label" class="paragraph-text">{{ nodeText(repeatHit(n)!) || repeatHit(n)!.label }}</p>
       <ParagraphActions :hints="repeatHit(n)!.hints" :hero-uid="heroUid" :place="place(repeatHit(n)!)" @fight="(s) => emit('fight', s, place(repeatHit(n)!))" />
     </div>
     <div v-if="choices(n).length" class="stage-choices">

@@ -92,6 +92,26 @@ describe('сценарный ведущий', () => {
     expect(outcome.choices!.map((c) => c.label)).toEqual(expect.arrayContaining(['Взять бутылку', 'Взять свиток 5 ур.']))
   })
 
+  it('покупка у торговца в пути: без 200 монет вариант остаётся, с деньгами — плата и артефакт', async () => {
+    const g = await setup()
+    const room = (await g.s.store.get(g.j.code))!
+    room.state.pendingRoad = [106]
+    await g.c.chat('§ 106', true)
+    await until(() => /В пути \(§ 106\)/.test(lastGm(g.chat)?.text ?? ''))
+    const scene = lastGm(g.chat)
+    const buy = scene.choices!.find((c) => c.label === '▸ Купить артефакт за 200 монет')!
+    const hero = room.state.heroes[0]
+    hero.money = 10
+    await g.c.choose(scene.id, buy.id)
+    await until(() => /не хватает монет/.test(lastGm(g.chat).text))
+    expect(room.state.claimed ?? []).not.toContain('doroga:106:b:open')
+    hero.money = 250
+    await g.c.choose(scene.id, buy.id)
+    await until(() => /По книге: −200 монет/.test(lastGm(g.chat).text))
+    expect(hero.money).toBe(50)
+    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('Взять артефакт')
+  })
+
   it('переход в другое помещение: грифон уносит в центр города, спасённый дварф становится спутником', async () => {
     const g = await setup()
     await g.c.call('enterLocation', ['zolotoy-gorod'])

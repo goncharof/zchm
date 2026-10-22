@@ -3,7 +3,7 @@
  * Один и тот же код выполняется в браузере (одиночная игра) и на сервере (сетевая игра).
  * Не зависит от Vue и от localStorage.
  */
-import type { Caster, WorldMap } from '@/types'
+import type { BookEffect, Caster, WorldMap } from '@/types'
 import { gameData, idx } from '@/data'
 import type { CombatState, EquipSlot, GameState, Hero, InventoryKind, LogEntry } from '@/engine/model'
 import { SAVE_VERSION, uid } from '@/engine/model'
@@ -566,10 +566,17 @@ export class GameSession {
     if ((this.state.claimed ?? []).includes(`${at}:fx`)) throw new GameError('Последствия уже применены')
     const alive = this.heroes.filter((h) => !h.status.dead)
     const actor = alive.find((h) => h.uid === heroUid) ?? alive[0]
+    const targets = (e: BookEffect) => ('who' in e && e.who === 'each' ? alive : actor ? [actor] : [])
+    // плата («Купить артефакт за 200 монет») без нужной суммы не проходит — и отметка не ставится
+    for (const e of node.effects) {
+      if (!('coins' in e) || typeof e.coins !== 'number' || e.coins >= 0) continue
+      const poor = targets(e).find((h) => h.money < -e.coins)
+      if (poor) throw new GameError(`У ${poor.name} не хватает монет`)
+    }
     this.mark(`${at}:fx`)
     const out: string[] = []
     for (const e of node.effects) {
-      const who = 'who' in e && e.who === 'each' ? alive : actor ? [actor] : []
+      const who = targets(e)
       if ('lives' in e) {
         for (const h of who) {
           const v = e.lives
@@ -581,7 +588,7 @@ export class GameSession {
         for (const h of who) { this.giveXp(h.uid, e.xp); out.push(`${h.name} получает ${e.xp} опыта.`) }
       } else if ('coins' in e) {
         for (const h of who) {
-          const delta = e.coins === 'half' ? -Math.floor(h.money / 2) : e.coins === 'all' ? -h.money : Math.max(e.coins, -h.money)
+          const delta = e.coins === 'half' ? -Math.floor(h.money / 2) : e.coins === 'all' ? -h.money : e.coins
           this.adjustMoney(h.uid, delta)
           out.push(`${h.name}: ${delta >= 0 ? '+' : '−'}${Math.abs(delta)} ${plural(Math.abs(delta), 'монета', 'монеты', 'монет')} (всего ${h.money}).`)
         }

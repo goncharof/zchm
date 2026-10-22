@@ -90,12 +90,15 @@ describe('аудит приключения', () => {
     throw new Error('ни одной встречи в пути за 60 попыток')
   })
 
-  it('списки «для каждого» помечены для многократного броска', () => {
-    for (const [loc, n] of [['severnyy-fort', 22], ['doroga', 54], ['doroga', 128]] as const) {
-      const p = idx.locationById.get(loc)!.paragraphs.find((x) => x.n === n)!
-      const rolls = p.segments!.flatMap((g) => g.blocks).filter((b) => 'roll' in b)
-      expect(rolls.length, `${loc}:${n}`).toBeGreaterThan(0)
-      expect(rolls.every((b) => 'roll' in b && b.repeat)).toBe(true)
+  it('списки «для каждого» помечены для многократного броска, дома деревень «Дороги» — выбор любого из шести', () => {
+    const p = idx.locationById.get('severnyy-fort')!.paragraphs.find((x) => x.n === 22)!
+    const rolls = p.segments!.flatMap((g) => g.blocks).filter((b) => 'roll' in b)
+    expect(rolls.length).toBeGreaterThan(0)
+    expect(rolls.every((b) => 'roll' in b && b.repeat)).toBe(true)
+    for (const n of [54, 128]) {
+      const tree = idx.locationById.get('doroga')!.paragraphs.find((x) => x.n === n)!.tree!
+      expect(tree.exclusive, `doroga:${n}`).toBeUndefined()
+      expect((tree.then ?? []).filter((c) => c.on === 'choice'), `doroga:${n}`).toHaveLength(6)
     }
   })
 
