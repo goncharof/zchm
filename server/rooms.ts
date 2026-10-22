@@ -86,6 +86,9 @@ export type ScriptAction = (
   | { t: 'item'; kind: 'weapon' | 'armor' | 'item'; id: string; qty?: number }
   /** проверку удачи этапа заменяет предмет (магические отмычки) */
   | { t: 'pass'; loc: string; n: number; id: string }
+  /** финальная дуэль с Чёрным магом и фонтан (особые действия этапа) */
+  | { t: 'duel' }
+  | { t: 'fountain' }
   /** опасные последствия этапа (смерть, половина жизней) — по кнопке */
   | { t: 'effects'; loc: string; n: number; id: string; heroUid?: string }
   | { t: 'rest' }

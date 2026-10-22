@@ -146,6 +146,7 @@ function stagePayload(n: BookNode): Record<string, unknown> {
     ...(n.dice ? { бросок: `к${n.dice.sides}${n.dice.repeat ? ', бросают для каждого' : ''}` } : {}),
     ...(n.effects?.length ? { последствия: n.effects } : {}),
     ...(n.exclusive ? { только_один_вариант: true } : {}),
+    ...(n.action === 'final-duel' ? { особое: 'финальная дуэль — инструмент final_duel_attack' } : n.action === 'fountain' ? { особое: 'фонтан — инструмент drink_fountain' } : {}),
     ...(kids.length ? { дальше: kids.map(stagePayload) } : {}),
   }
 }

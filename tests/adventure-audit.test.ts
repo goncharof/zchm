@@ -132,7 +132,10 @@ describe('аудит приключения', () => {
 
   it('в зале Чёрного мага ветка «Если попадаете» больше не выдаёт корону и артефакт второй раз', () => {
     const p = idx.locationById.get('zamok-chernogo-maga')!.paragraphs.find((x) => x.n === 13)!
-    const branch = p.segments!.find((g) => g.label === 'Если попадаете в Черного мага')!
+    // корону и артефакт выдаёт сама дуэль (finalDuelAttack); этап победы открывается её отметкой и наград не несёт
+    const branch = p.tree!.then!.find((g) => g.label === 'Если попадаете в Черного мага')!
+    expect(branch.on).toBe('win')
+    expect(p.tree!.action).toBe('final-duel')
     expect(branch.hints?.coins).toBeUndefined()
     expect(branch.hints?.artifact).toBeUndefined()
   })

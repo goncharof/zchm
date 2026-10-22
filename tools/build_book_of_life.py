@@ -330,7 +330,7 @@ def apply_overrides(locations, issues):
 BOOK_DIR = os.path.join(os.path.dirname(__file__), 'book')
 DATA = os.path.join(ROOT, 'src', 'data')
 NODE_ON = {'enter', 'choice', 'win', 'lose', 'flee', 'ok', 'fail'}
-NODE_KEYS = {'id', 'on', 'label', 'text', 'teaser', 'hints', 'passWith', 'dice', 'effects', 'npcs', 'exclusive', 'goto', 'then'}
+NODE_KEYS = {'id', 'on', 'label', 'text', 'teaser', 'hints', 'passWith', 'dice', 'effects', 'npcs', 'exclusive', 'goto', 'action', 'then'}
 HINT_KEYS = {'luck', 'bottles', 'coins', 'prices', 'monsters', 'monsterCounts', 'artifact', 'tavern', 'shop', 'scrolls', 'items'}
 
 
@@ -396,6 +396,8 @@ def check_tree(tree, text, ctx, ns):
                 errs.append(f'{where}: последствие {e}')
             elif 'companion' in e and e['companion'] not in monsters:
                 errs.append(f'{where}: нет монстра-спутника {e["companion"]}')
+        if n.get('action') not in (None, 'final-duel', 'fountain'):
+            errs.append(f'{where}: неизвестное действие {n["action"]}')
         if 'goto' in n and n['goto'] not in ns:
             errs.append(f'{where}: нет помещения {n["goto"]}')
         if n.get('dice') and (set(n['dice']) - {'sides', 'key', 'repeat'} or n['dice'].get('sides') not in (3, 6, 18)):

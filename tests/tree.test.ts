@@ -89,9 +89,10 @@ describe('дерево этапов', () => {
     expect(revealedBy(t, P, marks, `${P}:r3:ok`)).toEqual([])
   })
 
-  it('без боя в параграфе ветка «если победите» — обычный выбор (как раньше)', () => {
+  it('без боя в параграфе ветка «если победите» — обычный выбор (как раньше, у деревьев из старой разметки)', () => {
     let found = 0
     for (const l of idx.data.locations) for (const p of l.paragraphs) {
+      if (p.tree) continue
       const t = paragraphTree(p)
       for (const n of allNodes(t)) {
         if (n.on !== 'win') continue
@@ -99,7 +100,7 @@ describe('дерево этапов', () => {
         expect(allNodes(t).some((x) => (x.hints?.monsters ?? []).some((m) => !idx.monsterById.get(m)?.special)), `${l.id} §${p.n}`).toBe(true)
       }
     }
-    expect(found).toBeGreaterThan(20)
+    expect(found).toBeGreaterThan(5)
   })
 
   it('сессия отмечает итог проверки удачи и боя на этапе книги', () => {

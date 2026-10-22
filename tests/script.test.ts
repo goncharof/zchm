@@ -92,6 +92,26 @@ describe('сценарный ведущий', () => {
     expect(outcome.choices!.map((c) => c.label)).toEqual(expect.arrayContaining(['Взять бутылку', 'Взять свиток 5 ур.']))
   })
 
+  it('финал: в зале с фонтаном — атака на Чёрного мага и фонтан; попадание — победа и текст книги о кучке пепла', async () => {
+    const g = await setup()
+    await goTo(g, 'zamok-chernogo-maga')
+    await g.c.call('enterLocation', ['zamok-chernogo-maga'])
+    await g.c.chat('13', true)
+    await until(() => /помещение 13/.test(lastGm(g.chat)?.text ?? ''))
+    const hall = lastGm(g.chat)
+    expect(hall.text).not.toContain('кучка пепла')
+    const labels = hall.choices!.map((c) => c.label)
+    expect(labels).toEqual(expect.arrayContaining(['⚔ Атаковать Чёрного мага (удача 15)', 'Выпить из фонтана']))
+    setRng(() => 0.999) // к18 = 18 — попадание
+    await g.c.choose(hall.id, hall.choices!.find((c) => c.label.startsWith('⚔ Атаковать'))!.id)
+    await until(() => /Победа!/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).text).toContain('кучка пепла')
+    expect(g.state.victory).toBeTruthy()
+    await g.c.chat('13', true)
+    await until(() => /вы здесь уже были/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).choices!.some((c) => c.label.startsWith('⚔ Атаковать'))).toBe(false)
+  })
+
   it('покупка у торговца в пути: без 200 монет вариант остаётся, с деньгами — плата и артефакт', async () => {
     const g = await setup()
     const room = (await g.s.store.get(g.j.code))!

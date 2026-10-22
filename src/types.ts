@@ -281,6 +281,8 @@ export interface BookNode {
   exclusive?: true
   /** переход в другое помещение той же локации («летит в центр города (локация 41)») */
   goto?: number
+  /** особое действие движка: финальная дуэль с Чёрным магом (GameSession.finalDuelAttack) или фонтан (drinkFountain) */
+  action?: 'final-duel' | 'fountain'
   then?: BookNode[]
 }
 

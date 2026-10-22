@@ -486,6 +486,8 @@ export class GameSession {
       this.log(`${h.name} забирает корону Чёрного мага (1000 монет).`)
       try { this.findArtifact(heroUid) } catch (e) { if (!(e instanceof GameError)) throw e }
       this.state.victory = { day: this.state.day, heroUid, heroName: h.name }
+      // отметка прохождения: открывает этап «Если попадаете в Черного мага» (tools/book/zamok-chernogo-maga.json)
+      this.mark('zamok-chernogo-maga:13:a:won')
       return true
     }
     // уворот от шара — обычный бросок удачи: действуют «Удача», «Молитва» и «Несчастье»

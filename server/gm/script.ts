@@ -129,6 +129,8 @@ function nodeOffers(loc: string, n: number, node: BookNode, claimed: readonly st
   if (node.passWith && !hasResult(P, node.id, claimed, 'ok') && heroes.some((x) => !x.status.dead && x.inventory.some((e) => e.kind === 'item' && e.ref === node.passWith))) {
     out.unshift({ label: `🗝 Открыть: ${itemName('item', node.passWith)}`, action: { t: 'pass', loc, n, id: node.id } })
   }
+  if (node.action === 'final-duel' && !hasResult(P, node.id, claimed, 'won')) out.unshift({ label: '⚔ Атаковать Чёрного мага (удача 15)', action: { t: 'duel' } })
+  if (node.action === 'fountain') out.push({ label: 'Выпить из фонтана', action: { t: 'fountain' } })
   const d = node.dice
   if (d && (d.repeat || !claimed.some((k) => k.startsWith(`${P}:${diceKey(node)}:roll=`)))) out.push({ label: d.repeat ? `🎲 Бросить к${d.sides} (на каждый)` : `🎲 Бросить к${d.sides} по списку`, action: { t: 'roll', loc, n, id: node.id } })
   const choices = (node.then ?? []).filter((c) => c.on === 'choice')
@@ -362,6 +364,23 @@ export class ScriptedGm {
         this.say(room, lines.join(' '))
         return
       }
+      case 'duel': {
+        const h = needHero()
+        const from = room.state.log.length
+        const won = s.finalDuelAttack(h.uid)
+        const said = room.state.log.slice(from).map((e) => e.text).join(' ')
+        if (won) {
+          // победа открывает этап «Если попадаете в Черного мага»
+          const tree = treeAt('zamok-chernogo-maga', 13)
+          const opened = tree ? revealedBy(tree, 'zamok-chernogo-maga:13', room.state.claimed ?? [], 'zamok-chernogo-maga:13:a:won') : []
+          this.sayNodes(room, 'zamok-chernogo-maga', 13, [said, 'Победа! Чёрный маг повержен.'], opened, [], playerId)
+        } else this.say(room, said, [{ label: '⚔ Атаковать Чёрного мага (удача 15)', action: { t: 'duel' } }, { label: 'Выпить из фонтана', action: { t: 'fountain' } }])
+        return
+      }
+      case 'fountain':
+        s.drinkFountain()
+        this.say(room, room.state.log.at(-1)?.text ?? 'Партия пьёт из фонтана.')
+        return
       case 'item': {
         const h = needHero()
         s.giveItem(h.uid, a.kind, a.id, a.qty ?? 1)
