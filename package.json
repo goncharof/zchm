@@ -19,7 +19,8 @@
     "data:text": "tools/.venv/bin/python -I tools/extract_text.py source/pdf source/text",
     "server": "tsx watch server/index.ts",
     "build:server": "vite build --ssr server/index.ts --outDir server-dist --emptyOutDir",
-    "start": "node server-dist/index.js"
+    "start": "node server-dist/index.js",
+    "qa:book": "tsx tools/qa/book-walk.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
