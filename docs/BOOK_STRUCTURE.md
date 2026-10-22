@@ -281,3 +281,6 @@ type Effect =
    текст параграфов — из PDF (`parse_chapter` в `tools/build_book_of_life.py`), черновик — `npx tsx tools/book_draft.ts
    <локация> [§]`, ошибки — каталоги `docs/book-review/`; дерево пишется только там, где старая разметка ошибается;
    правки параграфа в `book_overrides.json` удаляются; `pnpm data:book` проверяет покрытие текста и ссылки.
+7. ✅ Обход ботом (2026-10-22, `pnpm qa:book`, `tools/qa/book-walk.ts`): каждый этап всех 647 деревьев открывается хотя бы
+   в одной игре, сценарный ведущий проходит параграфы кнопками без сбоев. После правки разметки — `pnpm data:book`, затем
+   `pnpm qa:book`; отчёт — `tools/qa/out/book-walk.md`.

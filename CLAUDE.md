@@ -42,6 +42,7 @@ pnpm data:rules     # → src/data/{classes,weapons,armor,items,artifacts,spells
 pnpm data:lore      # → src/data/lore.json (Книга Сумерек)
 node tools/qa/screens.mjs [url] [outDir]  # при запущенном pnpm dev: проход по экранам в Chrome, скриншоты desktop/mobile в tools/qa/out, отчёт об ошибках и горизонтальной прокрутке
 node tools/qa/offline.mjs [url]           # при pnpm build && pnpm preview --port 5178: проверка игры без сети
+pnpm qa:book        # обход Книги Жизни ботом: все пути кнопок + сценарный ведущий → tools/qa/out/book-walk.md (после правки разметки)
 ```
 
 ## Структура
@@ -60,7 +61,7 @@ src/views/       экраны (роутер), src/components/ — переисп
 public/img/      картинки (иллюстрации бестиария, планы локаций, карта мира); при их изменении поднять CACHE в public/sw.js
 public/sw.js     service worker (офлайн), public/manifest.webmanifest + public/icons — установка как приложение
 tests/           Vitest: движок, стор, сквозной прогон приложения в jsdom
-tools/qa/        визуальный прогон в Chrome (playwright-core)
+tools/qa/        визуальный прогон в Chrome (playwright-core), обход Книги Жизни ботом (book-walk.ts)
 docs/            документация проекта
 ```
 
