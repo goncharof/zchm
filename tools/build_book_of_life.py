@@ -449,7 +449,7 @@ def apply_trees(locations, raw, issues):
     load = lambda name: json.load(open(os.path.join(DATA, name), encoding='utf-8'))
     ctx = {'monsters': {m['id'] for m in json.load(open(BESTIARY, encoding='utf-8'))},
            'items': {'weapon': {x['id'] for x in load('weapons.json')}, 'armor': {x['id'] for x in load('armor.json')},
-                     'item': {x['id'] for x in load('items.json')}}}
+                     'item': {x['id'] for x in load('items.json')}, 'scroll': {x['id'] for x in load('spells.json')}}}
     with open(OVERRIDES, encoding='utf-8') as f:
         overridden = set(json.load(f))
     by_id = {l['id']: l for l in locations}

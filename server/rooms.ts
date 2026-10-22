@@ -83,7 +83,7 @@ export type ScriptAction = (
   | { t: 'buy'; bottles: number[]; price: number }
   | { t: 'artifact' }
   | { t: 'scroll'; caster?: 'mage' | 'priest'; level?: number }
-  | { t: 'item'; kind: 'weapon' | 'armor' | 'item'; id: string; qty?: number }
+  | { t: 'item'; kind: 'weapon' | 'armor' | 'item' | 'scroll'; id: string; qty?: number }
   /** проверку удачи этапа заменяет предмет (магические отмычки) */
   | { t: 'pass'; loc: string; n: number; id: string }
   /** финальная дуэль с Чёрным магом и фонтан (особые действия этапа) */

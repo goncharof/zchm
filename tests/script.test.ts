@@ -224,9 +224,11 @@ describe('сценарный ведущий', () => {
     await g.c.chat('24', true)
     await until(() => /помещение 24/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
-    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '▸ Бьете его (пробить — удача 9)')!.id)
-    await until(() => /Раздается вопль/.test(lastGm(g.chat).text))
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '▸ Бьете его')!.id)
+    await until(() => /пробить — удача 9/.test(lastGm(g.chat).text))
     const branch = lastGm(g.chat)
+    // исход удачи («раздается вопль») до броска не виден
+    expect(branch.text).not.toMatch(/вопль/)
     setRng(() => 0) // к18 = 1 — провал
     await g.c.choose(branch.id, branch.choices!.find((c) => c.label.includes('удачи 9'))!.id)
     await until(() => lastGm(g.chat).text.includes('испытывает удачу'))

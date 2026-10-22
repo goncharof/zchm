@@ -52,7 +52,7 @@ describe('данные игры', () => {
         expect(n, where).toBeGreaterThan(1)
       }
       for (const b of h?.bottles ?? []) expect(b >= 1 && b <= 6, where).toBe(true)
-      for (const it of h?.items ?? []) expect((it.kind === 'weapon' ? idx.weaponById : it.kind === 'armor' ? idx.armorById : idx.itemById).has(it.id), `${where}: ${it.id}`).toBe(true)
+      for (const it of h?.items ?? []) expect((it.kind === 'weapon' ? idx.weaponById : it.kind === 'armor' ? idx.armorById : it.kind === 'scroll' ? idx.spellById : idx.itemById).has(it.id), `${where}: ${it.id}`).toBe(true)
     }
     for (const l of gameData.locations) {
       const ns = l.paragraphs.map((p) => p.n)

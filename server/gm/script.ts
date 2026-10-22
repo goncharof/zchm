@@ -115,7 +115,7 @@ function hintOffers(h: ParagraphHints | undefined, place?: Place, text = ''): Of
   return out
 }
 
-const itemName = (kind: 'weapon' | 'armor' | 'item', id: string) => (kind === 'weapon' ? idx.weaponById : kind === 'armor' ? idx.armorById : idx.itemById).get(id)?.name ?? id
+const itemName = (kind: 'weapon' | 'armor' | 'item' | 'scroll', id: string) => kind === 'scroll' ? `свиток «${idx.spellById.get(id)?.name ?? id}»` : (kind === 'weapon' ? idx.weaponById : kind === 'armor' ? idx.armorById : idx.itemById).get(id)?.name ?? id
 
 /** Кнопки открытого этапа: механика из подсказок (бой — пока не выигран, проверка удачи — пока не пройдена), бросок
  *  по списку — пока не брошен (списки «для каждого» — сколько угодно), невыбранные варианты-дети */

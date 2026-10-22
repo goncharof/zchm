@@ -212,8 +212,9 @@ export interface ParagraphHints {
   shop?: boolean
   /** свитки: уровень и тип заклинания, если указан */
   scrolls?: { caster?: Caster; level?: number }[]
-  /** вещи из таблиц правил (ручная разметка дерева): оружие, доспехи, предметы */
-  items?: { kind: 'weapon' | 'armor' | 'item'; id: string; qty?: number }[]
+  /** вещи из таблиц правил (ручная разметка дерева): оружие, доспехи, предметы, свитки с названным заклинанием
+   *  («свиток с заклинанием “сила” — 3 раза» — три свитка) */
+  items?: { kind: 'weapon' | 'armor' | 'item' | 'scroll'; id: string; qty?: number }[]
 }
 
 export interface RollOption {

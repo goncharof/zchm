@@ -60,7 +60,7 @@ function fight(ids: string[]) {
   const specs = ids.map((monsterId) => ({ monsterId, count: counts.value[monsterId] ?? 1 })).filter((s) => s.count > 0)
   if (specs.length) emit('fight', specs)
 }
-const itemName = (it: { kind: 'weapon' | 'armor' | 'item'; id: string }) => (it.kind === 'weapon' ? idx.weaponById : it.kind === 'armor' ? idx.armorById : idx.itemById).get(it.id)?.name ?? it.id
+const itemName = (it: { kind: 'weapon' | 'armor' | 'item' | 'scroll'; id: string }) => it.kind === 'scroll' ? `свиток «${idx.spellById.get(it.id)?.name ?? it.id}»` : (it.kind === 'weapon' ? idx.weaponById : it.kind === 'armor' ? idx.armorById : idx.itemById).get(it.id)?.name ?? it.id
 const has = computed(() => !!props.hints && Object.values(props.hints).some((v) => (Array.isArray(v) ? v.length : !!v)))
 </script>
 
