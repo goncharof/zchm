@@ -91,10 +91,10 @@ describe('аудит приключения', () => {
   })
 
   it('списки «для каждого» помечены для многократного броска, дома деревень «Дороги» — выбор любого из шести', () => {
+    // «перед каждым черепом кидайте кубик»: бросок повторяется, а «дошли до конца» — отдельный выбор
     const p = idx.locationById.get('severnyy-fort')!.paragraphs.find((x) => x.n === 22)!
-    const rolls = p.segments!.flatMap((g) => g.blocks).filter((b) => 'roll' in b)
-    expect(rolls.length).toBeGreaterThan(0)
-    expect(rolls.every((b) => 'roll' in b && b.repeat)).toBe(true)
+    expect(p.tree!.dice).toEqual({ sides: 6, repeat: true })
+    expect(p.tree!.then!.find((c) => c.on === 'choice')!.label).toBe('Доходите до конца')
     for (const n of [54, 128]) {
       const tree = idx.locationById.get('doroga')!.paragraphs.find((x) => x.n === n)!.tree!
       expect(tree.exclusive, `doroga:${n}`).toBeUndefined()
