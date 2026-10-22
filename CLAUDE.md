@@ -79,7 +79,8 @@ docs/            документация проекта
 - Оформление: токены и компоненты — в `src/style.css` (палитра коробки: `--blood`, `--stone`, `--parchment`); заголовки —
   Monomakh, текст Книги — класс `paragraph-text`/`book-text` (Old Standard TT), интерфейс — Inter. Новые экраны
   собирать из существующих классов (`card`, `row`, `cols`, `tabs`, `badge`, кнопки `primary`/`danger`/`small`);
-  проверять на 390 и 1280 px (`node tools/qa/screens.mjs`). Картинки бренда — `public/img/brand`.
+  проверять на 390 и 1280 px и на телефоне в альбомной ориентации (`node tools/qa/screens.mjs`). Подсветку при наведении
+  писать внутри `@media (hover: hover)` (на тач-экране она залипает). Картинки бренда — `public/img/brand`.
 - Случайность только через `src/engine/dice.ts` (подменяемый генератор, чтобы тесты были детерминированы).
 - После заметных изменений обновлять `docs/PROGRESS.md` (что сделано, что дальше) и при необходимости `docs/DECISIONS.md`.
 - Коммиты — по скиллу `.claude/skills/commit`: Conventional Commits `type(scope): описание строчными` на английском,
