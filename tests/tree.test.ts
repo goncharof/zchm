@@ -39,6 +39,23 @@ describe('дерево этапов', () => {
     expect(trees).toBeGreaterThan(20)
   })
 
+  it('условие «по отметке» ссылается на существующий этап; стражник Мёртвого города свободен, когда дракон убит', () => {
+    let marks = 0
+    for (const l of idx.data.locations) for (const p of l.paragraphs) for (const n of allNodes(paragraphTree(p))) {
+      if (typeof n.on !== 'object' || !('mark' in n.on)) continue
+      for (const m of n.on.mark) {
+        const [loc, num, ...rest] = m.split(':')
+        const id = rest.slice(0, -1).join(':')
+        expect(allNodes(paragraphTree(para(loc, Number(num)))).some((x) => x.id === id), `${l.id} §${p.n}: ${m}`).toBe(true)
+        marks++
+      }
+    }
+    expect(marks).toBeGreaterThan(0)
+    const t = paragraphTree(para('mertvyy-gorod', 33))
+    expect(openNodes(t, 'mertvyy-gorod:33').map((n) => n.id)).toEqual(['a'])
+    expect(openNodes(t, 'mertvyy-gorod:33', ['mertvyy-gorod:16:b:won']).map((n) => n.id)).toEqual(['a', 'c'])
+  })
+
   it('тайная пометка из середины фразы вырезается, соседние куски склеиваются с точкой', () => {
     const root = paragraphTree(para('krepost-rytsarey', 44))
     expect(nodeText(root)).toContain('сидит раненый берсеркер. Кровь течет')

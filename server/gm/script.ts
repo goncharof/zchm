@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { idx } from '@/data'
 import type { BookNode, ParagraphHints } from '@/types'
-import { allNodes, deadlyEffect, diceKey, effectLabel, findNode, hasResult, nodeFullText, nodeText, openNodes, paragraphTree, parentOf, revealedBy } from '@/game/tree'
+import { allNodes, deadlyEffect, diceKey, effectLabel, findNode, hasResult, nodeFullText, nodeText, openNodes, paragraphTree, parentOf, revealedBy, rollOf } from '@/game/tree'
 import type { Hero } from '@/engine/model'
 import { GameError } from '@/game/session'
 import { plural } from '@/ui/format'
@@ -39,7 +39,8 @@ const shown = (t: string) => t.replace(/\(([1-6])\)/g, '(бутылка)')
 /** Текст этапа для чата: «условие — текст» (у исхода броска — выпавшие числа), без пометок ведущего */
 function nodeSay(node: BookNode): string {
   const body = nodeText(node)
-  const head = typeof node.on === 'object' ? `Выпало ${node.on.roll.join(', ')}` : node.on === 'enter' ? '' : node.label
+  const roll = rollOf(node)
+  const head = roll ? `Выпало ${roll.join(', ')}` : node.on === 'enter' ? '' : node.label
   return shown(head ? `${head}${body ? ` — ${body}` : ''}` : body)
 }
 
@@ -375,7 +376,7 @@ export class ScriptedGm {
         const d = node?.dice
         if (!tree || !node || !d) throw new GameError('Список не найден')
         const r = s.rollDie(d.sides, 'Бросок по списку')
-        const hit = (node.then ?? []).find((c) => typeof c.on === 'object' && c.on.roll.includes(r))
+        const hit = (node.then ?? []).find((c) => rollOf(c)?.includes(r))
         if (d.repeat) {
           // список «для каждого» бросают много раз; награда исхода — своя у каждого варианта и берётся один раз
           this.say(room, `Выпало ${r}: ${hit ? shown(nodeText(hit) || hit.label || '') : 'ничего не происходит'}`, hit ? fresh(room, nodeOffers(a.loc, a.n, hit, room.state.claimed ?? [], new Set(), room.state.heroes)) : [])

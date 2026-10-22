@@ -213,18 +213,22 @@ describe('сценарный ведущий', () => {
     expect(lastGm(g.chat).text).toContain('Не пробиваете —')
   })
 
-  it('после победы исход открывается сам и предлагает нового противника: минотавр требует половину сокровищ', async () => {
+  it('после победы исход открывается сам: минотавр требует половину — отдать или биться с ним', async () => {
     const g = await setup()
     await goTo(g, 'mertvyy-gorod')
     await g.c.call('enterLocation', ['mertvyy-gorod'])
     await g.c.chat('31', true)
     await until(() => /помещение 31/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
-    expect(scene.choices!.map((c) => c.label)).not.toContain('▸ Если убиваете дракона')
+    expect(scene.text).not.toContain('192')
     await g.c.choose(scene.id, scene.choices!.find((c) => c.label.startsWith('⚔ Бой:'))!.id)
     const after = await winFight(g)
-    expect(after.text).toMatch(/Если убиваете дракона — .*Минотавр требует/)
-    expect(after.choices!.map((c) => c.label)).toContain('⚔ Бой: Минотавр')
+    expect(after.text).toMatch(/Если убиваете дракона — минотавр требует половину/)
+    expect(after.text).not.toContain('192')
+    const labels = after.choices!.map((c) => c.label)
+    expect(labels).toEqual(expect.arrayContaining(['▸ Отдаете половину', '▸ Не отдаете']))
+    await g.c.choose(after.id, after.choices!.find((c) => c.label === '▸ Не отдаете')!.id)
+    await until(() => lastGm(g.chat).choices?.some((c) => c.label === '⚔ Бой: Минотавр') ?? false)
   })
 
   it('выбор открывает бой, победа — награду; второй бой с теми же монстрами не предлагается', async () => {

@@ -238,8 +238,10 @@ export interface ParagraphSegment {
 }
 
 /** Когда открывается этап параграфа: enter — вместе с родителем (у корня — при входе), choice — по выбору игроков,
- *  win/lose/flee — по итогу боя родителя, ok/fail — по проверке удачи родителя, roll — по броску его списка */
-export type NodeOn = 'enter' | 'choice' | 'win' | 'lose' | 'flee' | 'ok' | 'fail' | { roll: number[] }
+ *  win/lose/flee — по итогу боя родителя, ok/fail — по проверке удачи родителя, roll — по броску его списка,
+ *  mark — когда в прохождении есть одна из отметок, в том числе другого помещения («Когда дракон умрет — цепи сами
+ *  спадут»: mertvyy-gorod:16:b:won) */
+export type NodeOn = 'enter' | 'choice' | 'win' | 'lose' | 'flee' | 'ok' | 'fail' | { roll: number[] } | { mark: string[] }
 
 /** Дословный кусок текста книги; gm — пометка ведущего, игрокам не показывается */
 export interface BookText { t: string; gm?: true }

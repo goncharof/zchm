@@ -355,7 +355,12 @@ def check_tree(tree, text, ctx, ns):
         ids.add(n.get('id'))
         on = n.get('on')
         roll = isinstance(on, dict) and set(on) == {'roll'} and all(isinstance(v, int) for v in on['roll'])
-        if not ((isinstance(on, str) and on in NODE_ON) or roll):
+        # отметка прохождения, в том числе другого помещения: «локация:номер:этап:итог»
+        mark = isinstance(on, dict) and set(on) == {'mark'} and on['mark'] and all(
+            isinstance(m, str) and re.fullmatch(r'[a-z-]+:\d+:[\w.:-]+:(open|won|lost|fled|ok|fail)', m) for m in on['mark'])
+        if mark and not n.get('label'):
+            errs.append(f'{where}: у этапа по отметке нет label')
+        if not ((isinstance(on, str) and on in NODE_ON) or roll or mark):
             errs.append(f'{where}: неизвестное on {on!r}')
         if parent is None and on != 'enter':
             errs.append('корень должен открываться при входе (on: enter)')

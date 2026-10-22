@@ -70,6 +70,9 @@ export function parentOf(root: BookNode, id: string): BookNode | undefined {
   return allNodes(root).find((n) => (n.then ?? []).some((c) => c.id === id))
 }
 
+/** Выпавшие числа, при которых открывается исход броска (у других этапов — null) */
+export const rollOf = (n: BookNode): number[] | null => (typeof n.on === 'object' && 'roll' in n.on ? n.on.roll : null)
+
 /** Ключ отметки броска списка этапа */
 export const diceKey = (n: BookNode) => n.dice?.key ?? n.id
 
@@ -92,6 +95,7 @@ export function openNodes(root: BookNode, place: string, claimed: readonly strin
     const on = c.on
     if (on === 'enter') return true
     if (on === 'choice') return marked(c.id, 'open')
+    if (typeof on === 'object' && 'mark' in on) return on.mark.some((m) => set.has(m))
     if (typeof on === 'object') return !!parent.dice && !parent.dice.repeat && rolled(diceKey(parent)).some((r) => on.roll.includes(r))
     return resultIn(parent, on)
   }

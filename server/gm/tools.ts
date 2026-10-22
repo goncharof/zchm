@@ -127,11 +127,12 @@ const has = (h?: ParagraphHints) => !!h && Object.values(h).some((v) => (Array.i
  *  каждого этапа: награда за победу не должна выглядеть лежащей на виду */
 function stagePayload(n: BookNode): Record<string, unknown> {
   const on = n.on
-  const when = on === 'enter' ? undefined : on === 'choice' ? `по выбору игроков: «${n.label ?? ''}»` : typeof on === 'object' ? `если на кубике выпало ${on.roll.join(', ')}` : WHEN[on]
+  const when = on === 'enter' ? undefined : on === 'choice' ? `по выбору игроков: «${n.label ?? ''}»` : typeof on === 'object'
+    ? ('roll' in on ? `если на кубике выпало ${on.roll.join(', ')}` : `когда случилось: «${n.label ?? ''}» (в этом или другом помещении)`) : WHEN[on]
   const visible = n.text.filter((x) => !x.gm).map((x) => x.t).join(' ')
   const secret = n.text.filter((x) => x.gm).map((x) => x.t)
   // условие исхода из книги («Если вы выходите из схватки победителем») — часть текста этапа
-  const lead = n.label && on !== 'choice' && on !== 'enter' && typeof on !== 'object' ? `${n.label} — ` : ''
+  const lead = n.label && on !== 'choice' && on !== 'enter' && !(typeof on === 'object' && 'roll' in on) ? `${n.label} — ` : ''
   const npcs = [...(n.hints?.monsters ?? []).filter((m) => idx.monsterById.get(m)?.special).map((m) => idx.monster(m).name), ...(n.npcs ?? []).map((x) => idx.monsterById.get(x)?.name ?? x)]
   const kids = n.then ?? []
   return {

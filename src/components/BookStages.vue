@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { BookNode, Paragraph } from '@/types'
 import type { EncounterSpec } from '@/engine/combat'
 import { idx } from '@/data'
-import { deadlyEffect, diceKey, effectLabel, hasResult, nodeText, openNodes, paragraphTree } from '@/game/tree'
+import { deadlyEffect, diceKey, effectLabel, hasResult, nodeText, openNodes, paragraphTree, rollOf } from '@/game/tree'
 import { useGameStore } from '@/stores/game'
 import ParagraphActions from './ParagraphActions.vue'
 
@@ -25,7 +25,8 @@ watch(P, () => { repeatRoll.value = {} })
 const place = (n: BookNode) => `${P.value}:${n.id}`
 function head(n: BookNode): string {
   if (n.on === 'enter') return ''
-  if (typeof n.on === 'object') return `Выпало ${n.on.roll.join(', ')}`
+  const roll = rollOf(n)
+  if (roll) return `Выпало ${roll.join(', ')}`
   return n.label ?? ''
 }
 /** механика этапа: выигранный бой и пройденная проверка не предлагаются снова */
@@ -56,7 +57,7 @@ const rolled = (n: BookNode) => {
 }
 const repeatHit = (n: BookNode) => {
   const r = repeatRoll.value[n.id]
-  return r === undefined ? undefined : (n.then ?? []).find((c) => typeof c.on === 'object' && c.on.roll.includes(r))
+  return r === undefined ? undefined : (n.then ?? []).find((c) => rollOf(c)?.includes(r))
 }
 async function roll(n: BookNode) {
   const d = n.dice

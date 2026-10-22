@@ -22,7 +22,7 @@ export function sceneText(p: Paragraph): string {
 /** Полный текст дерева этапов: «условие — текст», у исходов броска — «выпавшие числа — текст» */
 export function treeText(n: BookNode): string {
   const body = n.text.map((x) => x.t).join(' ')
-  const head = typeof n.on === 'object' ? n.on.roll.join(', ') : n.label
+  const head = typeof n.on === 'object' && 'roll' in n.on ? n.on.roll.join(', ') : n.label
   const own = head ? `${head}${body ? ` — ${body}` : ''}` : body
   return [own, ...(n.then ?? []).map(treeText)].filter(Boolean).join(' ')
 }
