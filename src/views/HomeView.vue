@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { idx } from '@/data'
+import { classArt, pct } from '@/ui/format'
 import { useGameStore } from '@/stores/game'
 import LogPanel from '@/components/LogPanel.vue'
 import OnlinePanel from '@/components/OnlinePanel.vue'
@@ -77,7 +78,7 @@ async function newGame() {
       <div v-if="store.game?.victory" class="card tight" style="border-color:var(--ok)"><b>Победа!</b> {{ store.game.victory.heroName }} сразил Чёрного мага на {{ store.game.victory.day }}-й день. Ворота Инкардагот остались закрыты.</div>
       <div v-if="allDead" class="card tight" style="border-color:var(--danger)"><b>Партия погибла.</b> Жрец мог бы оживить павших, но жрецов не осталось. Начните новую партию или загрузите сохранение.</div>
       <div class="cta">
-        <button v-if="store.started" class="primary" @click="continueGame">Продолжить · день {{ store.game?.day }}, {{ where }}</button>
+        <button v-if="store.started" class="primary cta-main" @click="continueGame"><span>Продолжить</span><small>день {{ store.game?.day }} · {{ where }}</small></button>
         <template v-if="!store.online || store.room?.me.isHost">
           <button :class="{ primary: !store.started }" @click="newGame">Новая партия</button>
           <button @click="quick" title="Воин, маг, жрец и вор со снаряжением на 40 монет">Быстрый старт</button>
@@ -92,36 +93,32 @@ async function newGame() {
       <div id="online"><OnlinePanel /></div>
       <div class="card" v-if="store.heroes.length">
         <h2 class="title-ornament">Партия</h2>
-        <table class="list stack">
-          <thead><tr><th>Герой</th><th>Класс</th><th>Ур.</th><th>Жизни</th><th>Мана</th><th>Монеты</th><th>Опыт</th></tr></thead>
-          <tbody>
-            <tr v-for="h in store.heroes" :key="h.uid" :class="{ 'hero-down': h.status.dead }">
-              <td data-label="Герой"><b>{{ h.name }}</b><span v-if="h.status.dead" class="badge" style="margin-left:.3rem;border-color:var(--danger);color:var(--danger)">мёртв</span></td>
-              <td data-label="Класс">{{ idx.cls(h.classId).name }}</td><td data-label="Ур.">{{ h.level }}</td><td data-label="Жизни">{{ h.lives }}/{{ h.maxLives }}</td><td data-label="Мана">{{ h.maxMana ? `${h.mana}/${h.maxMana}` : '—' }}</td><td data-label="Монеты">{{ h.money }}</td><td data-label="Опыт">{{ h.xp }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <router-link v-for="h in store.heroes" :key="h.uid" to="/party" class="hero-row" :class="{ 'hero-down': h.status.dead }">
+          <img :src="classArt(h.classId)" alt="" class="portrait small-portrait" />
+          <div class="hero-row-name">{{ h.name }}<span>{{ idx.cls(h.classId).name }} {{ h.level }} ур.</span><span v-if="h.status.dead" class="badge danger">мёртв</span></div>
+          <div class="hero-row-side">{{ h.money }} м <span class="muted">· {{ h.xp }} оп.</span></div>
+          <div class="vitals">
+            <div class="vital" title="Жизни"><span><i class="ic-life">♥</i> {{ h.lives }}/{{ h.maxLives }}</span><div class="bar" :class="{ danger: h.lives * 3 <= h.maxLives }"><i :style="{ width: pct(Math.max(0, h.lives), h.maxLives) }" /></div></div>
+            <div v-if="h.maxMana" class="vital" title="Мана"><span><i class="ic-mana">✦</i> {{ h.mana }}/{{ h.maxMana }}</span><div class="bar mana"><i :style="{ width: pct(h.mana, h.maxMana) }" /></div></div>
+          </div>
+        </router-link>
         <div class="row" style="margin-top:.6rem"><router-link class="btn" to="/party">Листы персонажей</router-link><router-link class="btn" to="/map">Карта</router-link></div>
       </div>
       <div class="card">
         <h2 class="title-ornament">Сохранения</h2>
         <p class="small muted">Партия сохраняется автоматически. Слоты — дополнительные копии в этом браузере.</p>
-        <table class="list stack">
-          <tbody>
-            <tr v-for="n in [1, 2, 3]" :key="n">
-              <td data-label="Слот"><b>Слот {{ n }}</b></td>
-              <td data-label="Партия" class="small">
-                <template v-if="slots[n - 1]">День {{ slots[n - 1]!.day }} · {{ slots[n - 1]!.heroes || 'без героев' }} · {{ new Date(slots[n - 1]!.savedAt).toLocaleString('ru-RU') }}</template>
-                <span v-else class="muted">пусто</span>
-              </td>
-              <td style="text-align:right;white-space:nowrap">
-                <button class="small" :disabled="!store.started" @click="save(n)">Сохранить</button>
-                <button v-if="canLoad" class="small" :disabled="!slots[n - 1]" @click="load(n)">Загрузить</button>
-                <button class="small" :disabled="!slots[n - 1]" title="Удалить слот" @click="clear(n)">✕</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-for="n in [1, 2, 3]" :key="n" class="slot">
+          <div class="slot-info">
+            <b>Слот {{ n }}</b>
+            <span v-if="slots[n - 1]" class="small">День {{ slots[n - 1]!.day }} · {{ slots[n - 1]!.heroes || 'без героев' }} · <span class="muted">{{ new Date(slots[n - 1]!.savedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) }}</span></span>
+            <span v-else class="small muted">пусто</span>
+          </div>
+          <div class="slot-actions">
+            <button class="small" :disabled="!store.started" @click="save(n)">Сохранить</button>
+            <button v-if="canLoad" class="small" :disabled="!slots[n - 1]" @click="load(n)">Загрузить</button>
+            <button class="small ghost" :disabled="!slots[n - 1]" title="Удалить слот" :aria-label="`Удалить слот ${n}`" @click="clear(n)">✕</button>
+          </div>
+        </div>
         <div class="row" style="margin-top:.6rem">
           <button v-if="store.started" class="small" @click="exportSave">Экспорт сохранения</button>
           <button v-if="canLoad" class="small" @click="fileInput?.click()">Импорт сохранения</button>

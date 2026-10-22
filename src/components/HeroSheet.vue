@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Pencil, Trash2 } from 'lucide-vue-next'
 import { idx } from '@/data'
 import type { EquipSlot, Hero, InventoryEntry } from '@/engine/model'
 import { BOW_GROUPS, artifactSlot, heroAccuracy, heroDefense, heroDexterity, heroLuck, heroStrength, heroWeapons, levelRow } from '@/engine/character'
@@ -53,6 +54,9 @@ function canPoison(e: InventoryEntry): boolean {
 function isEquipped(e: InventoryEntry) { return Object.values(props.hero.equipment).includes(e.uid) }
 function canEquip(e: InventoryEntry) { return e.kind === 'weapon' ? idx.weapon(e.ref).group !== 'ammo' : e.kind === 'armor' || e.kind === 'artifact' }
 const needsArrows = computed(() => heroWeapons(props.hero, idx).some((w) => w.needsAmmo && !w.ammoEntry))
+/** убрать героя — только после подтверждения: на телефоне кнопку легко задеть */
+function remove() { if (confirm(`Убрать героя «${props.hero.name}» из партии?`)) store.removeHero(props.hero.uid) }
+function rename() { store.renameHero(props.hero.uid, newName.value); renaming.value = false }
 function act(fn: () => void) { try { fn() } catch (e) { store.say((e as Error).message) } }
 const statusText = computed(() => {
   const s = props.hero.status
@@ -66,32 +70,39 @@ const statusText = computed(() => {
 
 <template>
   <div class="card" :class="{ 'hero-down': hero.status.dead }">
-    <div class="row between">
-      <h2 v-if="!renaming" class="row" style="gap:.6rem"><img :src="classArt(hero.classId)" alt="" class="portrait" />{{ hero.name }} <span class="badge accent">{{ cls.name }} {{ hero.level }} ур.</span> <span v-if="statusText" class="badge" style="border-color:var(--danger);color:var(--danger)">{{ statusText }}</span></h2>
-      <div v-else class="row"><input v-model="newName" /><button class="small primary" @click="store.renameHero(hero.uid, newName); renaming = false">Ок</button></div>
-      <div class="row">
-        <span v-if="store.online" class="badge" :style="store.isMine(hero.uid) ? 'border-color:var(--ok);color:var(--ok)' : ''">{{ owner ? (store.isMine(hero.uid) ? 'ваш герой' : `игрок: ${owner}`) : 'ничей' }}</span>
-        <button v-if="store.online && !owner" class="small" @click="store.claimHero(hero.uid)">Взять героя</button>
+    <div class="sheet-head">
+      <img :src="classArt(hero.classId)" alt="" class="portrait" />
+      <div class="sheet-title">
+        <h2 v-if="!renaming">{{ hero.name }}</h2>
+        <form v-else class="row" style="flex-wrap:nowrap" @submit.prevent="rename"><input v-model="newName" aria-label="Имя героя" style="min-width:0;flex:1" /><button type="submit" class="small primary">Ок</button></form>
+        <div class="row" style="gap:.3rem">
+          <span class="badge accent">{{ cls.name }} · {{ hero.level }} ур.</span>
+          <span v-if="statusText" class="badge danger">{{ statusText }}</span>
+          <span v-if="store.online" class="badge" :class="{ ok: store.isMine(hero.uid) }">{{ owner ? (store.isMine(hero.uid) ? 'ваш герой' : `игрок: ${owner}`) : 'ничей' }}</span>
+        </div>
+      </div>
+      <div class="sheet-tools">
+        <button v-if="store.online && !owner" class="small primary" @click="store.claimHero(hero.uid)">Взять героя</button>
         <button v-if="store.online && store.isMine(hero.uid)" class="small" @click="store.releaseHero(hero.uid)">Отпустить</button>
         <template v-if="!ro">
-          <button class="small" @click="renaming = !renaming">Имя</button>
-          <button class="small danger" @click="store.removeHero(hero.uid)">Убрать</button>
+          <button class="small ghost" title="Переименовать" aria-label="Переименовать" :aria-pressed="renaming" @click="renaming = !renaming"><Pencil :size="15" aria-hidden="true" /><span class="hide-phone">Имя</span></button>
+          <button class="small ghost danger" title="Убрать из партии" aria-label="Убрать из партии" @click="remove"><Trash2 :size="15" aria-hidden="true" /><span class="hide-phone">Убрать</span></button>
         </template>
       </div>
     </div>
-    <div class="row" style="gap:1rem;margin:.4rem 0 .6rem">
-      <div style="flex:1;min-width:160px"><div class="small">Жизни {{ hero.lives }}/{{ hero.maxLives }}</div><div class="bar" :class="{ danger: hero.lives * 3 <= hero.maxLives }"><i :style="{ width: pct(hero.lives, hero.maxLives) }" /></div></div>
-      <div v-if="hero.maxMana" style="flex:1;min-width:160px"><div class="small">Мана {{ hero.mana }}/{{ hero.maxMana }}</div><div class="bar mana"><i :style="{ width: pct(hero.mana, hero.maxMana) }" /></div></div>
+    <div class="vitals">
+      <div class="vital" title="Жизни"><span><i class="ic-life">♥</i> {{ hero.lives }}/{{ hero.maxLives }}</span><div class="bar" :class="{ danger: hero.lives * 3 <= hero.maxLives }"><i :style="{ width: pct(Math.max(0, hero.lives), hero.maxLives) }" /></div></div>
+      <div v-if="hero.maxMana" class="vital" title="Мана"><span><i class="ic-mana">✦</i> {{ hero.mana }}/{{ hero.maxMana }}</span><div class="bar mana"><i :style="{ width: pct(hero.mana, hero.maxMana) }" /></div></div>
+      <div v-if="next" class="vital" :title="`Опыт: до ${hero.level + 1} уровня ${next - hero.xp} очков`"><span><i class="ic-xp">★</i> {{ hero.xp }}/{{ next }}</span><div class="bar xp"><i :style="{ width: pct(hero.xp - prevXp, next - prevXp) }" /></div></div>
     </div>
-    <div v-if="next" style="margin:-.2rem 0 .5rem"><div class="bar" style="height:5px" :title="`до ${hero.level + 1} уровня: ${next - hero.xp} очков`"><i :style="{ width: pct(hero.xp - prevXp, next - prevXp), background: 'var(--accent)' }" /></div></div>
-    <div class="stat-table">
-      <div><b>Опыт</b> {{ hero.xp }}<span v-if="next" class="muted"> / {{ next }}</span></div>
-      <div><b>Сила</b> {{ heroStrength(hero, idx) }}</div>
-      <div><b>Ловкость</b> {{ heroDexterity(hero) }}</div>
-      <div><b>Меткость</b> {{ heroAccuracy(hero, idx) }}</div>
-      <div><b>Удача</b> {{ heroLuck(hero, idx) }}</div>
-      <div><b>Защита</b> {{ heroDefense(hero, idx) }}</div>
-      <div><b>Монеты</b> {{ hero.money }}</div>
+    <div class="stat-grid">
+      <div><span>Сила</span><b>{{ heroStrength(hero, idx) }}</b></div>
+      <div><span>Ловкость</span><b>{{ heroDexterity(hero) }}</b></div>
+      <div><span>Меткость</span><b>{{ heroAccuracy(hero, idx) }}</b></div>
+      <div><span>Удача</span><b>{{ heroLuck(hero, idx) }}</b></div>
+      <div><span>Защита</span><b>{{ heroDefense(hero, idx) }}</b></div>
+      <div><span>Монеты</span><b>{{ hero.money }}</b></div>
+      <div v-if="!next"><span>Опыт</span><b>{{ hero.xp }}</b></div>
     </div>
 
     <div v-if="hero.buffs.length" class="row small" style="margin-top:.4rem"><span class="muted">Эффекты:</span><span v-for="(b, i) in hero.buffs" :key="i" class="badge accent">{{ b.source }}</span></div>

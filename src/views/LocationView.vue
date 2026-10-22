@@ -3,6 +3,7 @@ import { paragraphText } from '@/game/book'
 import { allNodes, paragraphTree } from '@/game/tree'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { LogOut, Map as MapIcon, Store, Swords } from 'lucide-vue-next'
 import { idx } from '@/data'
 import type { EncounterSpec } from '@/engine/combat'
 import { SERVICES } from '@/engine/world'
@@ -104,11 +105,11 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
   <template v-else>
     <div class="row between" style="margin-bottom:.6rem">
       <h1>{{ loc.name }} <span class="badge">Книга Жизни, стр. {{ loc.pages[0] }}–{{ loc.pages[1] }}</span> <span v-if="visited.length" class="badge accent">пройдено {{ visited.length }} из {{ loc.paragraphs.length }}</span></h1>
-      <div class="row">
-        <router-link v-if="services.includes('shop') || services.includes('tavern')" class="btn" to="/shop">Лавка / трактир</router-link>
-        <button v-if="store.isGm && !store.aiGm" @click="picker = true">Произвольный бой</button>
-        <button v-if="store.game?.locationId === id" @click="leave">Покинуть локацию</button>
-        <router-link v-else class="btn" to="/map">Карта</router-link>
+      <div class="row loc-tools">
+        <router-link v-if="services.includes('shop') || services.includes('tavern')" class="btn" to="/shop" aria-label="Лавка и трактир"><Store :size="16" aria-hidden="true" /><span>Лавка<span class="hide-phone"> / трактир</span></span></router-link>
+        <button v-if="store.isGm && !store.aiGm" aria-label="Произвольный бой" title="Бой с любыми монстрами из Бестиария" @click="picker = true"><Swords :size="16" aria-hidden="true" /><span class="hide-phone">Произвольный бой</span><span class="phone-only">Бой</span></button>
+        <button v-if="store.game?.locationId === id" aria-label="Покинуть локацию" @click="leave"><LogOut :size="16" aria-hidden="true" /><span>Покинуть<span class="hide-phone"> локацию</span></span></button>
+        <router-link v-else class="btn" to="/map"><MapIcon :size="16" aria-hidden="true" />Карта</router-link>
       </div>
     </div>
     <div v-if="id === 'doroga' && store.game?.pendingRoad.length" class="card tight row">

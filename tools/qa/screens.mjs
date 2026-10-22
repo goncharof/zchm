@@ -37,9 +37,9 @@ async function run(label, viewport, touch = false) {
   await shot('02-party')
 
   await page.getByRole('button', { name: 'Лавка (снаряжение)' }).click()
-  const buyer = page.locator('select').first()
+  const buyer = (i) => page.locator('.buyers button').nth(i)
   const buy = async (heroIdx, tab, item) => {
-    await buyer.selectOption({ index: heroIdx })
+    await buyer(heroIdx).click()
     await page.getByRole('button', { name: tab, exact: true }).click()
     await page.locator('tr', { hasText: item }).first().getByRole('button', { name: 'Купить' }).click()
   }
@@ -48,7 +48,7 @@ async function run(label, viewport, touch = false) {
   await buy(1, 'Оружие', 'кинжал')
   await buy(2, 'Оружие', 'палица')
   await buy(3, 'Оружие', 'арбалет')
-  await buyer.selectOption({ index: 3 })
+  await buyer(3).click()
   await page.locator('tr', { hasText: /^\s*стрела/ }).first().getByRole('button', { name: '×10' }).click()
   await page.getByRole('button', { name: 'Оружие', exact: true }).click()
   await shot('03-shop')

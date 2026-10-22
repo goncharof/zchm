@@ -45,14 +45,15 @@ const hasHero = computed(() => !!store.room?.me.heroUids.length)
       <GmPanel v-if="store.room?.gm === 'human' && store.room.me.isHost" />
       <div v-else class="card tight">
         <h3>Партия <span class="small muted">· день {{ store.game?.day }} · {{ store.location?.name ?? store.worldNode?.name ?? '' }}</span></h3>
-        <div v-for="h in store.heroes" :key="h.uid" class="row" style="gap:.5rem;margin:.35rem 0;flex-wrap:nowrap" :class="{ 'hero-down': h.status.dead }">
+        <router-link v-for="h in store.heroes" :key="h.uid" to="/party" class="hero-row" :class="{ 'hero-down': h.status.dead }">
           <img :src="classArt(h.classId)" alt="" class="portrait small-portrait" />
-          <div style="flex:1;min-width:0">
-            <div class="small"><b>{{ h.name }}</b> <span class="muted">{{ idx.cls(h.classId).name }} {{ h.level }} · {{ store.ownerOf(h.uid) ?? 'ничей' }}</span></div>
-            <div class="bar" style="height:5px"><i :style="{ width: pct(h.lives, h.maxLives) }" /></div>
+          <div class="hero-row-name">{{ h.name }}<span>{{ idx.cls(h.classId).name }} {{ h.level }}</span></div>
+          <div class="hero-row-side" :class="{ muted: !store.ownerOf(h.uid) }">{{ store.ownerOf(h.uid) ?? 'ничей' }}</div>
+          <div class="vitals">
+            <div class="vital" title="Жизни"><span><i class="ic-life">♥</i> {{ h.lives }}/{{ h.maxLives }}</span><div class="bar" :class="{ danger: h.lives * 3 <= h.maxLives }"><i :style="{ width: pct(Math.max(0, h.lives), h.maxLives) }" /></div></div>
+            <div v-if="h.maxMana" class="vital" title="Мана"><span><i class="ic-mana">✦</i> {{ h.mana }}/{{ h.maxMana }}</span><div class="bar mana"><i :style="{ width: pct(h.mana, h.maxMana) }" /></div></div>
           </div>
-          <span class="small muted">{{ h.lives }}/{{ h.maxLives }}</span>
-        </div>
+        </router-link>
         <div class="row" style="margin-top:.4rem"><router-link class="btn small" to="/party">Листы героев</router-link><router-link class="btn small" to="/shop">Лавка</router-link></div>
       </div>
       <div v-if="store.game?.log.length" class="card tight">

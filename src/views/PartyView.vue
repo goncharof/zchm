@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { gameData, idx } from '@/data'
 import { useGameStore } from '@/stores/game'
+import { classArt } from '@/ui/format'
 import HeroSheet from '@/components/HeroSheet.vue'
 
 const store = useGameStore()
@@ -47,7 +48,7 @@ const visibleHeroes = computed(() => (!narrow.value || shown.value === 'all' ? s
     <div class="row between">
       <h1>Партия</h1>
       <div class="row">
-        <label class="row" style="gap:.3rem" v-if="store.game && !store.online"><input type="checkbox" :checked="store.game.gmMode" @change="store.toggleGm()" /> режим ведущего</label>
+        <label v-if="store.game && !store.online" class="switch-row" title="Текст параграфов скрыт — его читает живой ведущий"><input type="checkbox" class="switch" :checked="store.game.gmMode" @change="store.toggleGm()" /> режим ведущего</label>
         <button v-if="store.heroes.length" @click="router.push('/shop')">Лавка (снаряжение)</button>
         <button v-if="store.heroes.length" @click="router.push('/map')">На карту</button>
       </div>
@@ -64,8 +65,8 @@ const visibleHeroes = computed(() => (!narrow.value || shown.value === 'all' ? s
         <select v-model="classId"><option v-for="c in gameData.classes" :key="c.id" :value="c.id" :disabled="taken(c.id)">{{ c.name }}{{ taken(c.id) ? ' — уже в команде' : '' }}</option></select>
       </div>
       <button class="primary" :disabled="taken(classId)" @click="add">Добавить в партию</button>
-      <label v-if="store.game && (!store.online || store.room?.me.isHost)" class="row small" style="gap:.3rem" title="По правилам этой версии в одной команде классы не повторяются">
-        <input type="checkbox" :checked="!!store.game.allowDuplicateClasses" @change="store.setAllowDuplicateClasses(!store.game.allowDuplicateClasses)" /> разрешить повтор классов
+      <label v-if="store.game && (!store.online || store.room?.me.isHost)" class="switch-row" title="По правилам этой версии в одной команде классы не повторяются">
+        <input type="checkbox" class="switch" :checked="!!store.game.allowDuplicateClasses" @change="store.setAllowDuplicateClasses(!store.game.allowDuplicateClasses)" /> разрешить повтор классов
       </label>
     </div>
     <p class="small muted" style="margin-top:.6rem"><b>{{ cls.name }}.</b> {{ cls.description }} <i>Оружие: {{ cls.weaponRule }}. Метательное: {{ cls.rangedRule }}.</i>
@@ -90,7 +91,7 @@ const visibleHeroes = computed(() => (!narrow.value || shown.value === 'all' ? s
   <p v-if="!store.heroes.length" class="muted">Добавьте героев. У каждого 40 монет, характеристики на старте равны нулю.</p>
   <!-- телефон: один лист героя за раз, переключатель сверху -->
   <div v-if="narrow && store.heroes.length > 1" class="hero-switch" role="tablist" aria-label="Герой">
-    <button v-for="h in store.heroes" :key="h.uid" role="tab" :aria-selected="shown === h.uid" :class="{ active: shown === h.uid, down: h.status.dead }" @click="shown = h.uid">{{ h.name }}</button>
+    <button v-for="h in store.heroes" :key="h.uid" role="tab" :aria-selected="shown === h.uid" :class="{ active: shown === h.uid, down: h.status.dead }" @click="shown = h.uid"><img :src="classArt(h.classId)" alt="" />{{ h.name }}</button>
     <button role="tab" :aria-selected="shown === 'all'" :class="{ active: shown === 'all' }" @click="shown = 'all'">Все</button>
   </div>
   <div class="sheets"><HeroSheet v-for="h in visibleHeroes" :key="h.uid" :hero="h" /></div>

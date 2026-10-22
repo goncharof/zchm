@@ -5,7 +5,7 @@ import { canUseWeapon } from '@/engine/character'
 import { SERVICES } from '@/engine/world'
 import { REST_COST_PER_DAY } from '@/engine/rules'
 import { useGameStore } from '@/stores/game'
-import { HAND_NAMES, attacksStr } from '@/ui/format'
+import { HAND_NAMES, attacksStr, classArt } from '@/ui/format'
 import HeroSheet from '@/components/HeroSheet.vue'
 
 const store = useGameStore()
@@ -31,9 +31,11 @@ function usable(wId: string) {
 
 <template>
   <div class="card">
-    <div class="row between">
-      <h1>Лавка и трактир</h1>
-      <div class="row"><label>Покупатель</label><select v-model="buyerUid"><option v-for="h in mine" :key="h.uid" :value="h.uid">{{ h.name }} ({{ h.money }} монет)</option></select></div>
+    <h1>Лавка и трактир</h1>
+    <!-- покупатель — плашкой с портретом и монетами: одно касание вместо выпадающего списка -->
+    <div v-if="mine.length && tab !== 'sell' && tab !== 'tavern'" class="buyers" role="group" aria-label="Покупатель">
+      <span class="small muted">Покупает</span>
+      <button v-for="h in mine" :key="h.uid" :class="{ active: buyer?.uid === h.uid }" :aria-pressed="buyer?.uid === h.uid" @click="buyerUid = h.uid"><img :src="classArt(h.classId)" alt="" /><span>{{ h.name }}</span><b>{{ h.money }} м</b></button>
     </div>
     <p v-if="!store.heroes.length" class="muted">Сначала соберите партию.</p>
     <p v-else-if="!allowed" class="muted">Лавки здесь нет. ХАУСРУЛ: торговля доступна в городах и крепостях (Золотой город, Крепость рыцарей, Замок жрецов, Крепость последней надежды, Брошенный город, Северный форт), а также перед началом пути. Ведущий может включить режим ведущего и разрешить торговлю.</p>
@@ -51,7 +53,7 @@ function usable(wId: string) {
         <tr v-for="w in weapons" :key="w.id" :class="{ muted: !usable(w.id) }">
           <td><b>{{ w.name }}</b> <span v-if="w.ranged" class="badge">метательное</span><span v-if="w.throwable" class="badge">можно метать</span><span v-if="w.accuracyBonus" class="badge">меткость +{{ w.accuracyBonus }}</span><span v-if="!usable(w.id)" class="badge">не для класса</span>
             <div class="shop-meta">атаки {{ attacksStr(w.attacks) }}{{ w.hand ? ` · ${HAND_NAMES[w.hand]}` : '' }} · <b>{{ w.price }} м</b></div></td>
-          <td class="wide-only">{{ attacksStr(w.attacks) }}</td><td class="wide-only small">{{ w.hand ? HAND_NAMES[w.hand] : '' }}</td><td class="wide-only">{{ w.price }}</td>
+          <td class="wide-only">{{ attacksStr(w.attacks) }}</td><td class="wide-only small">{{ w.hand ? HAND_NAMES[w.hand] : '' }}</td><td class="wide-only price">{{ w.price }} м</td>
           <td><button class="small" :disabled="!buyer || buyer.money < w.price" :title="usable(w.id) ? '' : 'Класс не может этим пользоваться, но купить можно'" @click="buy('weapon', w.id)">Купить</button><button v-if="STACKS.includes(w.id)" class="small" :disabled="!buyer || buyer.money < w.price * 10" @click="buy('weapon', w.id, 10)">×10</button></td>
         </tr>
       </tbody>
@@ -61,7 +63,7 @@ function usable(wId: string) {
       <tbody>
         <tr v-for="a in gameData.armor.filter(x => x.price > 0)" :key="a.id">
           <td><b>{{ a.name }}</b><div class="shop-meta">защита {{ a.defense ?? (a.defenseBonus ? `+${a.defenseBonus}` : a.strengthBonus ? `сила +${a.strengthBonus}` : '—') }} · <b>{{ a.price }} м</b></div></td>
-          <td class="wide-only">{{ a.defense ?? (a.defenseBonus ? `+${a.defenseBonus}` : a.strengthBonus ? `сила +${a.strengthBonus}` : '') }}</td><td class="wide-only">{{ a.price }}</td>
+          <td class="wide-only">{{ a.defense ?? (a.defenseBonus ? `+${a.defenseBonus}` : a.strengthBonus ? `сила +${a.strengthBonus}` : '') }}</td><td class="wide-only price">{{ a.price }} м</td>
           <td><button class="small" :disabled="!buyer || buyer.money < a.price" @click="buy('armor', a.id)">Купить</button></td>
         </tr>
       </tbody>
@@ -71,7 +73,7 @@ function usable(wId: string) {
       <tbody>
         <tr v-for="i in gameData.items" :key="i.id">
           <td><b>{{ i.name }}</b><div class="shop-meta"><b>{{ i.price }} м</b> · {{ i.description }}</div></td>
-          <td class="wide-only small muted">{{ i.description }}</td><td class="wide-only">{{ i.price }}</td>
+          <td class="wide-only small muted">{{ i.description }}</td><td class="wide-only price">{{ i.price }} м</td>
           <td><button class="small" :disabled="!buyer || buyer.money < i.price" @click="buy('item', i.id)">Купить</button></td>
         </tr>
       </tbody>

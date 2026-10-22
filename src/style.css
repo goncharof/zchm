@@ -118,6 +118,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--s
 input::placeholder, textarea::placeholder { color: var(--faint); }
 input[type=number] { width: 5.5rem; }
 input[type=checkbox] { width: 18px; height: 18px; min-height: 0; accent-color: var(--blood-2); }
+/* переключатель вместо галочки */
+.switch-row { display: inline-flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--muted); cursor: pointer; min-height: 38px; padding: 0 .3rem; }
+input[type=checkbox].switch {
+  appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 34px; height: 20px; margin: 0; cursor: pointer;
+  border-radius: 999px; background: var(--bg-2); border: 1px solid var(--line-2); transition: background .15s, border-color .15s;
+}
+input[type=checkbox].switch::before { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--faint); transition: transform .15s, background .15s; }
+input[type=checkbox].switch:checked { background: rgba(77, 139, 105, .35); border-color: var(--stone); }
+input[type=checkbox].switch:checked::before { transform: translateX(14px); background: var(--stone-hi); }
 select { padding-right: 1.8rem; }
 label { font-size: .88rem; color: var(--muted); }
 
@@ -143,6 +152,9 @@ main.page { max-width: 1200px; margin: 0 auto; padding: 1.1rem 16px 5rem; }
 .cols.side { grid-template-columns: 260px 1fr; }
 .muted { color: var(--muted); }
 .small { font-size: .85rem; }
+/* подписи для телефона и для широкого экрана */
+@media (max-width: 640px) { .hide-phone { display: none !important; } }
+@media (min-width: 641px) { .phone-only { display: none !important; } }
 .hero-down { opacity: .55; filter: grayscale(.6); }
 
 /* ---------- метки, полосы, таблицы ---------- */
@@ -159,6 +171,39 @@ main.page { max-width: 1200px; margin: 0 auto; padding: 1.1rem 16px 5rem; }
 .bar > i { display: block; height: 100%; background: linear-gradient(90deg, #3aa56b, var(--ok)); border-radius: 999px; transition: width .3s; }
 .bar.mana > i { background: linear-gradient(90deg, #3f78d8, var(--mana)); }
 .bar.danger > i { background: linear-gradient(90deg, #a3152d, var(--blood-2)); }
+.bar.xp > i { background: linear-gradient(90deg, #9a7a3a, var(--brass)); }
+.badge.danger { color: var(--danger); border-color: rgba(255, 107, 107, .55); }
+.badge.ok { color: var(--ok); border-color: rgba(95, 197, 140, .55); }
+/* жизни, мана, опыт: число и полоса в строку (бой, лист героя, партия на главной) */
+.vitals { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: .55rem 0; }
+.vital { flex: 1 1 140px; display: flex; align-items: center; gap: .5rem; font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.vital > span { flex: none; min-width: 4.4rem; white-space: nowrap; }
+.vital .bar { flex: 1; }
+.ic-life, .ic-mana, .ic-xp { font-style: normal; }
+.ic-life { color: var(--blood-2); }
+.ic-mana { color: var(--mana); }
+.ic-xp { color: var(--brass); }
+/* характеристики героя — плитки */
+/* в одну строку; на телефоне — по три */
+.stat-grid { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: .4rem; }
+@media (max-width: 640px) { .stat-grid { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.stat-grid > div { display: flex; flex-direction: column; align-items: center; gap: .05rem; padding: .4rem .3rem .45rem; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--line); min-width: 0; }
+.stat-grid span { font-size: .66rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.stat-grid b { font-size: 1.15rem; font-weight: 650; color: var(--brass); font-variant-numeric: tabular-nums; line-height: 1.2; }
+/* строка героя: портрет, имя и класс, монеты, жизни и мана (главная, стол) */
+.hero-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .2rem .65rem; padding: .55rem .2rem; border-bottom: 1px solid var(--line); color: var(--ink); border-radius: 8px; }
+.hero-row:last-child { border-bottom: none; }
+a.hero-row:hover { text-decoration: none; }
+@media (hover: hover) { a.hero-row:hover { background: rgba(255, 255, 255, .025); } }
+.hero-row > .portrait { grid-row: span 2; }
+.hero-row-name { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-row-name span { font-weight: 500; font-size: .8rem; color: var(--muted); margin-left: .35rem; }
+.hero-row-side { font-size: .8rem; color: var(--brass); font-weight: 600; white-space: nowrap; text-align: right; }
+.hero-row-side.muted { color: var(--faint); font-weight: 500; }
+.hero-row-side .muted { font-weight: 500; }
+.hero-row .vitals { grid-column: 2 / -1; margin: 0; }
+.hero-row .vital { flex-basis: 110px; font-size: .78rem; }
+.hero-row .vital > span { min-width: 3.6rem; }
 .stat-table { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: .35rem .8rem; font-size: .9rem; }
 .stat-table b { color: var(--brass); font-weight: 650; }
 table.list { width: 100%; border-collapse: collapse; font-size: .9rem; }
@@ -167,12 +212,15 @@ table.list th { color: var(--muted); font-weight: 550; font-size: .8rem; text-tr
 table.list tr:last-child td { border-bottom: none; }
 /* инвентарь: действия справа; на телефоне — строкой под названием, с переносом */
 td.inv-actions { text-align: right; white-space: nowrap; }
+/* название забирает всю ширину — кнопки прижаты к правому краю */
+table.list tr.inv-row td:first-child { width: 100%; }
 .inv-detail { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 640px) {
-  table.list tr.inv-row { display: grid; grid-template-columns: minmax(0, 1fr); border-bottom: 1px solid var(--line); }
+  table.list tr.inv-row { display: flex; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--line); }
   table.list tr.inv-row td { border-bottom: none; }
-  td.inv-actions { white-space: normal; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .3rem; padding-top: 0; }
-  td.inv-actions select { max-width: 100%; }
+  table.list tr.inv-row td:first-child { flex: 1 1 8.5rem; min-width: 0; }
+  td.inv-actions { white-space: normal; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .3rem; margin-left: auto; padding-top: 0; }
+  td.inv-actions select { max-width: 9.5rem; }
 }
 /* выпадающие списки не шире своей строки (длинные названия заклинаний и свитков) */
 .row > select { max-width: 100%; min-width: 0; }
@@ -242,16 +290,7 @@ td.inv-actions { text-align: right; white-space: nowrap; }
 .cb-more { display: none; }
 .cb-extra { display: contents; }
 .cb-hint { flex-basis: 100%; margin: 0; padding-top: .55rem; border-top: 1px solid var(--line); font-size: .82rem; color: var(--muted); }
-/* переключатель вместо галочки */
-.switch-row { display: inline-flex; align-items: center; gap: .45rem; font-size: .85rem; color: var(--muted); cursor: pointer; min-height: 38px; padding: 0 .3rem; }
-input[type=checkbox].switch {
-  appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 34px; height: 20px; margin: 0; cursor: pointer;
-  border-radius: 999px; background: var(--bg-2); border: 1px solid var(--line-2); transition: background .15s, border-color .15s;
-}
-input[type=checkbox].switch::before { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--faint); transition: transform .15s, background .15s; }
-input[type=checkbox].switch:checked { background: rgba(77, 139, 105, .35); border-color: var(--stone); }
-input[type=checkbox].switch:checked::before { transform: translateX(14px); background: var(--stone-hi); }
-/* герой: кто ещё не сходил — красная кромка и отсвет; жизни и мана — числа и полосы в строку */
+/* герой: кто ещё не сходил — красная кромка и отсвет */
 .fighter { position: relative; transition: border-color .2s, box-shadow .2s; }
 .fighter.ready { border-color: rgba(224, 51, 79, .55); box-shadow: var(--shadow), 0 0 22px rgba(196, 30, 58, .13); }
 .fighter.ready::before { content: ''; position: absolute; left: -1px; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0; background: var(--blood-2); }
@@ -259,13 +298,6 @@ input[type=checkbox].switch:checked::before { transform: translateX(14px); backg
 .fighter-name { flex: 1; min-width: 8rem; display: flex; flex-direction: column; line-height: 1.25; }
 .fighter-name b { font-size: .98rem; }
 .fighter-name span { font-size: .78rem; color: var(--muted); }
-.vitals { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: .55rem 0; }
-.vital { flex: 1 1 140px; display: flex; align-items: center; gap: .5rem; font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.vital > span { flex: none; min-width: 4.4rem; white-space: nowrap; }
-.vital .bar { flex: 1; }
-.ic-life, .ic-mana { font-style: normal; }
-.ic-life { color: var(--blood-2); }
-.ic-mana { color: var(--mana); }
 .fighter-actions { gap: .4rem; }
 /* противник-цель — красная рамка с отсветом */
 .foe { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
@@ -293,6 +325,12 @@ input[type=checkbox].switch:checked::before { transform: translateX(14px); backg
 .update-bar span { flex: 1; min-width: 0; }
 @media (max-width: 760px) { .update-bar { bottom: calc(74px + var(--safe-b)); } }
 
+/* лист героя: портрет, имя с классом и уровнем, кнопки справа */
+.sheet-head { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem .75rem; margin-bottom: .2rem; }
+.sheet-title { flex: 1 1 8rem; min-width: 0; display: grid; gap: .25rem; }
+.sheet-title h2 { margin: 0; }
+.sheet-tools { display: flex; flex-wrap: wrap; gap: .3rem; margin-left: auto; }
+button.ghost.danger { color: var(--danger); }
 /* листы героев: на широком экране — в две колонки, чтобы предмет и его кнопки были рядом */
 .sheets { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
 .sheets > .card { margin-bottom: 0; }
@@ -310,6 +348,18 @@ input[type=checkbox].switch:checked::before { transform: translateX(14px); backg
 
 /* ---------- лавка ---------- */
 table.shop td:last-child { text-align: right; white-space: nowrap; }
+table.shop td.price { color: var(--brass); font-weight: 600; white-space: nowrap; }
+/* покупатель: плашки героев с монетами; на телефоне листаются вбок */
+.buyers { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin: .1rem 0 .7rem; }
+.buyers button { gap: .45rem; padding: .25rem .75rem .25rem .25rem; border-radius: 999px; background: var(--bg-2); border-color: var(--line); color: var(--muted); }
+.buyers button img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; object-position: top; background: var(--parchment); border: 1px solid var(--line-2); }
+.buyers button b { color: var(--brass); font-weight: 650; }
+.buyers button.active { color: var(--ink); background: var(--surface-3); border-color: var(--blood-2); box-shadow: 0 0 0 1px rgba(224, 51, 79, .3); }
+@media (max-width: 640px) {
+  .buyers { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -.2rem; margin-right: -.2rem; padding: .1rem .2rem; }
+  .buyers::-webkit-scrollbar { display: none; }
+  .buyers button { flex: none; }
+}
 table.shop td:last-child button + button { margin-left: .3rem; }
 .shop-meta { display: none; font-size: .82rem; color: var(--muted); margin-top: .15rem; }
 .shop-meta b { color: var(--brass); }
@@ -551,6 +601,8 @@ details.add-hero > summary::-webkit-details-marker { display: none; }
 .hero-switch button { flex: none; min-height: 34px; padding: .25rem .8rem; background: transparent; border-color: transparent; color: var(--muted); }
 .hero-switch button.active { background: var(--surface-3); border-color: var(--line-2); color: var(--ink); }
 .hero-switch button.down { text-decoration: line-through; }
+.hero-switch button img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; object-position: top; background: var(--parchment); border: 1px solid var(--line-2); }
+.hero-switch button.active img { border-color: var(--blood-2); }
 
 /* ---------- пульт живого ведущего ---------- */
 .gm-hero { display: flex; gap: .55rem; align-items: flex-start; padding: .45rem 0; border-top: 1px solid var(--line); }
@@ -573,6 +625,14 @@ details.add-hero > summary::-webkit-details-marker { display: none; }
 .hero-cover .series { font-family: var(--font-title); color: var(--muted); font-size: 1.1rem; margin-bottom: .9rem; }
 .hero-cover .cta { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .9rem; }
 .hero-cover .cta .primary { min-height: 46px; font-size: 1rem; padding: .6rem 1.2rem; }
+/* «Продолжить»: куда вернёмся — второй строкой */
+.cta-main { flex-direction: column; gap: 0; line-height: 1.2; }
+.cta-main small { font-size: .76rem; font-weight: 500; opacity: .85; }
+/* слоты сохранений: строка «Слот N · что в нём» и кнопки справа (на телефоне — под ней) */
+.slot { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .8rem; padding: .55rem 0; border-bottom: 1px solid var(--line); }
+.slot:last-of-type { border-bottom: none; }
+.slot-info { flex: 1 1 14rem; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .5rem; }
+.slot-actions { display: flex; gap: .3rem; margin-left: auto; }
 
 /* ---------- адаптивность ---------- */
 /* узкий компьютер и планшет: вкладки — только иконки (подписи — в подсказках) */
@@ -629,6 +689,7 @@ main.page, .topbar-inner, .party-bar-inner { padding-left: max(16px, env(safe-ar
   .hero-cover .series { font-size: .95rem; }
   .hero-cover .cta { justify-content: center; }
   .hero-cover .cta button { flex: 1 1 140px; }
+  .hero-cover .cta .cta-main { flex-basis: 100%; }
   .modal-back { align-items: flex-end; padding: 0; }
   /* карта шире экрана, листается вбок; выбранный путь — плашкой над нижней панелью */
   .map-scroll { overflow-x: auto; overscroll-behavior-x: contain; border-radius: var(--radius); scrollbar-width: thin; }
