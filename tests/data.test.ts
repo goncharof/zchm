@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { gameData, idx } from '@/data'
 import { paragraphText } from '@/game/book'
+import { allNodes } from '@/game/tree'
 import overrides from '../tools/book_overrides.json'
 import world from '@/data/world.json'
 import type { ParagraphHints, WorldMap } from '@/types'
@@ -51,15 +52,18 @@ describe('данные игры', () => {
         expect(n, where).toBeGreaterThan(1)
       }
       for (const b of h?.bottles ?? []) expect(b >= 1 && b <= 6, where).toBe(true)
+      for (const it of h?.items ?? []) expect((it.kind === 'weapon' ? idx.weaponById : it.kind === 'armor' ? idx.armorById : idx.itemById).has(it.id), `${where}: ${it.id}`).toBe(true)
     }
     for (const l of gameData.locations) {
       const ns = l.paragraphs.map((p) => p.n)
       expect(ns[0], l.id).toBe(1)
       for (let i = 1; i < ns.length; i++) expect(ns[i], l.id).toBeGreaterThan(ns[i - 1])
       for (const p of l.paragraphs) {
-        // у размеченных параграфов полный текст не хранится, а собирается из сегментов
-        if (p.segments) expect(p.text, `${l.id} §${p.n}`).toBeUndefined()
+        // у размеченных параграфов полный текст не хранится, а собирается из сегментов или дерева
+        if (p.segments || p.tree) expect(p.text, `${l.id} §${p.n}`).toBeUndefined()
         else expect(p.text?.length, `${l.id} §${p.n}`).toBeGreaterThan(10)
+        if (p.tree) expect(p.segments, `${l.id} §${p.n}`).toBeUndefined()
+        for (const n of p.tree ? allNodes(p.tree) : []) checkHints(n.hints, `${l.id} §${p.n} ${n.id}`)
         expect(paragraphText(p).length, `${l.id} §${p.n}`).toBeGreaterThan(10)
         checkHints(p.hints, `${l.id} §${p.n}`)
         for (const seg of p.segments ?? []) {

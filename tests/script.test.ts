@@ -53,7 +53,7 @@ async function winFight(g: { s: GameServer; j: { code: string }; c: NetClient; c
 async function goTo(g: { s: GameServer; j: { code: string } }, nodeId: string) { (await g.s.store.get(g.j.code))!.state.worldNodeId = nodeId }
 
 describe('сценарный ведущий', () => {
-  it('вход в локацию, номер помещения → сцена с вариантами; проверка удачи и бой выполняются движком', async () => {
+  it('вход в локацию, номер помещения → этапы по книге: бой, после победы дверь (удача или отмычки), за дверью выбор', async () => {
     const g = await setup()
     await g.c.call('enterLocation', ['zolotoy-gorod'])
     await until(() => g.chat.some((m) => m.from === 'gm' && /Назовите номер/.test(m.text)))
@@ -61,32 +61,54 @@ describe('сценарный ведущий', () => {
     await until(() => g.chat.some((m) => m.from === 'gm' && /помещение 1/.test(m.text)))
     const scene = lastGm(g.chat)
     expect(scene.text).toContain('зомби')
-    expect(scene.text).not.toContain('дарит вам (6)') // исход ветки скрыт до выбора
-    const labels = scene.choices!.map((c) => c.label)
-    expect(labels.some((l) => l.startsWith('⚔ Бой: Зомби'))).toBe(true)
-    expect(labels.some((l) => l.includes('удачи 12'))).toBe(true)
-    expect(labels.some((l) => l.startsWith('▸ Если вы его освобождаете'))).toBe(true)
+    // дверь, камера и награда — после боя, проверки и выбора
+    expect(scene.text).not.toContain('открыть дверь')
+    expect(scene.text).not.toContain('камера')
+    expect(scene.choices!.map((c) => c.label)).toEqual(['⚔ Бой: Зомби', 'Идти дальше'])
     expect(g.state.visited['zolotoy-gorod']).toContain(1)
 
-    const luck = scene.choices!.find((c) => c.label.includes('удачи 12'))!
-    await g.c.choose(scene.id, luck.id)
-    await until(() => lastGm(g.chat).text.includes('испытывает удачу'))
-    await expect(g.c.choose(scene.id, luck.id)).rejects.toThrow(/уже выбран/)
+    await g.c.choose(scene.id, scene.choices![0].id)
+    const door = await winFight(g)
+    expect(door.text).toContain('открыть дверь можно только магическими отмычками или удача — 12')
+    expect(door.choices!.map((c) => c.label)).toContain('🎲 Проверка удачи 12')
+    expect(door.choices!.some((c) => c.label.startsWith('🗝'))).toBe(false)
 
-    const branch = scene.choices!.find((c) => c.label.startsWith('▸'))!
-    await g.c.choose(scene.id, branch.id)
+    // с магическими отмычками дверь открывается без проверки
+    const room = (await g.s.store.get(g.j.code))!
+    room.session().giveItem(room.state.heroes[0].uid, 'item', 'magicheskie-otmychki')
+    await g.c.chat('1', true)
+    await until(() => /вы здесь уже были/.test(lastGm(g.chat).text))
+    const again = lastGm(g.chat)
+    expect(again.choices!.some((c) => c.label.startsWith('⚔'))).toBe(false)
+    await g.c.choose(again.id, again.choices!.find((c) => c.label === '🗝 Открыть: магические отмычки')!.id)
+    await until(() => /тесная камера/.test(lastGm(g.chat).text))
+    const cell = lastGm(g.chat)
+    expect(cell.text).not.toContain('дарит')
+    await g.c.choose(cell.id, cell.choices!.find((c) => c.label === '▸ Если вы его освобождаете')!.id)
     // номер бутылки игрокам не показывается: «(6)» — пометка ведущего
     await until(() => /дарит вам \(бутылка\)/.test(lastGm(g.chat).text))
     const outcome = lastGm(g.chat)
     expect(outcome.text).not.toContain('(6)')
-    const bottle = outcome.choices!.find((c) => c.label === 'Взять бутылку')!
-    await g.c.choose(outcome.id, bottle.id)
-    await until(() => g.state.heroes.some((h) => h.inventory.some((e) => e.kind === 'bottle')))
+    expect(outcome.choices!.map((c) => c.label)).toEqual(expect.arrayContaining(['Взять бутылку', 'Взять свиток 5 ур.']))
+  })
 
-    const fight = scene.choices!.find((c) => c.label.startsWith('⚔'))!
-    await g.c.choose(scene.id, fight.id)
-    await until(() => !!g.state.combat)
-    expect(g.state.combat!.monsters[0].monsterId).toBe('zombi')
+  it('переход в другое помещение: грифон уносит в центр города, спасённый дварф становится спутником', async () => {
+    const g = await setup()
+    await g.c.call('enterLocation', ['zolotoy-gorod'])
+    await g.c.chat('35', true)
+    await until(() => /помещение 35/.test(lastGm(g.chat)?.text ?? ''))
+    const scene = lastGm(g.chat)
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '▸ Если вы последовали этому совету')!.id)
+    await until(() => /помещение 41/.test(lastGm(g.chat).text))
+    const square = lastGm(g.chat)
+    expect(g.state.visited['zolotoy-gorod']).toContain(41)
+    await g.c.choose(square.id, square.choices!.find((c) => c.label === '▸ Если помогаете ему')!.id)
+    await until(() => lastGm(g.chat).choices?.some((c) => c.label === '⚔ Бой: Стражник ×4') ?? false)
+    const fight = lastGm(g.chat)
+    await g.c.choose(fight.id, fight.choices!.find((c) => c.label === '⚔ Бой: Стражник ×4')!.id)
+    const after = await winFight(g)
+    expect(after.text).toContain('идет с вами')
+    await until(() => g.state.companions.some((c) => c.monsterId === 'dvarf'))
   })
 
   it('свободная реплика без номера — подсказка; плата без денег не проходит и вариант снова доступен', async () => {
@@ -185,19 +207,25 @@ describe('сценарный ведущий', () => {
     expect(after.choices!.map((c) => c.label)).toContain('⚔ Бой: Минотавр')
   })
 
-  it('ветка-исход боя не предлагает второй бой с теми же монстрами', async () => {
+  it('выбор открывает бой, победа — награду; второй бой с теми же монстрами не предлагается', async () => {
     const g = await setup()
     await g.c.call('enterLocation', ['zolotoy-gorod'])
     await g.c.chat('24', true)
     await until(() => /помещение 24/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
-    expect(scene.choices!.some((c) => c.label === '▸ Если убиваете драконида')).toBe(false)
-    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '⚔ Бой: Драконид')!.id)
+    // что стражник — драконид, видно только после предупреждения
+    expect(scene.choices!.some((c) => c.label.startsWith('⚔'))).toBe(false)
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '▸ Если предупреждаете короля')!.id)
+    await until(() => /это драконид/.test(lastGm(g.chat).text))
+    const warn = lastGm(g.chat)
+    await g.c.choose(warn.id, warn.choices!.find((c) => c.label === '⚔ Бой: Драконид')!.id)
     const after = await winFight(g)
     expect(after.text).toMatch(/Короля Золотого города/i)
     const labels = after.choices!.map((c) => c.label)
     expect(labels.some((l) => l.startsWith('⚔'))).toBe(false)
-    expect(labels).toContain('Взять бутылку')
+    expect(labels).toEqual(expect.arrayContaining(['Взять бутылку', 'Взять: меч двуручный']))
+    // выбор был один из двух: «ничего не предпринимаете» после него не предлагается
+    expect(labels).not.toContain('▸ Если вы ничего не предпринимаете')
   })
 
   it('исходы боя и проверки удачи не видны до боя и броска: их текст и награды не взять заранее', async () => {
@@ -216,15 +244,17 @@ describe('сценарный ведущий', () => {
   it('повторный вход после победы: бой не предлагается снова, исход победы виден', async () => {
     const g = await setup()
     await g.c.call('enterLocation', ['zolotoy-gorod'])
-    await g.c.chat('24', true)
-    await until(() => /помещение 24/.test(lastGm(g.chat)?.text ?? ''))
+    await g.c.chat('38', true)
+    await until(() => /помещение 38/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
-    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '⚔ Бой: Драконид')!.id)
-    await winFight(g)
-    await g.c.chat('24', true)
+    expect(scene.text).not.toContain('65 монет')
+    await g.c.choose(scene.id, scene.choices!.find((c) => c.label === '⚔ Бой: Железный человек')!.id)
+    const after = await winFight(g)
+    expect(after.choices!.map((c) => c.label)).toContain('Забрать 65 монет')
+    await g.c.chat('38', true)
     await until(() => /вы здесь уже были/.test(lastGm(g.chat).text))
     const again = lastGm(g.chat)
-    expect(again.text).toMatch(/Короля Золотого города/i)
+    expect(again.text).toContain('в сундуке 65 монет')
     expect(again.choices!.some((c) => c.label.startsWith('⚔'))).toBe(false)
   })
 
@@ -243,6 +273,11 @@ describe('сценарный ведущий', () => {
     await g.c.choose(branch.id, branch.choices!.find((c) => c.label === '🎲 Бросить к6 по списку')!.id)
     await until(() => /^Выпало 3 — /.test(lastGm(g.chat).text))
     expect(lastGm(g.chat).text).toContain('приставляют 1 лестницу')
+    // откинуть лестницу — удача 10; не вышло — бой со взобравшимися драконидами
+    const ladder = lastGm(g.chat)
+    setRng(() => 0) // к18 = 1 — провал
+    await g.c.choose(ladder.id, ladder.choices!.find((c) => c.label === '🎲 Проверка удачи 10')!.id)
+    await until(() => lastGm(g.chat).text.includes('испытывает удачу'))
     expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('⚔ Бой: Драконид ×4')
     await g.c.chat('2', true)
     await until(() => /вы здесь уже были/.test(lastGm(g.chat).text))
@@ -362,16 +397,17 @@ describe('сценарный ведущий', () => {
     const g = await setup()
     await g.c.call('enterLocation', ['zolotoy-gorod'])
     await until(() => g.chat.some((m) => m.from === 'gm' && /Назовите номер/.test(m.text)))
-    await g.c.chat('Помещение 32', true)
-    await until(() => lastGm(g.chat).text.includes('помещение 32'))
+    await g.c.chat('Помещение 22', true)
+    await until(() => lastGm(g.chat).text.includes('помещение 22'))
     const first = lastGm(g.chat)
-    const take = first.choices!.find((c) => c.label === 'Взять артефакт')!
+    const take = first.choices!.find((c) => c.label === 'Забрать 20 монет')!
+    const money = () => g.state.heroes.reduce((a, h) => a + h.money, 0)
+    const before = money()
     await g.c.choose(first.id, take.id)
-    await until(() => lastGm(g.chat).text.includes('находит артефакт'))
-    const found = g.state.artifactsFound.length
-    await g.c.chat('Помещение 32', true)
+    await until(() => money() === before + 20)
+    await g.c.chat('Помещение 22', true)
     await until(() => lastGm(g.chat).text.includes('вы здесь уже были'))
-    expect(lastGm(g.chat).choices!.some((c) => c.label === 'Взять артефакт')).toBe(false)
-    expect(g.state.artifactsFound).toHaveLength(found)
+    expect(lastGm(g.chat).choices!.some((c) => c.label === 'Забрать 20 монет')).toBe(false)
   })
+
 })

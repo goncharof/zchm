@@ -62,8 +62,8 @@ async function roll(n: BookNode) {
   await store.claim(`${P.value}:${diceKey(n)}:roll=${r}`)
 }
 const teaser = (n: BookNode) => n.teaser && !hasResult(P.value, n.id, claimed.value, 'won')
-/** проверку удачи заменяет предмет: у кого он есть */
-const passHolder = (n: BookNode) => n.passWith && n.hints?.luck?.length && !hasResult(P.value, n.id, claimed.value, 'ok')
+/** проверку удачи заменяет (или замок открывает) предмет: у кого он есть */
+const passHolder = (n: BookNode) => n.passWith && !hasResult(P.value, n.id, claimed.value, 'ok')
   ? store.heroes.find((h) => !h.status.dead && h.inventory.some((e) => e.kind === 'item' && e.ref === n.passWith)) : undefined
 const effectsDone = (n: BookNode) => claimed.value.includes(`${place(n)}:fx`)
 const effects = (n: BookNode) => (n.effects ?? []).map(effectLabel).join(', ')

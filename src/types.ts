@@ -246,9 +246,10 @@ export interface BookText { t: string; gm?: true }
 
 /** Последствие этапа (применяется один раз, GameSession.bookEffects). who: actor — герой, который действует (по
  *  умолчанию), each — каждый живой герой. lives: изменение жизней, death — смерть, half — половина жизней, full — все
- *  жизни, { dice: 6 } — минус к6 жизней; coins: отрицательное — потеря, half/all — половина или все деньги */
+ *  жизни, { dice: 6 } — минус 1к6 жизней, { heal: 6 } — плюс 1к6; coins: отрицательное — потеря, half/all — половина
+ *  или все деньги */
 export type BookEffect =
-  | { lives: number | 'death' | 'half' | 'full' | { dice: number }; who?: 'actor' | 'each' }
+  | { lives: number | 'death' | 'half' | 'full' | { dice: number } | { heal: number }; who?: 'actor' | 'each' }
   | { xp: number; who?: 'actor' | 'each' }
   | { coins: number | 'half' | 'all'; who?: 'actor' | 'each' }
   | { companion: string; battles?: number }
@@ -265,7 +266,8 @@ export interface BookNode {
   teaser?: string
   /** механика: монстры — бой, luck — проверка удачи, находки, цены, таверна, лавка */
   hints?: ParagraphHints
-  /** предмет, который заменяет проверку удачи («только магическими отмычками или удача — 12») */
+  /** предмет, который заменяет проверку удачи («магическими отмычками или удача — 12») или сам открывает этап («открыть
+   *  можно только магическими отмычками»): с ним этап получает отметку ok */
   passWith?: string
   /** список исходов броска: дети с on.roll; key — место отметки броска (по умолчанию id), repeat — бросают много раз */
   dice?: { sides: number; key?: string; repeat?: true }

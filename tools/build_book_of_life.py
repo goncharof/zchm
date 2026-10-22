@@ -355,7 +355,7 @@ def check_tree(tree, text, ctx, ns):
         ids.add(n.get('id'))
         on = n.get('on')
         roll = isinstance(on, dict) and set(on) == {'roll'} and all(isinstance(v, int) for v in on['roll'])
-        if not (on in NODE_ON or roll):
+        if not ((isinstance(on, str) and on in NODE_ON) or roll):
             errs.append(f'{where}: неизвестное on {on!r}')
         if parent is None and on != 'enter':
             errs.append('корень должен открываться при входе (on: enter)')
@@ -383,11 +383,11 @@ def check_tree(tree, text, ctx, ns):
                 errs.append(f'{where}: нет вещи {it}')
         if n.get('passWith') and n['passWith'] not in items['item']:
             errs.append(f'{where}: нет предмета {n["passWith"]}')
-        if n.get('passWith') and not h.get('luck'):
-            errs.append(f'{where}: passWith без проверки удачи')
         for e in n.get('effects', []):
             kinds = set(e) & {'lives', 'xp', 'coins', 'companion'}
-            if len(kinds) != 1 or set(e) - {'lives', 'xp', 'coins', 'companion', 'who', 'battles'} or e.get('who', 'actor') not in ('actor', 'each'):
+            lives = e.get('lives')
+            bad_lives = 'lives' in e and not (isinstance(lives, int) or lives in ('death', 'half', 'full') or (isinstance(lives, dict) and len(lives) == 1 and set(lives) <= {'dice', 'heal'}))
+            if len(kinds) != 1 or bad_lives or set(e) - {'lives', 'xp', 'coins', 'companion', 'who', 'battles'} or e.get('who', 'actor') not in ('actor', 'each'):
                 errs.append(f'{where}: последствие {e}')
             elif 'companion' in e and e['companion'] not in monsters:
                 errs.append(f'{where}: нет монстра-спутника {e["companion"]}')
@@ -399,15 +399,17 @@ def check_tree(tree, text, ctx, ns):
             walk(c, n)
 
     walk(tree, None)
-    # покрытие текста: сначала длинные куски, чтобы короткий не съел часть длинного
-    rest = _norm(text)
-    strip = lambda x: _norm(x).strip(' .,;:!?—–-()«»"')
+    # покрытие текста: сначала длинные куски, чтобы короткий не съел часть длинного; кусок может повторяться в
+    # нескольких этапах (одна и та же развязка после разных путей)
+    full = _norm(text)
+    rest = full
+    strip = lambda x: _norm(x).strip(' .,;:!?—–-()«»"“”')
     texts = sorted((p for p in pieces if isinstance(p, str)), key=len, reverse=True)
     for t in texts:
         k = strip(t)
         if k and k in rest:
             rest = rest.replace(k, ' ', 1)
-        elif k:
+        elif k and k not in full:
             errs.append(f'кусок не найден в тексте книги: «{t[:70]}»')
     for _, label in (p for p in pieces if not isinstance(p, str)):
         k = strip(label)

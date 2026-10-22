@@ -573,7 +573,7 @@ export class GameSession {
       if ('lives' in e) {
         for (const h of who) {
           const v = e.lives
-          const delta = v === 'death' ? DEAD_AT - h.lives : v === 'half' ? -Math.ceil(Math.max(0, h.lives) / 2) : v === 'full' ? h.maxLives - h.lives : typeof v === 'object' ? -roll(v.dice) : v
+          const delta = v === 'death' ? DEAD_AT - h.lives : v === 'half' ? -Math.ceil(Math.max(0, h.lives) / 2) : v === 'full' ? h.maxLives - h.lives : typeof v === 'object' ? ('heal' in v ? roll(v.heal) : -roll(v.dice)) : v
           this.adjustLives(h.uid, delta)
           out.push(v === 'death' ? `${h.name} погибает.` : `${h.name}: ${delta >= 0 ? '+' : '−'}${Math.abs(delta)} ${plural(Math.abs(delta), 'жизнь', 'жизни', 'жизней')} (осталось ${h.lives}).`)
         }

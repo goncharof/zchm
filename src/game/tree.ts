@@ -145,7 +145,7 @@ export function effectLabel(e: BookEffect): string {
     if (v === 'death') return `смерть${each}`
     if (v === 'half') return `половина жизней${each}`
     if (v === 'full') return `все жизни восстановлены${each}`
-    if (typeof v === 'object') return `−1к${v.dice} жизней${each}`
+    if (typeof v === 'object') return 'heal' in v ? `+1к${v.heal} жизней${each}` : `−1к${v.dice} жизней${each}`
     return `${v < 0 ? '−' : '+'}${Math.abs(v)} ${plural(Math.abs(v), 'жизнь', 'жизни', 'жизней')}${each}`
   }
   if ('xp' in e) return `+${e.xp} опыта${each}`

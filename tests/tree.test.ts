@@ -4,6 +4,7 @@ import { idx } from '@/data'
 import { paragraphText, treeText } from '@/game/book'
 import { allNodes, openChoices, openNodes, paragraphTree, revealedBy } from '@/game/tree'
 import { GameSession, blankGame } from '@/game/session'
+import { readFileSync, readdirSync } from 'node:fs'
 import { checkEnd } from '@/engine/combat'
 import { seededRng, setRng } from '@/engine/dice'
 
@@ -24,20 +25,45 @@ describe('дерево этапов', () => {
     }
   })
 
-  it('Золотой город § 2: исходы удачи и боя закрыты до проверки и боя, вариант — по выбору', () => {
+  it('ручная разметка в данных совпадает с tools/book (данные пересобраны после правки)', () => {
+    const dir = new URL('../tools/book/', import.meta.url)
+    let trees = 0
+    for (const f of readdirSync(dir).filter((x) => x.endsWith('.json'))) {
+      const file = JSON.parse(readFileSync(new URL(f, dir), 'utf8')) as Record<string, unknown>
+      for (const [n, tree] of Object.entries(file)) {
+        if (n.startsWith('_')) continue
+        expect(para(f.replace('.json', ''), Number(n)).tree, `${f} § ${n}`).toEqual(tree)
+        trees++
+      }
+    }
+    expect(trees).toBeGreaterThan(20)
+  })
+
+  it('старая разметка, Упокоище § 26: исходы удачи закрыты до проверки, вариант — по выбору', () => {
+    const t = paragraphTree(para('upokoische', 26))
+    const P = 'upokoische:26'
+    const open = openNodes(t, P).map((n) => n.id)
+    expect(open[0]).toBe('0')
+    expect(allNodes(t).some((n) => n.on === 'fail')).toBe(true)
+    expect(open.some((id) => allNodes(t).find((n) => n.id === id)!.on === 'fail')).toBe(false)
+  })
+
+  it('Золотой город § 2 (ручное дерево): помощь по выбору, бросок открывает свою лестницу, провал удачи — бой, победа — награда', () => {
     const t = paragraphTree(para('zolotoy-gorod', 2))
     const P = 'zolotoy-gorod:2'
-    expect(openNodes(t, P).map((n) => n.id)).toEqual(['0'])
+    expect(openNodes(t, P).map((n) => n.id)).toEqual(['a'])
     expect(openChoices(t, P).map((n) => n.label)).toEqual(['Если вы решили помочь стражникам, бросьте кубик'])
-    const marks = [`${P}:1:open`]
-    expect(openNodes(t, P, marks).map((n) => n.id)).toEqual(['0', '1'])
-    // бросок списка ветки 1 открывает свой исход
-    marks.push(`${P}:1:0:roll=3`)
-    expect(revealedBy(t, P, marks, `${P}:1:0:roll=3`).map((n) => n.text[0].t)).toEqual(['дракониды приставляют 1 лестницу и по ней взбираются 4 драконида'])
-    // бой в исходе броска: победа открывает ветку «Если вы выходите из схватки победителем», висящую на корне
-    const won = `${P}:1:0:r2:won`
-    expect(revealedBy(t, P, [...marks, won], won).map((n) => n.label)).toEqual(['Если вы выходите из схватки победителем'])
-    expect(revealedBy(t, P, marks, `${P}:1:fail`).map((n) => n.label)).toEqual(['Если лестница не откинута'])
+    const marks = [`${P}:b:open`]
+    expect(openNodes(t, P, marks).map((n) => n.id)).toEqual(['a', 'b'])
+    marks.push(`${P}:b:roll=3`)
+    expect(revealedBy(t, P, marks, `${P}:b:roll=3`).map((n) => n.text[0].t)).toEqual(['дракониды приставляют 1 лестницу и по ней взбираются 4 драконида'])
+    const fail = `${P}:r3:fail`
+    const fight = revealedBy(t, P, [...marks, fail], fail)
+    expect(fight.map((n) => n.hints?.monsterCounts)).toEqual([{ drakonid: 4 }])
+    const won = `${P}:f3:won`
+    expect(revealedBy(t, P, [...marks, fail, won], won).map((n) => n.hints?.bottles)).toEqual([[5, 5]])
+    // удача — лестницу откинули: ни боя, ни награды
+    expect(revealedBy(t, P, marks, `${P}:r3:ok`)).toEqual([])
   })
 
   it('без боя в параграфе ветка «если победите» — обычный выбор (как раньше)', () => {
@@ -70,5 +96,23 @@ describe('дерево этапов', () => {
     s.bookMark('zolotoy-gorod:2:1', 'open')
     expect(s.state.claimed!.filter((k) => k === 'zolotoy-gorod:2:1:open')).toHaveLength(1)
     expect(() => s.bookMark('zolotoy-gorod:2:1', 'взять')).toThrow('Неверная отметка')
+  })
+
+  it('последствия этапа берутся из книги и применяются один раз: святая вода лечит каждого на 1к6', () => {
+    setRng(seededRng(7))
+    const s = new GameSession(blankGame(), null)
+    s.quickStart()
+    for (const h of s.heroes) s.adjustLives(h.uid, -6)
+    const before = s.heroes.map((h) => h.lives)
+    const lines = s.bookEffects('zolotoy-gorod:17:b')
+    expect(lines).toHaveLength(s.heroes.length)
+    s.heroes.forEach((h, i) => expect(h.lives).toBeGreaterThan(before[i]))
+    expect(() => s.bookEffects('zolotoy-gorod:17:b')).toThrow('уже применены')
+    expect(() => s.bookEffects('zolotoy-gorod:17:a')).toThrow('нет последствий')
+    // обед: −2 монеты и +1 жизнь тому, кто действует
+    const h = s.heroes[1]
+    const money = h.money
+    s.bookEffects('zolotoy-gorod:19:b', h.uid)
+    expect(h.money).toBe(money - 2)
   })
 })

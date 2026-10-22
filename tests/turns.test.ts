@@ -95,12 +95,13 @@ describe('ход по готовности', () => {
   describe('голосование за варианты', () => {
     async function scene() {
       const t = await table()
-      await t.host.c.chat('Помещение 1', true)
+      // Золотой город, 26: рычаг со щелью «Брось в щель 3 монеты» — заплатить или сразу дёрнуть
+      await t.host.c.chat('Помещение 26', true)
       await t.guest.c.setReady(true)
-      await until(() => gmMessages(t.guest.chat).some((m) => /помещение 1/.test(m.text) && !!m.choices))
-      const msg = gmMessages(t.guest.chat).find((m) => /помещение 1/.test(m.text))!
-      const luck = msg.choices!.find((c) => c.label.includes('удачи 12'))!
-      const free = msg.choices!.find((c) => c.label.startsWith('▸ Если вы его освобождаете'))!
+      await until(() => gmMessages(t.guest.chat).some((m) => /помещение 26/.test(m.text) && !!m.choices))
+      const msg = gmMessages(t.guest.chat).find((m) => /помещение 26/.test(m.text))!
+      const luck = msg.choices!.find((c) => c.label === 'Заплатить 3 монеты')!
+      const free = msg.choices!.find((c) => c.label === '▸ Дернуть рычаг')!
       return { ...t, msg, luck, free }
     }
     const current = (chat: ChatMessage[], id: string) => chat.find((m) => m.id === id)!
@@ -111,7 +112,7 @@ describe('ход по готовности', () => {
       await until(() => current(guest.chat, msg.id).votes?.[luck.id]?.length === 1)
       expect(current(guest.chat, msg.id).used ?? []).toEqual([])
       await guest.c.choose(msg.id, free.id)
-      await until(() => gmMessages(guest.chat).some((m) => m.text.includes('испытывает удачу')))
+      await until(() => gmMessages(guest.chat).some((m) => m.text.includes('платит 3 монеты')))
       expect(current(guest.chat, msg.id).used).toEqual([luck.id])
       expect(current(guest.chat, msg.id).votes).toBeUndefined()
     })
@@ -124,7 +125,7 @@ describe('ход по готовности', () => {
       await guest.c.choose(msg.id, luck.id)
       await until(() => current(host.chat, msg.id).votes?.[luck.id]?.length === 1)
       await host.c.turnGo()
-      await until(() => gmMessages(guest.chat).some((m) => m.text.includes('испытывает удачу')))
+      await until(() => gmMessages(guest.chat).some((m) => m.text.includes('платит 3 монеты')))
       expect(gmMessages(guest.chat).some((m) => m.text.startsWith('Все готовы'))).toBe(false)
     })
 
@@ -133,7 +134,7 @@ describe('ход по готовности', () => {
       guest.c.close()
       await until(() => host.room.active.length === 1)
       await host.c.choose(msg.id, luck.id)
-      await until(() => gmMessages(host.chat).some((m) => m.text.includes('испытывает удачу')))
+      await until(() => gmMessages(host.chat).some((m) => m.text.includes('платит 3 монеты')))
     })
   })
 })

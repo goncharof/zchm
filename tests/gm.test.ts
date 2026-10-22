@@ -74,15 +74,18 @@ describe('ИИ-ведущий', () => {
   it('параграф для модели — этапы: награда победы в своём этапе, а не при входе; исходы броска — с условием', () => {
     const room = { state: { visited: {} } } as unknown as Room
     const p = JSON.parse(paragraphPayload(room, 'zolotoy-gorod', 2))
-    type Stage = { когда?: string; текст: string; подсказки?: { bottles?: number[] }; дальше?: Stage[] }
+    type Stage = { когда?: string; текст: string; подсказки?: { bottles?: number[]; luck?: number[] }; не_враги?: string[]; дальше?: Stage[] }
     const root: Stage = p.этапы
     expect(root.когда).toBeUndefined()
-    expect(root.подсказки?.bottles ?? []).not.toContain(5)
-    const win = root.дальше!.find((b) => b.когда === 'после победы в бою')!
-    expect(win.подсказки!.bottles).toContain(5)
-    expect(win.текст).toMatch(/^Если вы выходите из схватки победителем — /)
+    expect(root.подсказки).toBeUndefined()
+    expect(root.не_враги).toEqual(['Стражник'])
     const help = root.дальше!.find((b) => b.когда?.startsWith('по выбору игроков'))!
-    expect(help.дальше!.map((b) => b.когда)).toContain('если на кубике выпало 3')
+    const three = help.дальше!.find((b) => b.когда === 'если на кубике выпало 3')!
+    expect(three.подсказки!.luck).toEqual([10])
+    const fail = three.дальше!.find((b) => b.когда === 'если проверка удачи не прошла')!
+    const win = fail.дальше!.find((b) => b.когда === 'после победы в бою')!
+    expect(win.подсказки!.bottles).toEqual([5, 5])
+    expect(win.текст).toMatch(/^Если вы выходите из схватки победителем — /)
   })
 
   it('инструменты фиксированы и строгие', () => {

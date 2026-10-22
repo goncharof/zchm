@@ -124,8 +124,8 @@ function nodeOffers(loc: string, n: number, node: BookNode, claimed: readonly st
   if (h && hasResult(P, node.id, claimed, 'won')) h = { ...h, monsters: [] }
   if (h && hasResult(P, node.id, claimed, 'ok')) h = { ...h, luck: [] }
   const out = hintOffers(h, { loc, n, id: node.id }, nodeFullText(node))
-  // проверку удачи заменяет предмет: кнопка, если он есть у кого-то из живых героев
-  if (node.passWith && h?.luck?.length && heroes.some((x) => !x.status.dead && x.inventory.some((e) => e.kind === 'item' && e.ref === node.passWith))) {
+  // проверку удачи заменяет (или замок открывает) предмет: кнопка, пока этап не пройден и предмет есть у живого героя
+  if (node.passWith && !hasResult(P, node.id, claimed, 'ok') && heroes.some((x) => !x.status.dead && x.inventory.some((e) => e.kind === 'item' && e.ref === node.passWith))) {
     out.unshift({ label: `🗝 Открыть: ${itemName('item', node.passWith)}`, action: { t: 'pass', loc, n, id: node.id } })
   }
   const d = node.dice
@@ -287,6 +287,8 @@ export class ScriptedGm {
       else if (num !== null) this.say(room, room.state.pendingRoad.length ? `Встречи в пути: ${room.state.pendingRoad.map((x) => `§ ${x}`).join(', ')}.` : 'Сначала войдите в локацию с карты, потом назовите номер помещения.')
       else this.say(room, 'Сценарный ведущий понимает номера помещений на плане («помещение 5») и кнопки вариантов. Свободные реплики разбирает ИИ-ведущий, когда он доступен.')
     }
+    // этапы, открытые событием (исход боя), могли изменить состояние: последствия, спутник
+    this.ctx.stateChanged(room)
   }
 
   /** Нажата кнопка-вариант */

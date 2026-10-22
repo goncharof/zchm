@@ -63,14 +63,14 @@ describe('второе ревью сервера', () => {
     await guest.c.claimHero(guest.state.heroes[1].uid)
     await host.c.setTurnMode('ready')
     await host.c.call('enterLocation', ['zolotoy-gorod'])
-    await host.c.chat('Помещение 1', true)
+    await host.c.chat('Помещение 26', true)
     await guest.c.setReady(true)
-    await until(() => gm(host.chat).some((m) => /помещение 1/.test(m.text)))
-    const msg = gm(host.chat).find((m) => /помещение 1/.test(m.text))!
-    const luck = msg.choices!.find((c) => c.label.includes('удачи'))!
+    await until(() => gm(host.chat).some((m) => /помещение 26/.test(m.text)))
+    const msg = gm(host.chat).find((m) => /помещение 26/.test(m.text))!
+    const luck = msg.choices!.find((c) => c.label === 'Заплатить 3 монеты')!
     await host.c.choose(msg.id, luck.id) // голос
     await guest.c.releaseHero(guest.state.heroes[1].uid) // голосование выключается — голос решается сразу
-    await until(() => gm(host.chat).some((m) => m.text.includes('испытывает удачу')))
+    await until(() => gm(host.chat).some((m) => m.text.includes('платит 3 монеты')))
     guest.c.close()
     await wait(100)
     expect((await s.store.get(j.code))!.votes).toEqual({})

@@ -51,7 +51,8 @@ describe('приложение монтируется и проходит по �
 
     store.enterLocation('zolotoy-gorod')
     await router.push({ path: '/location/zolotoy-gorod', query: { p: 1 } }); await flush()
-    expect(html()).toContain('§ 1'); expect(html()).toContain('Бросок удачи 12'); expect(html()).toContain('Зомби')
+    // по этапам: сначала зомби, дверь с проверкой удачи 12 — после победы
+    expect(html()).toContain('§ 1'); expect(html()).toContain('Бой: Зомби'); expect(html()).not.toContain('Бросок удачи 12')
     const r = (await store.luckCheck(w.uid, 12))!; expect(typeof r.ok).toBe('boolean')
 
     store.startEncounter([{ monsterId: 'zombi', count: 1 }], '/location/zolotoy-gorod?p=1')
