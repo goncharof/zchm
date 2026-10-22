@@ -194,11 +194,14 @@ export class ScriptedGm {
     return this.ctx.chat(room, { id, from: 'gm', author: SCRIPT_AUTHOR, text, ...(choices.length ? { choices, used: [] } : {}) })
   }
 
-  /** Герой, который действует за игрока: его первый живой герой, иначе первый живой в партии */
+  /** Герой, который действует за игрока: его первый герой в сознании, иначе его первый живой, иначе первый в сознании
+   *  или живой в партии (герой без сознания не сразится с Чёрным магом и не возьмёт находку) */
   private actor(room: Room, playerId?: string): Hero | undefined {
     const alive = room.state.heroes.filter((h) => !h.status.dead)
     const own = playerId ? room.players.get(playerId)?.heroUids ?? [] : []
-    return alive.find((h) => own.includes(h.uid)) ?? alive[0]
+    const mine = (h: Hero) => own.includes(h.uid)
+    const awake = (h: Hero) => !h.status.unconscious
+    return alive.find((h) => mine(h) && awake(h)) ?? alive.find(mine) ?? alive.find(awake) ?? alive[0]
   }
 
   /** Открыть параграф: открытые этапы (при первом входе — сцена) и их кнопки */
