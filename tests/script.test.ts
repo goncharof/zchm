@@ -335,19 +335,19 @@ describe('сценарный ведущий', () => {
     const room = (await g.s.store.get(g.j.code))!
     const hero = room.state.heroes[0]
     await g.c.claimHero(hero.uid)
-    await goTo(g, 'runnoe-more')
-    await g.c.call('enterLocation', ['runnoe-more'])
-    await g.c.chat('11', true)
-    await until(() => /помещение 11/.test(lastGm(g.chat)?.text ?? ''))
+    await goTo(g, 'drevnie-razvaliny')
+    await g.c.call('enterLocation', ['drevnie-razvaliny'])
+    await g.c.chat('15', true)
+    await until(() => /помещение 15/.test(lastGm(g.chat)?.text ?? ''))
     const scene = lastGm(g.chat)
-    const take = scene.choices!.find((c) => c.label === 'Взять 5 бутылок')!
+    const take = scene.choices!.find((c) => c.label === 'Взять 2 бутылки')!
     expect(take).toBeDefined()
     // номер бутылки — пометка ведущего: ни на кнопке, ни в тексте сцены его нет
     expect(scene.choices!.filter((c) => /\(\d\)/.test(c.label))).toHaveLength(0)
     expect(scene.text).not.toMatch(/\([1-6]\)/)
     await g.c.choose(scene.id, take.id)
-    await until(() => /забирает 5 бутылок без этикеток/.test(lastGm(g.chat).text))
-    expect(room.state.heroes[0].inventory.filter((e) => e.kind === 'bottle' && e.ref === '4').reduce((n, e) => n + e.qty, 0)).toBe(5)
+    await until(() => /забирает 2 бутылки без этикеток/.test(lastGm(g.chat).text))
+    expect(room.state.heroes[0].inventory.filter((e) => e.kind === 'bottle' && e.ref === '5').reduce((n, e) => n + e.qty, 0)).toBe(2)
   })
 
   it('продажа бутылок распознаётся по тексту, подарок и плата за совет — нет', () => {
