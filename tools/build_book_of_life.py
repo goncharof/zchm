@@ -384,10 +384,10 @@ def check_tree(tree, text, ctx, ns):
         if n.get('passWith') and n['passWith'] not in items['item']:
             errs.append(f'{where}: нет предмета {n["passWith"]}')
         for e in n.get('effects', []):
-            kinds = set(e) & {'lives', 'xp', 'coins', 'companion'}
+            kinds = set(e) & {'lives', 'xp', 'coins', 'companion', 'strip'}
             lives = e.get('lives')
-            bad_lives = 'lives' in e and not (isinstance(lives, int) or lives in ('death', 'half', 'full') or (isinstance(lives, dict) and len(lives) == 1 and set(lives) <= {'dice', 'heal'}))
-            if len(kinds) != 1 or bad_lives or set(e) - {'lives', 'xp', 'coins', 'companion', 'who', 'battles'} or e.get('who', 'actor') not in ('actor', 'each'):
+            bad_lives = 'lives' in e and not (isinstance(lives, int) or lives in ('death', 'half', 'full') or (isinstance(lives, dict) and len(lives) == 1 and set(lives) <= {'dice', 'heal', 'set'}))
+            if len(kinds) != 1 or bad_lives or set(e) - {'lives', 'xp', 'coins', 'companion', 'strip', 'who', 'battles'} or e.get('who', 'actor') not in ('actor', 'each'):
                 errs.append(f'{where}: последствие {e}')
             elif 'companion' in e and e['companion'] not in monsters:
                 errs.append(f'{where}: нет монстра-спутника {e["companion"]}')

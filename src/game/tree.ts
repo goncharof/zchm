@@ -122,9 +122,11 @@ export function openChoices(root: BookNode, place: string, claimed: readonly str
   })
 }
 
-/** Текст этапа для игроков: без пометок ведущего */
+/** Текст этапа для игроков: без пометок ведущего. Если пометку вырезали из середины («…сидит раненый берсеркер
+ *  (у берсеркера 5 жизней). Кровь течет…»), а следующий кусок начинается с заглавной — между ними ставится точка */
 export function nodeText(n: BookNode): string {
-  return n.text.filter((x) => !x.gm).map((x) => x.t).join(' ')
+  const parts = n.text.filter((x) => !x.gm).map((x) => x.t.trim()).filter(Boolean)
+  return parts.map((t, i) => (i < parts.length - 1 && !/[.!?…:;,—–»”"-]$/.test(t) && /^[А-ЯЁA-Z]/.test(parts[i + 1]) ? `${t}.` : t)).join(' ')
 }
 
 /** Полный текст этапа (вместе с пометками ведущего) */
@@ -145,10 +147,11 @@ export function effectLabel(e: BookEffect): string {
     if (v === 'death') return `смерть${each}`
     if (v === 'half') return `половина жизней${each}`
     if (v === 'full') return `все жизни восстановлены${each}`
-    if (typeof v === 'object') return 'heal' in v ? `+1к${v.heal} жизней${each}` : `−1к${v.dice} жизней${each}`
+    if (typeof v === 'object') return 'heal' in v ? `+1к${v.heal} жизней${each}` : 'set' in v ? `жизней остаётся ${v.set}${each}` : `−1к${v.dice} жизней${each}`
     return `${v < 0 ? '−' : '+'}${Math.abs(v)} ${plural(Math.abs(v), 'жизнь', 'жизни', 'жизней')}${each}`
   }
   if ('xp' in e) return `+${e.xp} опыта${each}`
+  if ('strip' in e) return `пропадают все вещи, кроме денег и артефактов${each}`
   if ('coins' in e) {
     const v = e.coins
     if (v === 'half') return `половина денег${each}`
@@ -159,5 +162,5 @@ export function effectLabel(e: BookEffect): string {
   return `спутник: ${m?.name ?? e.companion} на ${e.battles ?? 3} ${plural(e.battles ?? 3, 'бой', 'боя', 'боёв')}`
 }
 
-/** Опасное последствие — его принимают кнопкой, а не применяют сами */
-export const deadlyEffect = (e: BookEffect) => 'lives' in e && (e.lives === 'death' || e.lives === 'half')
+/** Тяжёлое последствие (смерть, половина жизней, «у вас 1 жизнь», потеря вещей) — его принимают кнопкой, а не применяют сами */
+export const deadlyEffect = (e: BookEffect) => ('lives' in e && (e.lives === 'death' || e.lives === 'half' || (typeof e.lives === 'object' && 'set' in e.lives))) || 'strip' in e

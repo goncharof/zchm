@@ -246,10 +246,11 @@ export interface BookText { t: string; gm?: true }
 
 /** Последствие этапа (применяется один раз, GameSession.bookEffects). who: actor — герой, который действует (по
  *  умолчанию), each — каждый живой герой. lives: изменение жизней, death — смерть, half — половина жизней, full — все
- *  жизни, { dice: 6 } — минус 1к6 жизней, { heal: 6 } — плюс 1к6; coins: отрицательное — потеря, half/all — половина
- *  или все деньги */
+ *  жизни, { dice: 6 } — минус 1к6 жизней, { heal: 6 } — плюс 1к6, { set: 1 } — жизней остаётся 1; coins: отрицательное —
+ *  потеря, half/all — половина или все деньги; strip — пропадают все вещи, кроме артефактов (деньги остаются) */
 export type BookEffect =
-  | { lives: number | 'death' | 'half' | 'full' | { dice: number } | { heal: number }; who?: 'actor' | 'each' }
+  | { lives: number | 'death' | 'half' | 'full' | { dice: number } | { heal: number } | { set: number }; who?: 'actor' | 'each' }
+  | { strip: true; who?: 'actor' | 'each' }
   | { xp: number; who?: 'actor' | 'each' }
   | { coins: number | 'half' | 'all'; who?: 'actor' | 'each' }
   | { companion: string; battles?: number }

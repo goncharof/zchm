@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { idx } from '@/data'
 import { paragraphText, treeText } from '@/game/book'
-import { allNodes, openChoices, openNodes, paragraphTree, revealedBy } from '@/game/tree'
+import { allNodes, nodeText, openChoices, openNodes, paragraphTree, revealedBy } from '@/game/tree'
 import { GameSession, blankGame } from '@/game/session'
 import { readFileSync, readdirSync } from 'node:fs'
 import { checkEnd } from '@/engine/combat'
@@ -37,6 +37,12 @@ describe('дерево этапов', () => {
       }
     }
     expect(trees).toBeGreaterThan(20)
+  })
+
+  it('тайная пометка из середины фразы вырезается, соседние куски склеиваются с точкой', () => {
+    const root = paragraphTree(para('krepost-rytsarey', 44))
+    expect(nodeText(root)).toContain('сидит раненый берсеркер. Кровь течет')
+    expect(nodeText(root)).not.toContain('5 жизней')
   })
 
   it('старая разметка, Упокоище § 26: исходы удачи закрыты до проверки, вариант — по выбору', () => {
@@ -109,6 +115,15 @@ describe('дерево этапов', () => {
     s.heroes.forEach((h, i) => expect(h.lives).toBeGreaterThan(before[i]))
     expect(() => s.bookEffects('zolotoy-gorod:17:b')).toThrow('уже применены')
     expect(() => s.bookEffects('zolotoy-gorod:17:a')).toThrow('нет последствий')
+    // «У вас 1 жизнь» и «ничего нет, кроме денег и артефакта» (Крепость рыцарей, 23)
+    s.bookEffects('krepost-rytsarey:23:h')
+    expect(s.heroes.every((x) => x.lives === 1)).toBe(true)
+    s.giveItem(s.heroes[0].uid, 'artifact', '1')
+    const coins = s.heroes[0].money
+    s.bookEffects('krepost-rytsarey:23:g')
+    expect(s.heroes[0].inventory.map((e) => e.kind)).toEqual(['artifact'])
+    expect(s.heroes[0].money).toBe(coins)
+    expect(Object.keys(s.heroes[0].equipment)).toEqual([])
     // обед: −2 монеты и +1 жизнь тому, кто действует
     const h = s.heroes[1]
     const money = h.money
