@@ -56,6 +56,20 @@ export function tally(room: Room, messageId: string): { choiceId: string; player
   return { choiceId, playerId: voter }
 }
 
+/** Подвести итог голосования по сообщению (все проголосовали или хозяин торопит): победивший вариант нажимается
+ *  от имени своего игрока. Вариант мог стать недоступным (выбран без голосования, сообщение вытеснено) — это не
+ *  повод ронять сервер */
+export function resolveVote(room: Room, messageId: string, ctx: { updateChat(room: Room, m: ChatMessage): void }, choose: (playerId: string, messageId: string, choiceId: string) => void): void {
+  const win = tally(room, messageId)
+  clearVotes(room, messageId)
+  const msg = room.chatById(messageId)
+  if (msg) ctx.updateChat(room, msg)
+  if (!win) return
+  try { choose(win.playerId, messageId, win.choiceId) } catch (e) {
+    if (!(e instanceof Error && e.name === 'GameError')) console.error('[голосование]', e)
+  }
+}
+
 /** Убрать голосование по сообщению */
 export function clearVotes(room: Room, messageId: string): void {
   delete room.votes[messageId]

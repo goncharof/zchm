@@ -13,7 +13,7 @@ import { stateForClients, type Ack, type ClientToServer, type GmMode, type Joine
 import { authorize, isCommand } from './permissions'
 import { Schemas, limit, makeLimiters, parse, type Limits } from './guard'
 import { HOST_AWAY_MS, Room, RoomStore, type Player } from './rooms'
-import { castVote, clearVotes, tally, voteComplete, votingOn } from './votes'
+import { castVote, clearVotes, resolveVote as resolveVoteWith, voteComplete, votingOn } from './votes'
 
 import { GmDirector } from './gm/ai'
 import type { GmContext, GmDriver, GmEvent, GmFactory, GmInput } from './gm/types'
@@ -190,17 +190,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
     if (r.turnMode === 'ready' && autoGm(r) && r.ready.size && r.allReady()) flushTurn(r, undefined, true)
   }
   /** Подвести итог голосования по сообщению (все проголосовали или хозяин торопит) */
-  function resolveVote(r: Room, messageId: string): void {
-    const win = tally(r, messageId)
-    clearVotes(r, messageId)
-    const msg = r.chatById(messageId)
-    if (msg) ctx.updateChat(r, msg)
-    if (!win) return
-    // вариант мог стать недоступным (выбран без голосования, сообщение вытеснено) — это не повод ронять сервер
-    try { gm.choose(r, win.playerId, messageId, win.choiceId) } catch (e) {
-      if (!(e instanceof Error && e.name === 'GameError')) console.error('[голосование]', e)
-    }
-  }
+  const resolveVote = (r: Room, messageId: string) => resolveVoteWith(r, messageId, ctx, (p, m, c) => gm.choose(r, p, m, c))
   /** Голосования, где уже проголосовали все активные игроки (например, после ухода игрока) */
   function checkVotes(r: Room): void {
     for (const id of Object.keys(r.votes)) if (voteComplete(r, id)) resolveVote(r, id)

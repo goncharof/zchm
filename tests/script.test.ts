@@ -142,6 +142,32 @@ describe('сценарный ведущий', () => {
     expect(again.choices!.map((c) => c.label)).toContain('🎲 Сыграть ещё раз на 3 жизни')
   })
 
+  it('свободная реплика нажимает подходящую кнопку, а чего нет в книге — решает стол', async () => {
+    const g = await setup()
+    await goTo(g, 'krepost-rytsarey')
+    await g.c.call('enterLocation', ['krepost-rytsarey'])
+    await g.c.chat('2', true)
+    await until(() => /помещение 2/.test(lastGm(g.chat).text))
+    ;(await g.s.store.get(g.j.code))!.session().adjustMoney(g.state.heroes[0].uid, 50)
+    // «сыграем» → вариант «Сыграть на 10 монет» нажат от имени игрока
+    await g.c.chat('Ладно, сыграем с ним', true)
+    await until(() => g.chat.some((m) => m.from === 'player' && m.text === 'Выбор: Сыграть на 10 монет'))
+    await until(() => !!lastGm(g.chat).choices?.some((c) => c.label === '🎲 Сыграть в кости на 10 монет'))
+    // «осмотреться» — сцена заново
+    await g.c.chat('осмотримся вокруг', true)
+    await until(() => /вы здесь уже были/.test(lastGm(g.chat).text))
+    // действия, которого нет в книге, — решение стола: удача, кубик, да или нет
+    await g.c.chat('лезем на башню', true)
+    await until(() => /в книге такого действия нет/.test(lastGm(g.chat).text))
+    const kit = lastGm(g.chat)
+    expect(kit.choices!.map((c) => c.label)).toEqual(['🎲 Проверка удачи 8 (легко)', '🎲 Проверка удачи 12', '🎲 Проверка удачи 16 (трудно)', '🎲 Бросить к6', '👍 Стол решает: да', '👎 Стол решает: нет', '👁 Осмотреться'])
+    await g.c.choose(kit.id, kit.choices![1].id)
+    await until(() => /испытывает удачу \(12\)/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).text).toContain('решите по смыслу')
+    await g.c.choose(kit.id, kit.choices![4].id)
+    await until(() => /Стол решает: да \(Иван\)/.test(lastGm(g.chat).text))
+  })
+
   it('финал: в зале с фонтаном — атака на Чёрного мага и фонтан; попадание — победа и текст книги о кучке пепла', async () => {
     const g = await setup()
     await goTo(g, 'zamok-chernogo-maga')
@@ -204,7 +230,7 @@ describe('сценарный ведущий', () => {
   it('свободная реплика без номера — подсказка; плата без денег не проходит и вариант снова доступен', async () => {
     const g = await setup()
     await g.c.chat('Поговорим с трактирщиком', true)
-    await until(() => lastGm(g.chat)?.text.includes('понимает номера'))
+    await until(() => lastGm(g.chat)?.text.includes('в книге такого действия нет'))
     await goTo(g, 'gorod-zhretsov')
     await g.c.call('enterLocation', ['zamok-zhretsov'])
     await g.c.chat('17', true)

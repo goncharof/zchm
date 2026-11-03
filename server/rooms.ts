@@ -81,6 +81,11 @@ export type ScriptAction = (
   | { t: 'game'; loc: string; n: number; id: string }
   /** «Возврат времени»: снять отметку провала проверки удачи или игры этапа id */
   | { t: 'rewind'; loc: string; n: number; id: string }
+  /** «Решение стола» для действий, которых нет в книге: проверка удачи без места, кубик, да или нет, осмотреться */
+  | { t: 'check'; target: number }
+  | { t: 'die'; sides: number }
+  | { t: 'decide'; yes: boolean }
+  | { t: 'look' }
   | { t: 'penalty'; heroUid: string; kind: 'death' | 'lives' | 'half'; amount?: number }
   | { t: 'fight'; specs: { monsterId: string; count: number }[]; loc?: string; n?: number; id?: string }
   | { t: 'coins'; amount: number }

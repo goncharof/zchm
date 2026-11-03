@@ -15,6 +15,7 @@ import { plural } from '@/ui/format'
 import { DEAD_AT } from '@/engine/rules'
 import type { ChatChoice, ChatMessage } from '@/net/protocol'
 import type { Room, ScriptAction } from '../rooms'
+import { castVote, resolveVote, voteComplete, votingOn } from '../votes'
 import type { GmContext, GmEvent } from './types'
 
 export const SCRIPT_AUTHOR = 'Ведущий · сценарий'
@@ -318,6 +319,60 @@ function senseReply(room: Room, nums: number[]): string {
   return lines.join('\n')
 }
 
+/** Служебные слова реплики, которые ничего не значат при сравнении с подписью кнопки */
+const STOP = new Set(['и', 'в', 'во', 'на', 'с', 'со', 'мы', 'я', 'к', 'ко', 'по', 'за', 'не', 'да', 'нет', 'его', 'их', 'ее', 'её', 'он', 'она', 'они', 'это', 'этот', 'эту', 'что', 'как', 'у', 'о', 'об', 'от', 'до', 'из', 'же', 'бы', 'ли', 'то', 'а', 'но', 'ну', 'вы', 'нас', 'нам', 'ему', 'ей', 'им', 'все', 'всё', 'тут', 'там', 'здесь', 'давай', 'давайте', 'хотим', 'хочу', 'пусть', 'если', 'сам', 'сами', 'свой', 'свою', 'герой', 'герои', 'партия', 'команда'])
+const ENDINGS = /(иями|ями|ами|ием|ого|его|ому|ему|ыми|ими|ешь|ете|ите|ают|яют|ует|уют|ать|ять|ить|еть|ала|яла|ила|ела|ись|ось|ие|ые|ой|ей|ий|ый|ая|яя|ое|ее|ую|юю|ом|ем|ам|ям|ах|ях|ов|ев|ью|ия|ть|ся|сь|а|я|у|ю|ы|и|е|о|й|ь)$/
+
+/** Основы слов реплики или подписи: строчные, без «ё», без служебных слов, с отрезанным окончанием (грубо, но для
+ *  сравнения «освобождаем пленника» с «Если вы его освобождаете» хватает); числа остаются как есть */
+export function stems(text: string): string[] {
+  return text.toLowerCase().replace(/ё/g, 'е').split(/[^a-zа-я0-9]+/).filter((w) => w && !STOP.has(w)).map((w) => {
+    if (/^\d+$/.test(w) || w.length < 4) return w
+    const s = w.replace(ENDINGS, '')
+    return s.length >= 3 ? s : w
+  })
+}
+const sameStem = (a: string, b: string) => a === b || (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a)))
+
+/** Слова реплики, по которым угадывается вид кнопки, когда подпись сформулирована иначе («деремся» → «⚔ Бой») */
+const INTENT: [RegExp, ScriptAction['t'][]][] = [
+  [/дальш|ид[её]м|пошли|уход|выход|продолж|покида|дальн/, ['next']],
+  [/отдых|спим|спать|ночу|ночев|переноч|трактир/, ['rest']],
+  [/бой|дер[её]мся|бь[её]м|напад|атак|сража|руби|убив|убь[её]м|убить|драться|дра[кч]/, ['fight', 'duel']],
+  [/удач|испыта|пробу|попроб|рискн/, ['luck', 'check']],
+  [/кост|сыгра|игра/, ['game']],
+  [/бер[её]м|взять|забир|забра|забер|подбир|подним|хвата|бер[иу]/, ['coins', 'bottle', 'artifact', 'item', 'scroll']],
+  [/монет|деньг|золот/, ['coins']],
+  [/бутыл|флакон|зель/, ['bottle', 'buy']],
+  [/артефакт/, ['artifact']],
+  [/свит/, ['scroll']],
+  [/куп|покуп/, ['buy']],
+  [/плат|заплат|отда[её]м|отдать|да[её]м\s+(?:ему|ей|им)/, ['pay']],
+  [/отмыч|ключ|открыва|вскрыва|взлам/, ['pass']],
+  [/фонтан|пь[её]м|выпь|выпить|напить/, ['fountain']],
+  [/маг[аеу]?\b|чёрн|черн/, ['duel']],
+]
+
+/** Какая из кнопок последнего сообщения ведущего подходит под реплику. Сравниваются основы слов реплики и подписи,
+ *  сверх того — слова-намерения по виду действия. Одна лучшая — она; несколько равных — уточнение (список);
+ *  ни одной — null */
+export function matchChoice(text: string, choices: { id: string; label: string; action: ScriptAction }[]): { pick?: string; among?: string[] } | null {
+  const ts = stems(text)
+  if (!ts.length) return null
+  const kinds = new Set(INTENT.flatMap(([re, ks]) => (re.test(text.toLowerCase().replace(/ё/g, 'е')) ? ks : [])))
+  const scored = choices.map((c) => {
+    const ls = stems(c.label.replace(/^[▸⚔🎲🗝⏪👁👍👎]\s*/u, ''))
+    const overlap = ls.filter((l) => ts.some((t) => sameStem(t, l))).length
+    const kind = kinds.has(c.action.t) ? 1 : 0
+    // «Идти дальше» только по слову-намерению: его основа совпадает со многими репликами
+    return { id: c.id, score: c.action.t === 'next' ? kind : overlap + kind }
+  }).filter((x) => x.score > 0)
+  if (!scored.length) return null
+  const top = Math.max(...scored.map((x) => x.score))
+  const best = scored.filter((x) => x.score === top)
+  return best.length === 1 ? { pick: best[0].id } : { among: best.map((x) => x.id) }
+}
+
 export function roomNumber(text: string): number | null {
   const m = text.match(/(?:помещени\S*|комнат\S*|номер|№|параграф\S*|§)\s*(\d{1,3})/i) ?? text.trim().match(/^(?:(?:идём|идем|идти|иду|заходим|входим)\s+)?(?:в\s+)?(\d{1,3})\s*[.!]?$/i)
   return m ? Number(m[1]) : null
@@ -433,6 +488,7 @@ export class ScriptedGm {
         this.say(room, ev.text)
       }
     }
+    const unmatched: { author: string; text: string }[] = []
     for (const t of texts) {
       // разведка заклинанием ждёт номера помещений: «зло 7, 12», «разведка 5»
       const sense = room.script.sense && t.text.match(/^\s*(?:зло|чу[юя]|чувств\S*|разведк\S*|тень|душ\S*)(?![а-яё])[^\d]*(\d[\d\s,и]*)/i)
@@ -442,10 +498,56 @@ export class ScriptedGm {
       // в пути — только встречи, которые выпали партии
       else if (num !== null && room.state.pendingRoad.includes(num)) this.presentParagraph(room, 'doroga', num, t.playerId)
       else if (num !== null) this.say(room, room.state.pendingRoad.length ? `Встречи в пути: ${room.state.pendingRoad.map((x) => `§ ${x}`).join(', ')}.` : 'Сначала войдите в локацию с карты, потом назовите номер помещения.')
-      else this.say(room, 'Сценарный ведущий понимает номера помещений на плане («помещение 5») и кнопки вариантов. Свободные реплики разбирает ИИ-ведущий, когда он доступен.')
+      else if (!this.freeReply(room, t.text, t.playerId)) unmatched.push(t)
     }
+    if (unmatched.length) this.tableDecision(room, unmatched)
     // этапы, открытые событием (исход боя), могли изменить состояние: последствия, спутник
     this.ctx.stateChanged(room)
+  }
+
+  /** Кнопки последнего сообщения ведущего, которые ещё не нажаты */
+  private openChoices(room: Room): { msg: ChatMessage; id: string; label: string; action: ScriptAction }[] {
+    const msg = [...room.chat].reverse().find((m) => m.from === 'gm' && m.choices?.some((c) => !m.used?.includes(c.id) && room.choiceActions[c.id]))
+    if (!msg) return []
+    return msg.choices!.filter((c) => !msg.used?.includes(c.id) && room.choiceActions[c.id]).map((c) => ({ msg, id: c.id, label: c.label, action: room.choiceActions[c.id].action }))
+  }
+
+  /** Свободная реплика: «осмотреться» — сцена заново; иначе подходящая кнопка нажимается от имени игрока (в режиме
+   *  «когда все готовы» — голос за неё). Несколько подходящих — уточнение. Ничего не подошло — false */
+  private freeReply(room: Room, text: string, playerId?: string): boolean {
+    const loc = room.script.locationId
+    if (/осмотр|огляд|смотр|обыск|ищем|ищу|поищ|разгляд|изуча/i.test(text) && loc && room.script.n != null) {
+      this.presentParagraph(room, loc, room.script.n, playerId)
+      return true
+    }
+    const choices = this.openChoices(room)
+    const m = matchChoice(text, choices)
+    if (!m) return false
+    if (m.among) {
+      const among = choices.filter((c) => m.among!.includes(c.id))
+      this.say(room, 'Уточните, что именно:', among.map((c) => ({ label: c.label, action: c.action })))
+      return true
+    }
+    const c = choices.find((x) => x.id === m.pick)!
+    if (!playerId) return false
+    if (votingOn(room)) {
+      this.ctx.updateChat(room, castVote(room, playerId, c.msg.id, c.id))
+      if (voteComplete(room, c.msg.id)) resolveVote(room, c.msg.id, this.ctx, (p, mid, cid) => this.choose(room, p, mid, cid))
+    } else this.choose(room, playerId, c.msg.id, c.id)
+    return true
+  }
+
+  /** Действия, которых в книге нет, решает стол: проверка удачи, кубик, да или нет — как у живого ведущего */
+  private tableDecision(room: Room, texts: { author: string; text: string }[]): void {
+    const what = texts.map((t) => `${t.author}: «${t.text.slice(0, 120)}»`).join('; ')
+    const offers: Offer[] = [
+      ...[8, 12, 16].map((target) => ({ label: `🎲 Проверка удачи ${target}${target === 8 ? ' (легко)' : target === 16 ? ' (трудно)' : ''}`, action: { t: 'check', target } as ScriptAction })),
+      { label: '🎲 Бросить к6', action: { t: 'die', sides: 6 } },
+      { label: '👍 Стол решает: да', action: { t: 'decide', yes: true } },
+      { label: '👎 Стол решает: нет', action: { t: 'decide', yes: false } },
+      ...(room.script.locationId && room.script.n != null ? [{ label: '👁 Осмотреться', action: { t: 'look' } as ScriptAction }] : []),
+    ]
+    this.say(room, `${what} — в книге такого действия нет. Решите за столом, как с живым ведущим: удача, кубик или общее решение; номер помещения на плане открывает его, кнопки выше — варианты книги.`, offers)
   }
 
   /** Нажата кнопка-вариант */
@@ -668,6 +770,24 @@ export class ScriptedGm {
         return
       case 'next':
         this.say(room, room.state.locationId ? 'Куда дальше? Назовите номер помещения на плане.' : 'Куда дальше? Выберите путь на карте.')
+        return
+      case 'check': {
+        const h = needHero()
+        const r = s.luckCheck(h.uid, a.target)
+        this.say(room, `${h.name} испытывает удачу (${a.target}): к18 = ${r.roll}${r.luck ? ` + ${r.luck}` : ''} — ${r.ok ? 'удача!' : 'неудача.'} Что это значит, решите по смыслу.`)
+        return
+      }
+      case 'die': {
+        const r = s.rollDie(a.sides, 'Решение стола')
+        this.say(room, `Кубик к${a.sides}: выпало ${r}.`)
+        return
+      }
+      case 'decide':
+        this.say(room, `Стол решает: ${a.yes ? 'да' : 'нет'} (${room.players.get(playerId)?.name ?? 'игрок'}).`)
+        return
+      case 'look':
+        if (room.script.locationId && room.script.n != null) this.presentParagraph(room, room.script.locationId, room.script.n, playerId)
+        else this.say(room, 'Партия не в помещении: назовите номер на плане или выберите путь на карте.')
         return
     }
   }
