@@ -9,6 +9,8 @@ import { seededRng, setRng } from '@/engine/dice'
 import { createGameServer, type GameServer } from '../server/app'
 import { bottleSales, luckPenalty } from '../server/gm/script'
 import { checkEnd } from '@/engine/combat'
+import { idx } from '@/data'
+import { allNodes, paragraphTree } from '@/game/tree'
 
 let servers: GameServer[] = []
 let clients: NetClient[] = []
@@ -226,7 +228,7 @@ describe('сценарный ведущий', () => {
     priest.spellbook.push('priest-chuvstvo-zla', 'priest-chtenie-sily')
     await g.c.claimHero(priest.uid)
     await g.c.call('cast', [priest.uid, 'priest-chuvstvo-zla', {}])
-    await until(() => /«Чувство зла»: сценарный ведущий/.test(lastGm(g.chat)?.text ?? ''))
+    await until(() => /«Чувство зла»: партия не в помещении/.test(lastGm(g.chat)?.text ?? ''))
     room.session().startEncounter([{ monsterId: 'ork', count: 2 }]) // бой начинает ведущий
     await g.c.call('cast', [priest.uid, 'priest-chtenie-sily', {}])
     await until(() => /читает силу/.test(lastGm(g.chat)?.text ?? ''))
@@ -240,6 +242,51 @@ describe('сценарный ведущий', () => {
     await g.c.call('cast', [mage.uid, mage.spellbook[0], { targetUid: room.state.combat!.monsters[0].uid }])
     await wait(100)
     expect(g.chat.slice(before).some((m) => m.from === 'gm')).toBe(false)
+  })
+
+  it('ручные заклинания вне боя решаются по дереву книги: эмоции, сила, чувство зла по номерам, обаяние, отворот, возврат времени', async () => {
+    const g = await setup()
+    const room = (await g.s.store.get(g.j.code))!
+    const priest = room.state.heroes.find((h) => h.classId === 'priest')!
+    priest.mana = priest.maxMana = 80
+    priest.spellbook.push('priest-chuvstvo-zla', 'priest-chtenie-emotsiy', 'priest-chtenie-sily', 'priest-obayanie', 'priest-otvorot-mertvetsov', 'priest-ozarenie', 'priest-vozvrat-vremeni')
+    await g.c.claimHero(priest.uid)
+    await g.c.call('enterLocation', ['zolotoy-gorod'])
+    await g.c.chat('1', true)
+    await until(() => /помещение 1/.test(lastGm(g.chat).text))
+    await g.c.call('cast', [priest.uid, 'priest-chtenie-emotsiy', {}])
+    await until(() => /читает эмоции/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).text).toContain('Зомби: злоба')
+    await g.c.call('cast', [priest.uid, 'priest-chtenie-sily', {}])
+    await until(() => /читает силу тех, кто здесь/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).text).toMatch(/Зомби: уровень \d+, защита \d+/)
+    // «Чувство зла» прощупывает названные помещения по Бестиарию
+    await g.c.call('cast', [priest.uid, 'priest-chuvstvo-zla', {}])
+    await until(() => /назовите их номера/.test(lastGm(g.chat).text))
+    await g.c.chat('зло 1, 3', true)
+    await until(() => /• 1:/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).text).toContain('• 1: зло — Зомби')
+    expect(lastGm(g.chat).text).toMatch(/• 3: /)
+    await g.c.call('cast', [priest.uid, 'priest-obayanie', {}])
+    await until(() => /действует только на людей/.test(lastGm(g.chat).text))
+    // «Отворот мертвецов» на одного: остальных зомби заметит
+    await g.c.call('cast', [priest.uid, 'priest-otvorot-mertvetsov', { targetHeroUid: priest.uid }])
+    await until(() => /пройти мимо Зомби незамеченным/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).text).toMatch(/но .* — нет: заметят всю партию/)
+    await g.c.call('cast', [priest.uid, 'priest-ozarenie', {}])
+    await until(() => /Боги отвечают/.test(lastGm(g.chat).text))
+    // «Возврат времени» снимает провал проверки удачи, и кнопка проверки возвращается
+    const p = idx.locationById.get('zolotoy-gorod')!.paragraphs.find((x) => x.n === 1)!
+    const door = allNodes(paragraphTree(p)).find((x) => x.hints?.luck?.includes(12))!
+    room.session().bookMark(`zolotoy-gorod:1:${door.id}`, 'fail')
+    await g.c.call('cast', [priest.uid, 'priest-vozvrat-vremeni', {}])
+    await until(() => /возвращает время на один шаг/.test(lastGm(g.chat).text))
+    const back = lastGm(g.chat)
+    expect(back.choices!.map((c) => c.label)).toEqual([expect.stringMatching(/^⏪ Повторить/)])
+    await g.c.choose(back.id, back.choices![0].id)
+    await until(() => /Время возвращается назад/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('🎲 Проверка удачи 12')
+    expect(room.state.claimed ?? []).not.toContain(`zolotoy-gorod:1:${door.id}:fail`)
   })
 
   it('слитые разметкой исходы разрезаны: провал «Перерубить — удача 8» ведёт в свою ветку с 217 монетами', async () => {

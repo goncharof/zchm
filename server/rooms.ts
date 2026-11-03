@@ -66,6 +66,8 @@ export interface ScriptState {
   fight?: { loc: string; n: number; id?: string }
   /** одноразовые действия, которые уже сделаны (награды, броски по списку): повторный вход их не повторяет */
   taken?: string[]
+  /** заклинание-разведка ждёт номера помещений: «Чувство зла» (evil) или тень и вселение души (scout), left — сколько ещё */
+  sense?: { kind: 'evil' | 'scout'; left: number }
 }
 
 /** Действие за кнопкой-вариантом сценарного ведущего (сериализуемое) */
@@ -77,6 +79,8 @@ export type ScriptAction = (
   | { t: 'luck'; target: number; loc?: string; n?: number; id?: string; seg?: number }
   /** игра в кости с персонажем книги на этапе id (GameSession.diceGame) */
   | { t: 'game'; loc: string; n: number; id: string }
+  /** «Возврат времени»: снять отметку провала проверки удачи или игры этапа id */
+  | { t: 'rewind'; loc: string; n: number; id: string }
   | { t: 'penalty'; heroUid: string; kind: 'death' | 'lives' | 'half'; amount?: number }
   | { t: 'fight'; specs: { monsterId: string; count: number }[]; loc?: string; n?: number; id?: string }
   | { t: 'coins'; amount: number }

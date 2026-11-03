@@ -6,8 +6,10 @@
 import { randomUUID } from 'node:crypto'
 import { idx } from '@/data'
 import type { BookNode, ParagraphHints } from '@/types'
-import { allNodes, deadlyEffect, diceKey, effectLabel, findNode, gameLimit, gamesPlayed, hasResult, nodeFullText, nodeText, openNodes, paragraphTree, parentOf, revealedBy, rollOf, stakeLabel } from '@/game/tree'
+import { allNodes, canFightHints, deadlyEffect, diceKey, effectLabel, findNode, gameLimit, gamesPlayed, hasResult, nodeFullText, nodeText, openNodes, paragraphTree, parentOf, revealedBy, rollOf, stakeLabel } from '@/game/tree'
 import type { Hero } from '@/engine/model'
+import { hasWard, isConscious } from '@/engine/character'
+import { UNDEAD } from '@/engine/combat'
 import { GameError } from '@/game/session'
 import { plural } from '@/ui/format'
 import { DEAD_AT } from '@/engine/rules'
@@ -160,21 +162,160 @@ function fresh(room: Room, offers: Offer[]): Offer[] {
 }
 
 /** Номер помещения в реплике: «помещение 5», «№ 5», «в 5» или реплика из одного числа (а не «даю ему 5 монет») */
-/** Ответ сценарного ведущего на заклинание, которое движок не отыгрывает. «Чтение силы» в бою — характеристики
- *  противников (то, что игроки видят на экране боя, плюс храбрость и магия); остальное решают сами игроки. */
-function spellReply(room: Room, spell: NonNullable<GmEvent['spell']>): string {
+/** Люди по Бестиарию — на них действует «Обаяние» («трактирщиков, стражников, но не торговцев») */
+const HUMANS = new Set(['chelovek', 'strazhnik', 'rytsar', 'razboynik', 'berserker', 'amazonka', 'druid', 'belyy-mag', 'chernyy-zhrets'])
+
+/** Противники параграфа, с которыми бой ещё не выигран: по открытым этапам (видимые) и по скрытым (засады за выбором) */
+function foesAt(loc: string, n: number, claimed: readonly string[]): { visible: { id: string; count: number; node: BookNode }[]; hidden: boolean; npcs: string[] } {
+  const tree = treeAt(loc, n)
+  if (!tree) return { visible: [], hidden: false, npcs: [] }
+  const P = `${loc}:${n}`
+  const open = openNodes(tree, P, claimed)
+  const ids = new Set(open.map((x) => x.id))
+  const visible = open.flatMap((node) => (hasResult(P, node.id, claimed, 'won') ? [] : (node.hints?.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special).map((id) => ({ id, count: node.hints?.monsterCounts?.[id] ?? 1, node }))))
+  const hidden = allNodes(tree).some((node) => !ids.has(node.id) && canFightHints(node.hints))
+  const npcs = open.flatMap((node) => [...(node.hints?.monsters ?? []).filter((m) => idx.monsterById.get(m)?.special), ...(node.npcs ?? [])])
+  return { visible, hidden, npcs: [...new Set(npcs)] }
+}
+
+const foeName = (f: { id: string; count: number }) => `${idx.monster(f.id).name}${f.count > 1 ? ` ×${f.count}` : ''}`
+
+/** Характеристики монстра по Бестиарию («Чтение силы» вне боя) */
+function monsterStats(id: string, count: number): string {
+  const m = idx.monster(id)
+  const attacks = Array.isArray(m.attacks) ? `атаки ${m.attacks.join('-')}` : m.attacks === 'death' ? 'смертельная атака' : m.attacks === 'magic' ? 'бьёт только магией' : 'не атакует'
+  const magic = m.spells?.length ? `магия: ${m.spells.join(', ')} (маны ${m.mana ?? 0})` : 'магией не владеет'
+  return `• ${m.name}${count > 1 ? ` ×${count}` : ''}: уровень ${m.level ?? '—'}, защита ${m.defense ?? '—'}, жизни ${m.lives ?? '—'}, ${attacks}, храбрость ${m.courage ?? 'нет'}; ${magic}.`
+}
+
+/** Ответ сценарного ведущего на заклинание, которое движок не отыгрывает: вердикт по дереву Книги Жизни и Бестиарию
+ *  (ХАУСРУЛЫ, docs/RULES.md). Вне параграфа заклинанию не на что опереться */
+function spellReply(room: Room, spell: NonNullable<GmEvent['spell']>): { text: string; offers?: Offer[] } {
   const c = room.state.combat
-  const foes = c && !c.finished ? c.monsters.filter((m) => !m.dead && !m.fled) : []
-  if (spell.id === 'priest-chtenie-sily' && foes.length) {
-    const lines = foes.map((m) => {
-      const attacks = Array.isArray(m.attacks) ? `атаки ${m.attacks.join('-')}` : m.attacks === 'death' ? 'смертельная атака' : m.attacks === 'magic' ? 'бьёт только магией' : 'не атакует'
-      const magic = m.spells?.length ? `магия: ${m.spells.join(', ')} (маны ${m.mana ?? 0})` : 'магией не владеет'
-      return `• ${m.name}: уровень ${m.level}, защита ${m.defense + m.defenseMod}, жизни ${m.lives}/${m.maxLives}, ${attacks}, храбрость ${m.courage ?? 'нет'}; ${magic}.`
-    })
-    return [`${spell.hero} читает силу противников:`, ...lines].join('\n')
+  const inFight = !!c && !c.finished
+  const foes = inFight ? c!.monsters.filter((m) => !m.dead && !m.fled) : []
+  const loc = room.script.locationId
+  const n = room.script.n
+  const here = loc && n != null ? foesAt(loc, n, room.state.claimed ?? []) : null
+  const nowhere = `«${spell.name}»: партия не в помещении — заклинанию не на что опереться. Назовите номер помещения и примените его там.`
+  const t = (lines: (string | false | undefined)[]) => lines.filter(Boolean).join('\n')
+  const heroes = room.state.heroes.filter((h) => !h.status.dead && isConscious(h))
+  switch (spell.id) {
+    case 'priest-chtenie-sily': {
+      if (foes.length) {
+        const lines = foes.map((m) => {
+          const attacks = Array.isArray(m.attacks) ? `атаки ${m.attacks.join('-')}` : m.attacks === 'death' ? 'смертельная атака' : m.attacks === 'magic' ? 'бьёт только магией' : 'не атакует'
+          const magic = m.spells?.length ? `магия: ${m.spells.join(', ')} (маны ${m.mana ?? 0})` : 'магией не владеет'
+          return `• ${m.name}: уровень ${m.level}, защита ${m.defense + m.defenseMod}, жизни ${m.lives}/${m.maxLives}, ${attacks}, храбрость ${m.courage ?? 'нет'}; ${magic}.`
+        })
+        return { text: t([`${spell.hero} читает силу противников:`, ...lines]) }
+      }
+      if (!here) return { text: nowhere }
+      if (!here.visible.length) return { text: `${spell.hero} читает силу: рядом нет никого, кого стоило бы опасаться.${here.hidden ? ' Но что-то здесь всё же скрыто.' : ''}` }
+      return { text: t([`${spell.hero} читает силу тех, кто здесь:`, ...here.visible.map((f) => monsterStats(f.id, f.count))]) }
+    }
+    case 'priest-chtenie-emotsiy': {
+      if (foes.length) return { text: `${spell.hero} читает эмоции: ${foes.map((m) => m.name).join(', ')} — волны ненависти и злобы, они будут драться.` }
+      if (!here) return { text: nowhere }
+      const lines = [`${spell.hero} читает эмоции:`]
+      for (const f of here.visible) lines.push(`• ${foeName(f)}: злоба и ненависть — нападёт.`)
+      for (const id of here.npcs) lines.push(`• ${idx.monsterById.get(id)?.name ?? id}: спокоен, зла не держит.`)
+      if (here.hidden) lines.push('• Поблизости чувствуется затаённая угроза: кто-то ждёт своего часа.')
+      if (lines.length === 1) lines.push('вокруг никого с сильными чувствами.')
+      return { text: t(lines) }
+    }
+    case 'priest-chuvstvo-zla': {
+      if (!loc) return { text: nowhere }
+      room.script = { ...room.script, sense: { kind: 'evil', left: 3 } }
+      return { text: `${spell.hero} прислушивается к злу вокруг. ХАУСРУЛ: заклинание прощупывает до трёх соседних помещений — назовите их номера одной репликой, например «зло 7, 12».` }
+    }
+    case 'mage-ozhivlenie-teni':
+    case 'mage-vselenie-dushi': {
+      if (!loc) return { text: nowhere }
+      const left = spell.id === 'mage-vselenie-dushi' ? 3 : 1
+      room.script = { ...room.script, sense: { kind: 'scout', left } }
+      return { text: `${spell.hero} ${spell.id === 'mage-vselenie-dushi' ? 'вселяется в мёртвое тело и отправляется на разведку' : 'оживляет свою тень и посылает её вперёд'}. ХАУСРУЛ: разведка показывает, что видно при входе в ${left === 1 ? 'одно соседнее помещение' : 'помещения (до трёх)'}, без наград и отметок — назовите ${left === 1 ? 'номер' : 'номера'} репликой «разведка 7».` }
+    }
+    case 'priest-ozarenie': {
+      if (!here || !loc || n == null) return { text: nowhere }
+      const tree = treeAt(loc, n)!
+      const P = `${loc}:${n}`
+      const open = openNodes(tree, P, room.state.claimed ?? [])
+      const lines = [`Боги отвечают ${spell.hero}:`]
+      for (const x of open) {
+        for (const piece of x.text.filter((p) => p.gm)) lines.push(`• ${shown(piece.t)}`)
+        if (x.teaser) lines.push(`• ${x.teaser}`)
+      }
+      // смертельно опасные пути среди ещё не выбранных вариантов
+      const deadly = (x: BookNode): boolean => (x.effects ?? []).some(deadlyEffect) || (x.then ?? []).some((c) => c.on !== 'choice' && deadly(c))
+      for (const x of open) for (const ch of (x.then ?? []).filter((c) => c.on === 'choice' && !open.includes(c))) if (deadly(ch)) lines.push(`• Остерегайтесь: «${shown(ch.label ?? '')}» — этот путь может стоить жизни.`)
+      if (lines.length === 1) lines.push('здесь нет скрытых тайн и опасностей, о которых стоило бы предупредить.')
+      return { text: t(lines) }
+    }
+    case 'priest-obayanie': {
+      if (inFight) return { text: `«${spell.name}» в бою бессильно: противники уже взялись за оружие.` }
+      if (!here) return { text: nowhere }
+      const people = here.visible.filter((f) => HUMANS.has(f.id))
+      const others = here.visible.filter((f) => !HUMANS.has(f.id))
+      if (!here.visible.length) return { text: `${spell.hero} неотразим, но убеждать здесь некого.` }
+      if (!people.length) return { text: `«${spell.name}» действует только на людей, а здесь ${here.visible.map(foeName).join(', ')}.` }
+      return { text: t([`${spell.hero} убеждает ${people.map(foeName).join(', ')}: они пропускают вас без боя — бой можно не начинать (ХАУСРУЛ). Добыча, которую они стерегут, остаётся при них.`, others.length ? `На ${others.map(foeName).join(', ')} обаяние не действует.` : undefined]) }
+    }
+    case 'mage-nevidimaya-stena': {
+      if (inFight) return { text: `${spell.hero} ставит невидимую стену: сквозь неё не пройдут ни ${foes.map((m) => m.name).join(', ')}, ни герои. ХАУСРУЛ: партия может отступить без погони — нажмите «Бежать» каждым героем или закончите бой отступлением.` }
+      if (!here || !here.visible.length) return { text: `${spell.hero} ставит невидимую стену, но отгораживаться здесь не от кого.` }
+      return { text: `${spell.hero} ставит невидимую стену между партией и ${here.visible.map(foeName).join(', ')}: они не доберутся до вас, и вы можете уйти без боя (ХАУСРУЛ). Всё, что за ними, остаётся за стеной.` }
+    }
+    case 'mage-nevidimost':
+    case 'priest-otvorot-mertvetsov': {
+      if (inFight) return { text: `«${spell.name}» наложено — движок учтёт его в этом бою.` }
+      if (!here || !here.visible.length) return { text: `«${spell.name}» действует до ближайшего боя — там движок учтёт его сам.` }
+      const undead = spell.id === 'priest-otvorot-mertvetsov'
+      const covered = heroes.filter((h) => hasWard(h, undead ? 'undead' : 'invisible'))
+      const uncovered = heroes.filter((h) => !covered.includes(h))
+      const living = here.visible.filter((f) => !UNDEAD.has(f.id))
+      if (undead && living.length) return { text: `«${spell.name}» отводит глаза только мертвецам, а здесь ${living.map(foeName).join(', ')} — живые, они вас заметят.` }
+      if (uncovered.length) return { text: `${covered.map((h) => h.name).join(', ') || 'Никто'} ${covered.length === 1 ? 'может' : 'могут'} пройти мимо ${here.visible.map(foeName).join(', ')} незамеченным${covered.length === 1 ? '' : 'и'}, но ${uncovered.map((h) => h.name).join(', ')} — нет: заметят всю партию. Защита держится до ближайшего боя.` }
+      return { text: `Под «${spell.name}» вся партия: ${here.visible.map(foeName).join(', ')} вас не заметят — бой можно не начинать, идите дальше (ХАУСРУЛ). Добыча за ними остаётся им.` }
+    }
+    case 'priest-vozvrat-vremeni':
+    case 'mage-vozvrat-vremeni': {
+      if (inFight) return { text: `«${spell.name}» в бою: цель перебрасывает кубики своего последнего действия — сценарный ведущий этого не считает, договоритесь за столом.` }
+      if (!here || !loc || n == null) return { text: nowhere }
+      const P = `${loc}:${n}`
+      const tree = treeAt(loc, n)!
+      // проваленные проверки удачи этого помещения можно отыграть назад: отметка провала снимается, кнопка возвращается
+      const failed = allNodes(tree).filter((x) => hasResult(P, x.id, room.state.claimed ?? [], 'fail') && (x.hints?.luck?.length || x.hints?.game))
+      if (!failed.length) return { text: `${spell.hero} возвращает время, но отыгрывать назад здесь нечего: проваленных проверок нет.` }
+      return { text: `${spell.hero} возвращает время на один шаг: проваленную проверку можно повторить (ХАУСРУЛ).`, offers: failed.map((x) => ({ label: `⏪ Повторить: ${shown(x.label ?? (x.hints?.game ? 'игра в кости' : `удача ${x.hints?.luck?.join(', ')}`))}`, action: { t: 'rewind', loc, n, id: x.id } })) }
+    }
+    default:
+      return { text: `«${spell.name}»: сценарный ведущий такие заклинания не отыгрывает — исход решите сами по описанию заклинания (ИИ-ведущий, когда он доступен, разыграет его по тексту книги).` }
   }
-  if (spell.id === 'mage-nevidimost' || spell.id === 'priest-otvorot-mertvetsov') return `«${spell.name}» действует до ближайшего боя — там движок учтёт его сам. Удастся ли обойти встречу, решите по тексту книги (сценарный ведущий этого не решает).`
-  return `«${spell.name}»: сценарный ведущий такие заклинания не отыгрывает — исход решите сами по описанию заклинания (ИИ-ведущий, когда он доступен, разыграет его по тексту книги).`
+}
+
+/** Ответ разведки на названные помещения: «Чувство зла» — враги по Бестиарию, тень — текст входа без наград */
+function senseReply(room: Room, nums: number[]): string {
+  const sense = room.script.sense!
+  const loc = room.script.locationId
+  if (!loc) { delete room.script.sense; return 'Партия вышла из локации — разведка не удалась.' }
+  const lines: string[] = []
+  for (const num of nums.slice(0, sense.left)) {
+    const tree = treeAt(loc, num)
+    if (!tree) { lines.push(`• ${num}: такого помещения нет на плане.`); continue }
+    if (sense.kind === 'evil') {
+      const foes = allNodes(tree).flatMap((x) => (x.hints?.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special).map((id) => ({ id, count: x.hints?.monsterCounts?.[id] ?? 1 })))
+      const merged = new Map<string, number>()
+      for (const f of foes) merged.set(f.id, Math.max(merged.get(f.id) ?? 0, f.count))
+      lines.push(merged.size ? `• ${num}: зло — ${[...merged].map(([id, count]) => foeName({ id, count })).join(', ')}.` : `• ${num}: зла не чувствуется.`)
+    } else {
+      const entry = openNodes(tree, `${loc}:${num}`, []).map((x) => nodeText(x)).filter(Boolean).join(' ')
+      lines.push(`• ${num}: ${shown(entry) || 'ничего не видно'}`)
+    }
+  }
+  sense.left -= Math.min(nums.length, sense.left)
+  if (sense.left <= 0) delete room.script.sense
+  return lines.join('\n')
 }
 
 export function roomNumber(text: string): number | null {
@@ -284,7 +425,8 @@ export class ScriptedGm {
         if (f && shownNodes.length) this.sayNodes(room, f.loc, f.n, [ev.text], shownNodes)
         else this.say(room, `${ev.text} Продолжайте: выберите вариант выше или назовите номер следующего помещения.`)
       } else if (ev.type === 'spell' && ev.spell) {
-        this.say(room, spellReply(room, ev.spell))
+        const r = spellReply(room, ev.spell)
+        this.say(room, r.text, r.offers ?? [])
       } else if (ev.type === 'pass') {
         this.say(room, room.state.locationId ? 'Все готовы. Выберите вариант выше или назовите номер помещения на плане.' : 'Все готовы. Выберите путь на карте или войдите в локацию.')
       } else {
@@ -292,6 +434,9 @@ export class ScriptedGm {
       }
     }
     for (const t of texts) {
+      // разведка заклинанием ждёт номера помещений: «зло 7, 12», «разведка 5»
+      const sense = room.script.sense && t.text.match(/^\s*(?:зло|чу[юя]|чувств\S*|разведк\S*|тень|душ\S*)(?![а-яё])[^\d]*(\d[\d\s,и]*)/i)
+      if (sense) { this.say(room, senseReply(room, [...new Set(sense[1].match(/\d+/g)!.map(Number))])); continue }
       const num = roomNumber(t.text)
       if (num !== null && room.state.locationId) this.presentParagraph(room, room.state.locationId, num, t.playerId)
       // в пути — только встречи, которые выпали партии
@@ -446,6 +591,17 @@ export class ScriptedGm {
         // ставка применена сразу: соперник, может быть, сыграет ещё
         const again = gamesPlayed(P, a.id, room.state.claimed ?? []) < gameLimit(node) ? [{ label: `🎲 Сыграть ещё раз${stakeLabel(node.hints!.game!)}`, action: { t: 'game', loc: a.loc, n: a.n, id: a.id } as ScriptAction }] : []
         this.say(room, head, again)
+        return
+      }
+      case 'rewind': {
+        // «Возврат времени»: отметка провала снимается, кнопка проверки или игры возвращается
+        const tree = treeAt(a.loc, a.n)
+        const P = `${a.loc}:${a.n}`
+        const node = tree ? findNode(tree, a.id) : undefined
+        if (!tree || !node || !hasResult(P, a.id, room.state.claimed ?? [], 'fail')) throw new GameError('Эту проверку уже не отыграть назад')
+        s.unclaim(`${P}:${a.id}:fail`)
+        if (node.hints?.game) s.unclaim((room.state.claimed ?? []).filter((k) => k.startsWith(`${P}:${a.id}:game#`)).at(-1) ?? '')
+        this.say(room, 'Время возвращается назад.', fresh(room, nodeOffers(a.loc, a.n, node, room.state.claimed ?? [], new Set(openNodes(tree, P, room.state.claimed ?? []).map((x) => x.id)), room.state.heroes)))
         return
       }
       case 'penalty': {
