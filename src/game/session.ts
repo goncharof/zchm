@@ -54,6 +54,10 @@ export function blankGame(startNodeId = 'zolotoy-gorod'): GameState {
 /** Дозаполняет поля, появившиеся в более новых версиях состояния */
 export function migrate(g: GameState): GameState {
   g.pendingRoad ??= []
+  // таверна Северного форта в оцифрованном издании напечатана как § 38, на плане это § 37: старые отметки переносятся
+  const fort = g.visited?.['severnyy-fort']
+  if (fort?.includes(38)) g.visited['severnyy-fort'] = [...new Set(fort.map((n) => (n === 38 ? 37 : n)))]
+  if (g.claimed?.some((k) => k.startsWith('severnyy-fort:38:'))) g.claimed = g.claimed.map((k) => k.replace(/^severnyy-fort:38:/, 'severnyy-fort:37:'))
   g.artifactsFound ??= []
   g.startNodeId ??= g.worldNodeId ?? 'zolotoy-gorod'
   g.companions ??= []

@@ -4,8 +4,9 @@ into public/img/locations/<id>.jpg.
 Usage: tools/.venv/bin/python -I tools/build_book_of_life.py
 
 Known quirks of the original book handled here:
-- the printed numbering skips 37 in «Северный форт» and 100 in «Дорога»; numbering is kept as printed
-  because the location plans refer to the printed room numbers;
+- the printed numbering skips 100 in «Дорога»; it is kept as printed (the road has no plan, encounters are drawn
+  from the existing numbers). In «Северный форт» the digitized copy prints the tavern as 38 while the plan (and
+  another printing) has 37: it is renumbered to 37 (RENUMBER);
 - OCR reads the dice result «6 —» as «б —» in a few lists; fixed on the fly;
 - dice-result lists («1 — …», «1, 2, 3 — …»), letter legends («С — нападает скелет») and the 6×6 crypt
   grid of «Крепость последней надежды» are kept as separate lines inside the paragraph text.
@@ -83,9 +84,14 @@ def crop_plan(page, img_path, scale=2.0):
     return bitmap.size
 
 
+# опечатки нумерации оцифрованного издания: напечатанный номер → номер на плане («Северный форт»: таверна 38 → 37)
+RENUMBER = {'Северный форт': {38: 37}}
+
+
 def parse_chapter(doc, name, first, last, has_plan, issues):
     paragraphs = []   # [{'n': int, 'lines': [str]}]
     expected = 1
+    renumber = RENUMBER.get(name, {})
     text_pages = range(first + (1 if has_plan else 0), last + 1)
     for pno in text_pages:
         page = doc[pno - 1]
@@ -109,7 +115,7 @@ def parse_chapter(doc, name, first, last, has_plan, issues):
             # a paragraph number sits left of the body margin; the original skips a number twice,
             # so accept expected or expected+1 and keep the printed number
             if m and int(m.group(1)) in (expected, expected + 1) and x < body_x - 3:
-                n = int(m.group(1))
+                n = renumber.get(int(m.group(1)), int(m.group(1)))
                 if n != expected:
                     issues.append(f'{name} p{pno}: в оригинале пропущен номер {expected} '
                                   f'(после {expected - 1} идёт {n}); нумерация сохранена как в книге')
