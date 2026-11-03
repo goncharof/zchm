@@ -301,6 +301,7 @@ export const useGameStore = defineStore('game', () => {
     rollDie: (sides: number, context?: string) => cmd('rollDie', sides, context),
     rollDice: (formula: string) => cmd('rollDice', formula),
     luckCheck: (heroUid: string, target: number, place?: string) => cmd('luckCheck', heroUid, target, place),
+    diceGame: (heroUid: string, place: string) => cmd('diceGame', heroUid, place),
     findArtifact: (heroUid: string) => cmd('findArtifact', heroUid),
     giveScroll: (heroUid: string, caster?: Caster, level?: number) => cmd('giveScroll', heroUid, caster, level),
     trapFound: (heroUid: string) => cmd('trapFound', heroUid),

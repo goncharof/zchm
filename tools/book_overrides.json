@@ -438,7 +438,11 @@
     "why": "весельчак зовёт сыграть в кости",
     "hints": {
       "paragraph": {
-        "monsters": []
+        "monsters": [],
+        "game": {
+          "stake": 10,
+          "of": "coins"
+        }
       }
     }
   },
@@ -446,7 +450,11 @@
     "why": "весельчак зовёт сыграть в кости",
     "hints": {
       "paragraph": {
-        "monsters": []
+        "monsters": [],
+        "game": {
+          "stake": 10,
+          "of": "coins"
+        }
       }
     }
   },
@@ -540,6 +548,197 @@
     "hints": {
       "paragraph": {
         "monsters": []
+      }
+    }
+  },
+  "zolotoy-gorod:8": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 10,
+          "of": "coins"
+        }
+      }
+    }
+  },
+  "zolotoy-gorod:11": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 3,
+          "of": "lives"
+        }
+      }
+    }
+  },
+  "krepost-rytsarey:30": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 3,
+          "of": "lives"
+        }
+      }
+    }
+  },
+  "zamok-zhretsov:5": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 10,
+          "of": "coins"
+        }
+      }
+    }
+  },
+  "zamok-zhretsov:25": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 10,
+          "of": "coins"
+        }
+      }
+    }
+  },
+  "krepost-korolya-nazgulov:21": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 10,
+          "of": "coins"
+        }
+      }
+    }
+  },
+  "chernye-peschery:23": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 3,
+          "of": "lives",
+          "times": 2
+        }
+      }
+    }
+  },
+  "liholese:15": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 3,
+          "of": "lives",
+          "times": 2
+        }
+      }
+    }
+  },
+  "drevnie-razvaliny:2": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 3,
+          "of": "lives"
+        }
+      }
+    }
+  },
+  "drevnie-razvaliny:9": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 10,
+          "of": "coins",
+          "times": 1
+        }
+      }
+    }
+  },
+  "severnyy-fort:1": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 3,
+          "of": "lives"
+        }
+      }
+    }
+  },
+  "severnyy-fort:3": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 10,
+          "of": "coins",
+          "times": 3
+        }
+      }
+    }
+  },
+  "doroga:24": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 3,
+          "of": "lives"
+        }
+      }
+    }
+  },
+  "doroga:25": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 10,
+          "of": "coins"
+        }
+      }
+    }
+  },
+  "doroga:77": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 3,
+          "of": "lives"
+        }
+      }
+    }
+  },
+  "doroga:78": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 10,
+          "of": "coins"
+        }
+      }
+    }
+  },
+  "doroga:142": {
+    "why": "игра в кости",
+    "hints": {
+      "paragraph": {
+        "game": {
+          "stake": 10,
+          "of": "coins"
+        }
       }
     }
   }

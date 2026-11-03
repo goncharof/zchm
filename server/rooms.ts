@@ -75,6 +75,8 @@ export type ScriptAction = (
   | { t: 'branch'; loc: string; n: number; seg: number }
   | { t: 'roll'; loc: string; n: number; id?: string; seg?: number; block?: number }
   | { t: 'luck'; target: number; loc?: string; n?: number; id?: string; seg?: number }
+  /** игра в кости с персонажем книги на этапе id (GameSession.diceGame) */
+  | { t: 'game'; loc: string; n: number; id: string }
   | { t: 'penalty'; heroUid: string; kind: 'death' | 'lives' | 'half'; amount?: number }
   | { t: 'fight'; specs: { monsterId: string; count: number }[]; loc?: string; n?: number; id?: string }
   | { t: 'coins'; amount: number }

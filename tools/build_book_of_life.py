@@ -337,7 +337,7 @@ BOOK_DIR = os.path.join(os.path.dirname(__file__), 'book')
 DATA = os.path.join(ROOT, 'src', 'data')
 NODE_ON = {'enter', 'choice', 'win', 'lose', 'flee', 'ok', 'fail'}
 NODE_KEYS = {'id', 'on', 'label', 'text', 'teaser', 'hints', 'passWith', 'dice', 'effects', 'npcs', 'exclusive', 'goto', 'action', 'then'}
-HINT_KEYS = {'luck', 'bottles', 'coins', 'prices', 'monsters', 'monsterCounts', 'artifact', 'tavern', 'shop', 'scrolls', 'items'}
+HINT_KEYS = {'luck', 'bottles', 'coins', 'prices', 'monsters', 'monsterCounts', 'artifact', 'tavern', 'shop', 'scrolls', 'items', 'game'}
 
 
 def _norm(x):
@@ -392,6 +392,10 @@ def check_tree(tree, text, ctx, ns):
         for it in h.get('items', []):
             if it.get('id') not in items.get(it.get('kind'), set()):
                 errs.append(f'{where}: нет вещи {it}')
+        g = h.get('game')
+        if g is not None and (not isinstance(g, dict) or set(g) - {'stake', 'of', 'times'} or g.get('of', 'coins') not in ('coins', 'lives')
+                              or any(not isinstance(g.get(k, 1), int) or g.get(k, 1) < 1 for k in ('stake', 'times'))):
+            errs.append(f'{where}: игра в кости {g}')
         if n.get('passWith') and n['passWith'] not in items['item']:
             errs.append(f'{where}: нет предмета {n["passWith"]}')
         for e in n.get('effects', []):

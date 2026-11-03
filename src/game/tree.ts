@@ -167,5 +167,27 @@ export function effectLabel(e: BookEffect): string {
   return `спутник: ${m?.name ?? e.companion} на ${e.battles ?? 3} ${plural(e.battles ?? 3, 'бой', 'боя', 'боёв')}`
 }
 
+/** Сколько раз соперник этапа играет в кости: столько, сколько сказано в разметке; иначе один раз, если итог открывает
+ *  исходы ok/fail, и сколько угодно, если ставка применяется сразу (ХАУСРУЛ, GameSession.diceGame) */
+export function gameLimit(n: BookNode): number {
+  const g = n.hints?.game
+  if (!g) return 0
+  return g.times ?? (gameHasOutcomes(n) ? 1 : Infinity)
+}
+
+/** Итог игры в кости открывает исходы этапа (ok — выигрыш, fail — проигрыш), а не применяет ставку сам */
+export const gameHasOutcomes = (n: BookNode) => (n.then ?? []).some((c) => c.on === 'ok' || c.on === 'fail')
+
+/** Сколько игр в кости на этапе уже сыграно (отметки `место:game#k`) */
+export function gamesPlayed(place: string, id: string, claimed: readonly string[]): number {
+  return claimed.filter((k) => k.startsWith(`${place}:${id}:game#`)).length
+}
+
+/** Ставка словами для кнопки: «на 10 монет», «на 3 жизни» */
+export function stakeLabel(g: NonNullable<ParagraphHints['game']>): string {
+  if (!g.stake) return ''
+  return g.of === 'lives' ? ` на ${g.stake} ${plural(g.stake, 'жизнь', 'жизни', 'жизней')}` : ` на ${g.stake} ${plural(g.stake, 'монету', 'монеты', 'монет')}`
+}
+
 /** Тяжёлое последствие (смерть, половина жизней, «у вас 1 жизнь», потеря вещей) — его принимают кнопкой, а не применяют сами */
 export const deadlyEffect = (e: BookEffect) => ('lives' in e && (e.lives === 'death' || e.lives === 'half' || (typeof e.lives === 'object' && 'set' in e.lives))) || 'strip' in e

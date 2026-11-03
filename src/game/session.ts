@@ -15,7 +15,7 @@ import { makeAlly, cleanupAfterCombat, grantRoundActions, heroRoll, endHeroesTur
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
 import { TROPHIES, takeLootItem } from '@/engine/loot'
 import { plural } from '@/ui/format'
-import { effectLabel, findNode, paragraphTree } from './tree'
+import { effectLabel, findNode, gameHasOutcomes, gameLimit, gamesPlayed, paragraphTree } from './tree'
 import { DEAD_AT, REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
 
 export const LOG_CAP = 500
@@ -614,6 +614,41 @@ export class GameSession {
     }
     return out
   }
+  /** ХАУСРУЛ: игра в кости с персонажем книги — к6 героя против к6 соперника, ничья в пользу соперника. Ставка, число
+   *  игр и исходы — из разметки этапа (hints.game, src/game/tree.ts), по сети приходит только место. Итог открывает
+   *  исходы ok/fail этапа, а без них ставка применяется сразу: монеты или жизни */
+  diceGame(heroUid: string, place: string): { won: boolean; mine: number; theirs: number; applied?: string } {
+    const h = this.hero(heroUid)
+    const at = this.bookPlace(place)
+    const [loc, n, ...rest] = at.split(':')
+    const p = idx.locationById.get(loc)!.paragraphs.find((x) => x.n === Number(n))!
+    const node = findNode(paragraphTree(p), rest.join(':'))
+    const g = node?.hints?.game
+    if (!node || !g) throw new GameError('Здесь не играют в кости')
+    if (!isConscious(h)) throw new GameError(`${h.name} сейчас не может играть`)
+    const claimed = this.state.claimed ?? []
+    const played = gamesPlayed(`${loc}:${n}`, node.id, claimed)
+    if (played >= gameLimit(node)) throw new GameError('Соперник больше не играет')
+    // ставку в монетах надо иметь и тогда, когда проигрыш записан исходом этапа (effects): без денег не играют
+    if (g.stake && g.of !== 'lives' && h.money < g.stake) throw new GameError(`У ${h.name} не хватает монет на ставку`)
+    const outcomes = gameHasOutcomes(node)
+    const stake = outcomes ? 0 : g.stake ?? 0
+    const mine = roll(6)
+    const theirs = roll(6)
+    const won = mine > theirs
+    this.mark(`${at}:game#${played + 1}`)
+    this.log(`${h.name} играет в кости: к6 = ${mine} против ${theirs} — ${won ? 'выигрыш!' : mine === theirs ? 'ничья, она за соперником.' : 'проигрыш.'}`, 'luck')
+    if (outcomes) this.mark(`${at}:${won ? 'ok' : 'fail'}`)
+    let applied: string | undefined
+    if (stake && g.of === 'lives') {
+      this.adjustLives(h.uid, won ? stake : -stake)
+      applied = won ? `${h.name} получает ${stake} ${plural(stake, 'жизнь', 'жизни', 'жизней')} (теперь ${h.lives}).` : `${h.name} теряет ${stake} ${plural(stake, 'жизнь', 'жизни', 'жизней')} (осталось ${h.lives}).`
+    } else if (stake) {
+      this.adjustMoney(h.uid, won ? stake : -stake)
+      applied = won ? `${h.name} выигрывает ${stake} ${plural(stake, 'монету', 'монеты', 'монет')} (всего ${h.money}).` : `${h.name} проигрывает ${stake} ${plural(stake, 'монету', 'монеты', 'монет')} (осталось ${h.money}).`
+    }
+    return { won, mine, theirs, ...(applied ? { applied } : {}) }
+  }
   /** Снять отметку, если награду выдать не удалось (нет связи, герой убран) — иначе она пропала бы навсегда */
   unclaim(key: string): void {
     const claimed = this.state.claimed ?? []
@@ -834,7 +869,7 @@ export const COMMANDS = {
   drink: 'owner', identifyBottle: 'owner', copyScroll: 'owner', learnSpell: 'owner', useAntidote: 'owner', useParalysisPotion: 'owner', poisonWeapon: 'owner',
   adjustLives: 'gm', adjustMana: 'gm', adjustMoney: 'gm', giveXp: 'gm', giveItem: 'gm',
   restAll: 'party', travelTo: 'party', enterLocation: 'party', leaveLocation: 'party', markVisited: 'party', dismissRoad: 'party',
-  rollDie: 'party', rollDice: 'party', claim: 'gm', unclaim: 'gm', bookMark: 'gm', bookEffects: 'gm', luckCheck: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
+  rollDie: 'party', rollDice: 'party', claim: 'gm', unclaim: 'gm', bookMark: 'gm', bookEffects: 'gm', luckCheck: 'gm', diceGame: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
   addCompanion: 'gm', dismissCompanion: 'party',
   startEncounter: 'gm', addMonstersToCombat: 'gm', abortCombat: 'gm',
   attack: 'owner', cast: 'owner', flee: 'owner', skip: 'owner',

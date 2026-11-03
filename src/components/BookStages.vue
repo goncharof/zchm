@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import type { BookNode, Paragraph } from '@/types'
 import type { EncounterSpec } from '@/engine/combat'
 import { idx } from '@/data'
-import { deadlyEffect, diceKey, effectLabel, hasResult, nodeText, openNodes, paragraphTree, rollOf } from '@/game/tree'
+import { deadlyEffect, diceKey, effectLabel, gameLimit, gamesPlayed, hasResult, nodeText, openNodes, paragraphTree, rollOf } from '@/game/tree'
 import { useGameStore } from '@/stores/game'
 import ParagraphActions from './ParagraphActions.vue'
 
@@ -34,6 +34,7 @@ function hints(n: BookNode) {
   let h = n.hints
   if (h && hasResult(P.value, n.id, claimed.value, 'won')) h = { ...h, monsters: [] }
   if (h && hasResult(P.value, n.id, claimed.value, 'ok')) h = { ...h, luck: [] }
+  if (h?.game && gamesPlayed(P.value, n.id, claimed.value) >= gameLimit(n)) h = { ...h, game: undefined }
   return h
 }
 function choices(n: BookNode): BookNode[] {

@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { idx } from '@/data'
 import type { BookNode, ParagraphHints } from '@/types'
-import { allNodes, deadlyEffect, diceKey, effectLabel, findNode, hasResult, nodeFullText, nodeText, openNodes, paragraphTree, parentOf, revealedBy, rollOf } from '@/game/tree'
+import { allNodes, deadlyEffect, diceKey, effectLabel, findNode, gameLimit, gamesPlayed, hasResult, nodeFullText, nodeText, openNodes, paragraphTree, parentOf, revealedBy, rollOf, stakeLabel } from '@/game/tree'
 import type { Hero } from '@/engine/model'
 import { GameError } from '@/game/session'
 import { plural } from '@/ui/format'
@@ -133,6 +133,8 @@ function nodeOffers(loc: string, n: number, node: BookNode, claimed: readonly st
   if (node.action === 'fountain') out.push({ label: 'Выпить из фонтана', action: { t: 'fountain' } })
   const d = node.dice
   if (d && (d.repeat || !claimed.some((k) => k.startsWith(`${P}:${diceKey(node)}:roll=`)))) out.push({ label: d.repeat ? `🎲 Бросить к${d.sides} (на каждый)` : `🎲 Бросить к${d.sides} по списку`, action: { t: 'roll', loc, n, id: node.id } })
+  const g = node.hints?.game
+  if (g && gamesPlayed(P, node.id, claimed) < gameLimit(node)) out.push({ label: `🎲 Сыграть в кости${stakeLabel(g)}`, action: { t: 'game', loc, n, id: node.id } })
   const choices = (node.then ?? []).filter((c) => c.on === 'choice')
   if (!(node.exclusive && choices.some((c) => open.has(c.id)))) {
     for (const c of choices) if (!open.has(c.id)) out.push({ label: `▸ ${shown(c.label ?? '')}`, action: { t: 'node', loc, n, id: c.id } })
@@ -428,6 +430,22 @@ export class ScriptedGm {
         const extra: Offer[] = pen ? [{ label: `Принять последствия: ${pen.text}`, action: { t: 'penalty', heroUid: h.uid, kind: pen.kind, amount: pen.amount } }] : []
         const opened = openNodes(tree, P, room.state.claimed).filter((x) => !before.has(x.id))
         this.sayNodes(room, a.loc!, a.n!, [pen ? `${head} По книге: иначе — ${pen.text}.` : head], opened, extra, playerId)
+        return
+      }
+      case 'game': {
+        const h = needHero()
+        const tree = treeAt(a.loc, a.n)
+        const P = `${a.loc}:${a.n}`
+        const node = tree ? findNode(tree, a.id) : undefined
+        if (!tree || !node) throw new GameError('Вариант не найден')
+        const before = new Set(openNodes(tree, P, room.state.claimed).map((x) => x.id))
+        const r = s.diceGame(h.uid, `${P}:${a.id}`)
+        const head = `${h.name} играет в кости: ${r.mine} против ${r.theirs} — ${r.won ? 'выигрыш!' : r.mine === r.theirs ? 'ничья, а ничья за соперником.' : 'проигрыш.'}${r.applied ? ` ${r.applied}` : ''}`
+        const opened = openNodes(tree, P, room.state.claimed).filter((x) => !before.has(x.id))
+        if (opened.length) { this.sayNodes(room, a.loc, a.n, [head], opened, [], playerId); return }
+        // ставка применена сразу: соперник, может быть, сыграет ещё
+        const again = gamesPlayed(P, a.id, room.state.claimed ?? []) < gameLimit(node) ? [{ label: `🎲 Сыграть ещё раз${stakeLabel(node.hints!.game!)}`, action: { t: 'game', loc: a.loc, n: a.n, id: a.id } as ScriptAction }] : []
+        this.say(room, head, again)
         return
       }
       case 'penalty': {

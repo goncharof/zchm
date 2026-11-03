@@ -16,7 +16,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { idx } from '@/data'
 import world from '@/data/world.json'
 import type { BookNode, WorldMap } from '@/types'
-import { allNodes, canFightHints, diceKey, findNode, nodeFullText, openNodes, paragraphTree, parentOf, rollOf } from '@/game/tree'
+import { allNodes, canFightHints, diceKey, findNode, gameHasOutcomes, nodeFullText, openNodes, paragraphTree, parentOf, rollOf } from '@/game/tree'
 import { blankGame } from '@/game/session'
 import { checkEnd } from '@/engine/combat'
 import { seededRng, setRng } from '@/engine/dice'
@@ -61,6 +61,8 @@ function moves(tree: BookNode, P: string, claimed: readonly string[], external: 
       if (h?.luck?.length) add(`${P}:${n.id}:fail`, n.id)
     }
     if (n.action === 'final-duel') add(`${P}:${n.id}:won`, n.id)
+    // игра в кости с исходами: выигрыш и проигрыш — по одному разу
+    if (n.hints?.game && gameHasOutcomes(n) && !has(n.id, 'ok') && !has(n.id, 'fail')) { add(`${P}:${n.id}:ok`, n.id); add(`${P}:${n.id}:fail`, n.id) }
     const d = n.dice
     if (d && !d.repeat && (loose || !claimed.some((k) => k.startsWith(`${P}:${diceKey(n)}:roll=`)))) {
       for (let r = 1; r <= d.sides; r++) add(`${P}:${diceKey(n)}:roll=${r}`, n.id)
@@ -285,7 +287,7 @@ const QUIET: GmContext = {
 const BAD_SAY = /undefined|NaN|\[object |Вариант не найден|Список не найден|пока недоступен|Неверная отметка|Нет такого места|уже применены|нет последствий/
 
 /** Отказы движка, которые бывают в честной игре: из фонтана уже пили, никого нет на ногах */
-const REFUSAL_OK = /сегодня уже пили|не может сражаться|нет живых героев|уже выбыл/
+const REFUSAL_OK = /сегодня уже пили|не может сражаться|не может играть|не хватает монет на ставку|нет живых героев|уже выбыл/
 
 /**
  * Сценарный ведущий на настоящей сессии: каждый параграф — walks случайных игр кнопками (бой кончается победой,
@@ -375,7 +377,7 @@ export function scriptRuns(locIds?: string[], walks = 24): ScriptRuns {
           scan()
         }
         for (const k of room.state.claimed ?? []) {
-          if (!k.startsWith(`${P}:`) || k.endsWith(':fx')) continue
+          if (!k.startsWith(`${P}:`) || k.endsWith(':fx') || /:game#\d+$/.test(k)) continue
           // бой на исходе броска «на каждый» отмечается на самом исходе — в модели таких этапов нет (они не открываются)
           const at = findNode(tree, k.slice(P.length + 1, k.lastIndexOf(':')))
           if (at && repeatOption(tree, at)) continue

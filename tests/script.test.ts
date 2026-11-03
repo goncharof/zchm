@@ -92,6 +92,54 @@ describe('сценарный ведущий', () => {
     expect(outcome.choices!.map((c) => c.label)).toEqual(expect.arrayContaining(['Взять бутылку', 'Взять свиток 5 ур.']))
   })
 
+  it('игра в кости: исходы «выигрываете / проигрываете» открывает бросок, а не выбор игроков; ставка Мерлина — жизни', async () => {
+    const g = await setup()
+    await goTo(g, 'krepost-rytsarey')
+    await g.c.call('enterLocation', ['krepost-rytsarey'])
+    await g.c.chat('2', true)
+    await until(() => /помещение 2/.test(lastGm(g.chat).text))
+    const scene = lastGm(g.chat)
+    expect(scene.choices!.map((c) => c.label)).toEqual(['▸ Сыграть на 10 монет', 'Идти дальше'])
+    await g.c.choose(scene.id, scene.choices![0].id)
+    await until(() => !!lastGm(g.chat).choices?.some((c) => c.label === '🎲 Сыграть в кости на 10 монет'))
+    const offer = lastGm(g.chat)
+    // исходы до броска не видны и не выбираются
+    expect(offer.choices!.map((c) => c.label)).toEqual(['🎲 Сыграть в кости на 10 монет', 'Идти дальше'])
+    const hero = g.state.heroes[0]
+    // без ставки не играют: кнопка остаётся
+    await g.c.choose(offer.id, offer.choices![0].id)
+    await until(() => /не хватает монет на ставку/.test(lastGm(g.chat).text))
+    expect(g.chat.find((m) => m.id === offer.id)!.used ?? []).toEqual([])
+    const room = (await g.s.store.get(g.j.code))!
+    room.session().adjustMoney(hero.uid, 50)
+    const money = room.state.heroes[0].money
+    await g.c.choose(offer.id, offer.choices![0].id)
+    await until(() => /играет в кости/.test(lastGm(g.chat).text))
+    const res = lastGm(g.chat)
+    const won = /выигрыш!/.test(res.text)
+    // исход из книги: выигрыш +10, проигрыш −10 и 5 монет утешения; второй раз весельчак не играет
+    expect(res.text).toContain(won ? 'Выигрываете' : 'дает вам 5 монет')
+    // состояние приходит отдельным событием после реплики
+    await until(() => g.state.heroes[0].money === money + (won ? 10 : -5))
+    expect(res.choices!.some((c) => c.label.includes('кости'))).toBe(false)
+
+    // Мерлин играет на жизни, ставка применяется сразу, можно сыграть ещё
+    await goTo(g, 'severnyy-fort')
+    await g.c.call('leaveLocation', [])
+    await g.c.call('enterLocation', ['severnyy-fort'])
+    await g.c.chat('1', true)
+    await until(() => /помещение 1/.test(lastGm(g.chat).text))
+    const merlin = lastGm(g.chat)
+    expect(merlin.choices!.map((c) => c.label)).toContain('🎲 Сыграть в кости на 3 жизни')
+    const lives = g.state.heroes[0].lives
+    await g.c.choose(merlin.id, merlin.choices!.find((c) => c.label.includes('кости'))!.id)
+    await until(() => /играет в кости/.test(lastGm(g.chat).text) && lastGm(g.chat).id !== res.id)
+    const again = lastGm(g.chat)
+    const expected = /выигрыш!/.test(again.text) ? Math.min(lives + 3, g.state.heroes[0].maxLives) : lives - 3
+    await until(() => g.state.heroes[0].lives === expected)
+    expect(again.choices!.map((c) => c.label)).toContain('🎲 Сыграть ещё раз на 3 жизни')
+  })
+
   it('финал: в зале с фонтаном — атака на Чёрного мага и фонтан; попадание — победа и текст книги о кучке пепла', async () => {
     const g = await setup()
     await goTo(g, 'zamok-chernogo-maga')

@@ -6,6 +6,7 @@ import type { EncounterSpec } from '@/engine/combat'
 import { useGameStore } from '@/stores/game'
 import { casterName } from '@/ui/format'
 import { MAX_FOES } from '@/game/session'
+import { stakeLabel } from '@/game/tree'
 import { Swords } from 'lucide-vue-next'
 
 /** Кнопки действий по подсказкам из текста: удача, бой, монеты, бутылки, артефакт, свитки */
@@ -50,6 +51,12 @@ async function reward(key: string, give: (h: string) => Promise<boolean>) {
   if (!(await give(h))) { if (full) await store.unclaim(full); return }
   taken.value = new Set([...taken.value, key])
 }
+async function game() {
+  const h = need(); if (!h || !props.place) return
+  const r = await store.diceGame(h, props.place)
+  if (!r) return
+  lastLuck.value = `${store.hero(h).name} играет в кости: ${r.mine} против ${r.theirs} — ${r.won ? 'выигрыш!' : r.mine === r.theirs ? 'ничья, а ничья за соперником.' : 'проигрыш.'}${r.applied ? ` ${r.applied}` : ''}`
+}
 async function luck(target: number) {
   const h = need(); if (!h) return
   // место в книге: итог проверки отмечается и открывает её исходы (src/game/tree.ts)
@@ -68,6 +75,7 @@ const has = computed(() => !!props.hints && Object.values(props.hints).some((v) 
 <template>
   <div v-if="has" class="row" style="margin-top:.45rem">
     <template v-for="t in hints?.luck ?? []" :key="'l' + t"><button class="small" @click="luck(t)">Бросок удачи {{ t }}</button></template>
+    <button v-if="hints?.game && place" class="small" title="к6 против к6, ничья за соперником" @click="game()">Сыграть в кости{{ stakeLabel(hints.game) }}</button>
     <template v-for="m in fightable" :key="m">
       <span class="row" style="gap:.2rem"><input type="number" min="0" :max="MAX_FOES" v-model.number="counts[m]" style="width:3.4rem" class="small" :aria-label="`Сколько: ${idx.monsterById.get(m)?.name}`" :title="'Сколько противников'" /><span class="small muted" aria-hidden="true">×</span><button class="small danger" @click="fight([m])"><Swords :size="15" />Бой: {{ idx.monsterById.get(m)?.name }}</button></span>
     </template>
