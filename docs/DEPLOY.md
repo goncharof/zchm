@@ -88,6 +88,7 @@ fly deploy
 | `STATIC_DIR` | `dist` | собранный фронтенд |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | `gemini-3.5-flash` | Google AI Studio; моделей можно несколько через запятую |
 | `GROQ_API_KEY`, `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq |
+| `MISTRAL_API_KEY`, `MISTRAL_MODEL` | `mistral-small-latest` | Mistral, тариф Experiment (не проверено) |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | `nvidia/nemotron-3-super-120b-a12b:free` | OpenRouter |
 | `CEREBRAS_API_KEY`, `CEREBRAS_MODEL` | `gpt-oss-120b` | Cerebras (не проверено) |
 | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | — | любая OpenAI-совместимая модель, например Ollama |

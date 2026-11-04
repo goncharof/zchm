@@ -30,7 +30,7 @@ pnpm build          # typecheck + vite build → dist/
 pnpm server         # сервер сетевой игры (tsx watch, порт 8787); вместе с pnpm dev — Vite проксирует /socket.io
 pnpm build:server && pnpm start   # продакшен: node server-dist/index.js раздаёт dist и сокеты на одном порту
 # окружение сервера: PORT, HOST, DATA_DIR (data/rooms), STATIC_DIR (dist); модели ведущего — server/gm/providers.ts
-#   (GEMINI_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, LLM_BASE_URL+LLM_MODEL, ANTHROPIC_API_KEY, GM_CHAIN);
+#   (GEMINI_API_KEY, MISTRAL_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, LLM_BASE_URL+LLM_MODEL, ANTHROPIC_API_KEY, GM_CHAIN);
 #   без ключей ходы ведёт сценарный ведущий; ключи можно положить в .env.local (KEY=value, не в git и не в Docker)
 pnpm exec tsx tools/qa/fake-gm-server.ts   # сервер с демо-ведущим без Claude API (для проверки интерфейса)
 node tools/qa/online.mjs                    # при pnpm dev + демо-сервере: два игрока в комнате, скриншоты
