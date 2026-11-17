@@ -315,7 +315,7 @@ export const useGameStore = defineStore('game', () => {
     dismissCompanion: (companionUid: string) => cmd('dismissCompanion', companionUid),
     startEncounter: (specs: EncounterSpec[], returnTo?: string, place?: string) => cmd('startEncounter', specs, returnTo, place),
     attack: (heroUid: string, slot: EquipSlot | 'unarmed' | 'spell', targetUid: string) => cmd('attack', heroUid, slot, targetUid),
-    cast: (heroUid: string, spellId: string, opts: { targetUid?: string; targetHeroUid?: string; targetEntryUid?: string; param?: number; scrollUid?: string } = {}): Promise<CastResult | undefined> => cmd('cast', heroUid, spellId, opts),
+    cast: (heroUid: string, spellId: string, opts: { targetUid?: string; targetHeroUid?: string; targetEntryUid?: string; param?: number; scrollUid?: string; monsterId?: string } = {}): Promise<CastResult | undefined> => cmd('cast', heroUid, spellId, opts),
     flee: (heroUid: string) => cmd('flee', heroUid),
     skip: (heroUid: string) => cmd('skip', heroUid),
     toMelee: () => cmd('toMelee'),

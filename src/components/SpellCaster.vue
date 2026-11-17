@@ -2,13 +2,15 @@
 import { computed, reactive } from 'vue'
 import { idx } from '@/data'
 import type { Hero } from '@/engine/model'
-import { canCast, needsEntryTarget, needsHeroTarget, needsMonsterTarget, needsParam, resolveCost, scrollProblem, usableOutOfCombat } from '@/engine/spells'
+import { canCast, needsEntryTarget, needsHeroTarget, needsMonsterForm, needsMonsterTarget, needsParam, resolveCost, scrollProblem, shapeshiftForms, usableOutOfCombat } from '@/engine/spells'
 import { entryName } from '@/engine/inventory'
 import { useGameStore } from '@/stores/game'
 
 const props = defineProps<{ hero: Hero; inCombat: boolean; targetUid?: string }>()
 const store = useGameStore()
-const form = reactive({ spellId: '', targetHeroUid: props.hero.uid, targetEntryUid: '', param: 1 })
+const form = reactive({ spellId: '', targetHeroUid: props.hero.uid, targetEntryUid: '', param: 1, monsterId: '' })
+/** облики для «Воплощения»: монстры Бестиария с обычными атаками */
+const forms = shapeshiftForms(idx)
 const spells = computed(() => props.hero.spellbook.map((id) => idx.spell(id)).filter((s) => props.inCombat || usableOutOfCombat(s)))
 /** свитки своего класса: прочесть один раз без постоянной цены в мане (стр. 21) */
 const scrolls = computed(() => props.hero.inventory
@@ -29,11 +31,13 @@ function cast() {
   if (!spell.value) return
   if (problem.value) { store.say(problem.value); return }
   if (needsMonsterTarget(spell.value) && !props.targetUid) { store.say('Выберите цель среди монстров'); return }
+  if (needsMonsterForm(spell.value) && !form.monsterId) { store.say('Выберите, в кого воплотиться'); return }
   store.cast(props.hero.uid, spell.value.id, {
     targetUid: needsMonsterTarget(spell.value) ? props.targetUid : undefined,
     targetHeroUid: needsHeroTarget(spell.value) ? form.targetHeroUid : undefined,
     targetEntryUid: needsEntryTarget(spell.value) ? form.targetEntryUid : undefined,
     param: form.param,
+    monsterId: needsMonsterForm(spell.value) ? form.monsterId : undefined,
     ...(scrollUid.value ? { scrollUid: scrollUid.value } : {}),
   })
   if (scrollUid.value) form.spellId = ''
@@ -49,6 +53,10 @@ function cast() {
     </select>
     <select v-if="spell && needsHeroTarget(spell)" v-model="form.targetHeroUid" class="small">
       <option v-for="x in store.heroes" :key="x.uid" :value="x.uid">{{ x.name }}</option>
+    </select>
+    <select v-if="spell && needsMonsterForm(spell)" v-model="form.monsterId" class="small" aria-label="В кого воплотиться">
+      <option value="">Облик…</option>
+      <option v-for="m in forms" :key="m.id" :value="m.id">{{ m.name }} (атаки {{ (m.attacks as number[]).join('-') }}, защита {{ m.defense ?? '—' }})</option>
     </select>
     <select v-if="spell && needsEntryTarget(spell)" v-model="form.targetEntryUid" class="small">
       <option value="">Предмет…</option>

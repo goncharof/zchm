@@ -1,5 +1,5 @@
 /** Заклинания: стоимость, применение эффектов, опыт. */
-import type { Spell, SpellEffect } from '@/types'
+import type { Monster, Spell, SpellEffect } from '@/types'
 import type { DataIndex } from './data'
 import type { AllyInstance, CombatState, Hero, InventoryEntry, LogEntry, MonsterInstance } from './model'
 import { changeLives, gainXp, hasWard, heroDefense, heroStrength, heroWeapons, isConscious, type LevelUp } from './character'
@@ -22,6 +22,8 @@ export interface CastInput {
   targetEntryUid?: string
   /** параметр: число стрел, маны на лечение и т.п. */
   param?: number
+  /** облик для «Воплощения»: id монстра Бестиария */
+  monsterId?: string
   /** читается по свитку (стр. 21): заклинания нет в книге, постоянная цена в мане не нужна; свиток убирает сессия */
   fromScroll?: boolean
   /** призрачный дракон для перелёта уже вызван (сессия) */
@@ -62,7 +64,18 @@ export function usableOutOfCombat(spell: Spell): boolean {
   const e = spell.effect
   if (e.type === 'ward') return e.kind === 'luck' || e.kind === 'prayer' || e.kind === 'invisible' || e.kind === 'undead'
   if (spell.id === DRAGON) return true
-  return ['heal', 'restore-all', 'cure', 'resurrect', 'identify', 'create-bottle', 'duplicate-bottle', 'restore-mana', 'initiative', 'manual'].includes(e.type)
+  // «Возврат времени» вне боя — проваленную проверку повторяет ведущий (сценарный снимает отметку провала)
+  return ['heal', 'restore-all', 'cure', 'resurrect', 'identify', 'create-bottle', 'duplicate-bottle', 'restore-mana', 'initiative', 'manual', 'redo'].includes(e.type)
+}
+
+/** «Воплощение»: нужно выбрать облик — монстра Бестиария с обычными атаками */
+export function needsMonsterForm(spell: Spell): boolean {
+  return spell.effect.type === 'shapeshift'
+}
+
+/** В кого можно воплотиться: не персонаж и с таблицей атак (не «смерть», не «магия») */
+export function shapeshiftForms(idx: DataIndex): Monster[] {
+  return idx.data.bestiary.filter((m) => !m.special && Array.isArray(m.attacks)).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
 }
 
 export function needsMonsterTarget(spell: Spell): boolean {
@@ -80,7 +93,7 @@ const SELF_HEAL = 'mage-transformatsiya-energii'
 
 export function needsHeroTarget(spell: Spell): boolean {
   const e = spell.effect
-  return (e.type === 'summon' && e.kind === 'copy') || (e.type === 'heal' && spell.id !== SELF_HEAL) || e.type === 'restore-all' || (e.type === 'buff' && e.scope === 'ally') || (e.type === 'ward' && e.scope === 'ally') || ['cure', 'resurrect', 'restore-mana', 'initiative', 'extra-action'].includes(e.type)
+  return (e.type === 'summon' && e.kind === 'copy') || (e.type === 'heal' && spell.id !== SELF_HEAL) || e.type === 'restore-all' || (e.type === 'buff' && e.scope === 'ally') || (e.type === 'ward' && e.scope === 'ally') || ['cure', 'resurrect', 'restore-mana', 'initiative', 'extra-action', 'redo'].includes(e.type)
 }
 
 export function needsEntryTarget(spell: Spell): boolean {
@@ -449,6 +462,34 @@ export function castSpell(input: CastInput): CastResult {
       if (t.status.initiative) effective = false
       t.status.initiative = true
       log(entries, `${t.name} в ближайшем бою атакует первым.`)
+      break
+    }
+    case 'redo': {
+      if (!combat) {
+        spend()
+        log(entries, `${hero.name} возвращает время назад: какую проверку повторить, решает ведущий.`)
+        break
+      }
+      const t = targetHero()
+      // перебрасывают кубики уже сделанного действия: кто ещё не ходил, тому возвращать нечего
+      if (!combat.acted.includes(t.uid)) return fail(`${t.name} ещё не действовал в этом раунде — перекидывать нечего`)
+      spend()
+      combat.acted = combat.acted.filter((u) => u !== t.uid)
+      log(entries, `Время откатывается на шаг: ${t.name} перебрасывает кубики и действует заново, противник свой бросок не повторяет.`)
+      break
+    }
+    case 'shapeshift': {
+      if (needCombat()) return res
+      const m = input.monsterId ? idx.monsterById.get(input.monsterId) : undefined
+      if (!m || m.special) return fail('Выберите, в кого воплотиться')
+      if (!Array.isArray(m.attacks)) return fail(`В ${m.name} не воплотиться: у него нет обычных атак`)
+      spend()
+      // атаки и защита монстра до конца боя, жизни прежние; сила мага прибавляется к урону как обычно (ХАУСРУЛ)
+      hero.buffs = hero.buffs.filter((b) => b.stat !== 'weapon' && b.source !== spell.name)
+      const delta = (m.defense ?? heroDefense(hero, idx)) - heroDefense(hero, idx)
+      hero.buffs.push({ source: spell.name, stat: 'weapon', amount: 0, rounds: -1, weapon: { name: `облик: ${m.name}`, attacks: m.attacks.join('-'), table: m.attacks, attacksPerRound: m.attacksPerRound } })
+      if (delta) hero.buffs.push({ source: spell.name, stat: 'defense', amount: delta, rounds: -1 })
+      log(entries, `${hero.name} принимает облик — ${m.name}: атаки ${m.attacks.join('-')}${m.attacksPerRound ? `, ${m.attacksPerRound} удара за ход` : ''}, защита ${heroDefense(hero, idx)}; жизни прежние. До конца боя.`)
       break
     }
     case 'extra-action': {

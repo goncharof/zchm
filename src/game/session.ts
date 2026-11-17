@@ -741,7 +741,7 @@ export class GameSession {
     this.logAll(out.log)
     this.announceLevelUps(out.levelUps)
   }
-  cast(heroUid: string, spellId: string, opts: { targetUid?: string; targetHeroUid?: string; targetEntryUid?: string; param?: number; scrollUid?: string } = {}): CastResult {
+  cast(heroUid: string, spellId: string, opts: { targetUid?: string; targetHeroUid?: string; targetEntryUid?: string; param?: number; scrollUid?: string; monsterId?: string } = {}): CastResult {
     if (this.combat && !this.combat.finished) this.requireHeroTurn(this.hero(heroUid))
     // параметр приходит и по сети: только целое от 1 (иначе жизни и мана становятся NaN)
     if (opts.param !== undefined) {
@@ -757,7 +757,7 @@ export class GameSession {
     const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
     const res = castSpell({
       hero: h, spell: idx.spell(spellId), idx, heroes: this.heroes, combat: this.combat, fromScroll: !!scroll, flightReady: !!this.state.flight,
-      targetUid: str(opts.targetUid), targetHeroUid: str(opts.targetHeroUid), targetEntryUid: str(opts.targetEntryUid), param: opts.param,
+      targetUid: str(opts.targetUid), targetHeroUid: str(opts.targetHeroUid), targetEntryUid: str(opts.targetEntryUid), param: opts.param, monsterId: str(opts.monsterId),
     })
     if (res.ok && res.flight) this.state.flight = h.uid
     if (res.ok && scroll) {

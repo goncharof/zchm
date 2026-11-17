@@ -139,6 +139,10 @@ export type SpellEffect =
   | { type: 'cure' }
   | { type: 'resurrect' }
   | { type: 'empower' }
+  /** «Воплощение»: атаки и защита выбранного монстра Бестиария до конца боя, жизни прежние */
+  | { type: 'shapeshift' }
+  /** «Возврат времени»: герой, который уже сходил в этом раунде, действует заново (перебрасывает кубики) */
+  | { type: 'redo' }
   | { type: 'manual' }
 
 export interface Spell {

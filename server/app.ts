@@ -53,8 +53,11 @@ function gmEventFor(name: CommandName, room: Room, before: GameState, args: unkn
     const [heroUid, spellId, opts] = args as CommandArgs<'cast'>
     const spell = idx.spell(spellId)
     // вне боя ведущему важны и «Невидимость» с «Отворотом мертвецов»: ими обходят встречу, решает это ведущий
-    const sneaking = spell.effect.type === 'ward' && (spell.effect.kind === 'invisible' || spell.effect.kind === 'undead') && (!s.combat || !!s.combat.finished)
-    if (spell.effect.type !== 'manual' && !sneaking) return null
+    const outOfCombat = !s.combat || !!s.combat.finished
+    const sneaking = spell.effect.type === 'ward' && (spell.effect.kind === 'invisible' || spell.effect.kind === 'undead') && outOfCombat
+    // «Возврат времени» вне боя: какую проверку повторить, решает ведущий (в бою движок возвращает действие сам)
+    const rewind = spell.effect.type === 'redo' && outOfCombat
+    if (spell.effect.type !== 'manual' && !sneaking && !rewind) return null
     const hero = s.heroes.find((h) => h.uid === heroUid)
     const target = s.heroes.find((h) => h.uid === opts?.targetHeroUid)?.name ?? s.combat?.monsters.find((m) => m.uid === opts?.targetUid)?.name
     return {

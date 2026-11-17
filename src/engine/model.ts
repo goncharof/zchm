@@ -87,8 +87,8 @@ export interface Buff {
   charge?: number
   /** общий запас заряда у нескольких героев (Воздушный щит на всю партию) */
   poolId?: string
-  /** для stat = 'weapon': временное магическое оружие */
-  weapon?: { name: string; attacks: string; dexterityBonus?: number; attacksPerRound?: number; lifesteal?: boolean }
+  /** для stat = 'weapon': временное магическое оружие; table — таблица атак по к6 вместо формулы («Воплощение») */
+  weapon?: { name: string; attacks: string; table?: number[]; dexterityBonus?: number; attacksPerRound?: number; lifesteal?: boolean }
 }
 
 /** Спутник (неигровой персонаж, стр. 16 Инструкции): сражается за партию оговорённое число боёв */

@@ -694,6 +694,10 @@ EFFECT_OVERRIDES = {
     'mage-identifikatsiya-predmetov': {'type': 'identify'},
     'mage-ocharovyvanie': control('charm', 'one', maxLevel=2),
     'mage-zamedlenie-vremeni': {'type': 'extra-action'},
+    # ХАУСРУЛ: «перекинуть кубики» — герой, который уже сходил в раунде, действует заново; вне боя решает ведущий
+    'mage-vozvrat-vremeni': {'type': 'redo'},
+    # атаки и защита выбранного монстра до конца боя, жизни прежние
+    'mage-voploschenie': {'type': 'shapeshift'},
     'mage-pautina': control('web', 'all', maxLevel=3),
     'mage-paralich': control('paralysis', 'one'),
     'mage-okamenenie': control('petrify', 'one', maxLevel=5),
@@ -722,6 +726,7 @@ EFFECT_OVERRIDES = {
     'priest-vampirizm': {'type': 'drain-mana', 'ratio': 3},
     'priest-ognennyy-mech': weapon('Огненный меч', '1к6+4', dexterityBonus=2),
     'priest-zamedlenie-vremeni': {'type': 'extra-action'},
+    'priest-vozvrat-vremeni': {'type': 'redo'},
     'priest-vosstanovlenie-many': {'type': 'restore-mana', 'ratio': 3},
     'priest-unichtozhenie-mertvetsov': control('slay-undead', 'one'),
     'priest-sozdanie-illyuzornogo-suschestva': {'type': 'summon', 'name': 'Иллюзорное существо', 'kind': 'decoy', 'lives': '1', 'attacks': 'none'},

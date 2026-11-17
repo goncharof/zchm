@@ -218,7 +218,7 @@ export function heroWeapons(hero: Hero, idx: DataIndex): HandWeapon[] {
   }
   for (const b of hero.buffs) {
     if (b.stat === 'weapon' && b.weapon) {
-      out.push({ slot: 'spell', name: b.weapon.name, formula: b.weapon.attacks, ranged: false, accuracyBonus: 0, dexterityBonus: b.weapon.dexterityBonus, attacksPerRound: b.weapon.attacksPerRound, lifesteal: b.weapon.lifesteal })
+      out.push({ slot: 'spell', name: b.weapon.name, ...(b.weapon.table ? { attacks: b.weapon.table } : { formula: b.weapon.attacks }), ranged: false, accuracyBonus: 0, dexterityBonus: b.weapon.dexterityBonus, attacksPerRound: b.weapon.attacksPerRound, lifesteal: b.weapon.lifesteal })
     }
   }
   return out
