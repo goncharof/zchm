@@ -174,7 +174,8 @@
      ],
      "monsterCounts": {
       "strazhnik": 5
-     }
+     },
+     "attack": true
     }
    }
   ]
@@ -226,7 +227,8 @@
        ],
        "monsterCounts": {
         "zombi": 5
-       }
+       },
+       "attack": true
       }
      },
      {
@@ -330,7 +332,8 @@
       "hints": {
        "monsters": [
         "skelet"
-       ]
+       ],
+       "attack": true
       }
      },
      {
@@ -352,7 +355,8 @@
       "hints": {
        "monsters": [
         "zombi"
-       ]
+       ],
+       "attack": true
       }
      },
      {
@@ -370,7 +374,8 @@
       "hints": {
        "monsters": [
         "vurdalak"
-       ]
+       ],
+       "attack": true
       }
      },
      {
@@ -486,7 +491,8 @@
     "hints": {
      "monsters": [
       "ork"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -500,7 +506,8 @@
        ],
        "coins": [
         10
-       ]
+       ],
+       "attack": true
       },
       "then": [
        {
@@ -603,7 +610,8 @@
      ],
      "monsterCounts": {
       "ork": 2
-     }
+     },
+     "attack": true
     }
    }
   ]
@@ -798,7 +806,8 @@
        ],
        "monsterCounts": {
         "ork": 2
-       }
+       },
+       "attack": true
       }
      }
     ]
@@ -866,7 +875,8 @@
   "hints": {
    "monsters": [
     "gnoll"
-   ]
+   ],
+   "attack": true
   },
   "effects": [
    {
@@ -1100,7 +1110,8 @@
   "hints": {
    "monsters": [
     "kamennaya-statuya"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {

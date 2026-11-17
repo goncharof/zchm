@@ -32,7 +32,8 @@
       "hints": {
        "monsters": [
         "furiya"
-       ]
+       ],
+       "attack": true
       }
      },
      {
@@ -84,7 +85,8 @@
     "hints": {
      "monsters": [
       "kobold"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -239,7 +241,8 @@
     "hints": {
      "monsters": [
       "ifrit"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -425,7 +428,8 @@
     "hints": {
      "monsters": [
       "skelet"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -648,7 +652,8 @@
     "hints": {
      "monsters": [
       "skelet"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -716,7 +721,8 @@
      ],
      "monsterCounts": {
       "zombi": 3
-     }
+     },
+     "attack": true
     }
    }
   ]

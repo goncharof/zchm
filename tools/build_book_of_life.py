@@ -337,7 +337,7 @@ BOOK_DIR = os.path.join(os.path.dirname(__file__), 'book')
 DATA = os.path.join(ROOT, 'src', 'data')
 NODE_ON = {'enter', 'choice', 'win', 'lose', 'flee', 'ok', 'fail'}
 NODE_KEYS = {'id', 'on', 'label', 'text', 'teaser', 'hints', 'passWith', 'dice', 'effects', 'npcs', 'exclusive', 'goto', 'action', 'then'}
-HINT_KEYS = {'luck', 'bottles', 'coins', 'prices', 'monsters', 'monsterCounts', 'artifact', 'tavern', 'shop', 'scrolls', 'items', 'game'}
+HINT_KEYS = {'luck', 'bottles', 'coins', 'prices', 'monsters', 'monsterCounts', 'artifact', 'tavern', 'shop', 'scrolls', 'items', 'game', 'attack'}
 
 
 def _norm(x):
@@ -392,6 +392,8 @@ def check_tree(tree, text, ctx, ns):
         for it in h.get('items', []):
             if it.get('id') not in items.get(it.get('kind'), set()):
                 errs.append(f'{where}: нет вещи {it}')
+        if 'attack' in h and not isinstance(h['attack'], bool):
+            errs.append(f'{where}: attack должен быть true или false')
         g = h.get('game')
         if g is not None and (not isinstance(g, dict) or set(g) - {'stake', 'of', 'times'} or g.get('of', 'coins') not in ('coins', 'lives')
                               or any(not isinstance(g.get(k, 1), int) or g.get(k, 1) < 1 for k in ('stake', 'times'))):
@@ -457,7 +459,9 @@ def apply_trees(locations, raw, issues):
     if not os.path.isdir(BOOK_DIR):
         return
     load = lambda name: json.load(open(os.path.join(DATA, name), encoding='utf-8'))
-    ctx = {'monsters': {m['id'] for m in json.load(open(BESTIARY, encoding='utf-8'))},
+    bestiary = json.load(open(BESTIARY, encoding='utf-8'))
+    # нападения (hints.attack) в ручных деревьях размечены в файлах (tools/mark_attacks.py по тем же глаголам), не на лету
+    ctx = {'monsters': {m['id'] for m in bestiary},
            'items': {'weapon': {x['id'] for x in load('weapons.json')}, 'armor': {x['id'] for x in load('armor.json')},
                      'item': {x['id'] for x in load('items.json')}, 'scroll': {x['id'] for x in load('spells.json')}}}
     with open(OVERRIDES, encoding='utf-8') as f:
@@ -519,6 +523,16 @@ def count_before(text, start):
 
 
 
+# монстры нападают сами («набрасывается», «нападает», «замахивается»): бой начинается при открытии этапа, а не кнопкой.
+# «не нападает», «если вы не нападаете» — не нападение
+ATTACK = re.compile(r'(?<!не )(?<!не\s)(?:напада|набрасыва|атаку(?:ет|ют)|бросает(?:ся|ются) (?:на (?:вас|героев)|в атаку)|на вас (?:\S+ ){0,3}?бросает(?:ся|ются)|'
+                    r'кида(?:ет|ют)ся на вас|замахива|хвата(?:ет|ют) вас|налета(?:ет|ют)|нанос(?:ит|ят) (?:вам )?удар|бь[её]т вас)', re.IGNORECASE)
+
+
+def attacks_outright(text):
+    return bool(ATTACK.search(text))
+
+
 def hints_for(text):
     global MONSTER_PATTERNS
     if MONSTER_PATTERNS is None:
@@ -563,6 +577,8 @@ def hints_for(text):
             counts[mid] = n
     if found:
         h['monsters'] = found
+        if attacks_outright(text):
+            h['attack'] = True
     if counts:
         h['monsterCounts'] = counts
     if re.search(r'артефакт', text, re.IGNORECASE):

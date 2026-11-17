@@ -10,7 +10,8 @@
   "hints": {
    "monsters": [
     "chelovek"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -159,7 +160,8 @@
          ],
          "monsterCounts": {
           "ork": 4
-         }
+         },
+         "attack": true
         }
        }
       ]
@@ -325,7 +327,8 @@
     "hints": {
      "monsters": [
       "troll"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -351,7 +354,8 @@
     "hints": {
      "monsters": [
       "kamennaya-statuya"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -417,7 +421,8 @@
       "hints": {
        "monsters": [
         "lyudoed"
-       ]
+       ],
+       "attack": true
       },
       "then": [
        {
@@ -449,7 +454,8 @@
   "hints": {
    "monsters": [
     "edinorog"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -502,7 +508,8 @@
      ],
      "monsterCounts": {
       "sprit": 4
-     }
+     },
+     "attack": true
     },
     "then": [
      {
@@ -532,7 +539,8 @@
    ],
    "luck": [
     10
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -652,7 +660,8 @@
   "hints": {
    "monsters": [
     "sablezubyy-tigr"
-   ]
+   ],
+   "attack": true
   }
  },
  "26": {
@@ -948,7 +957,8 @@
        ],
        "monsterCounts": {
         "rytsar": 2
-       }
+       },
+       "attack": true
       }
      }
     ]
@@ -1004,7 +1014,8 @@
       "hints": {
        "monsters": [
         "metalok"
-       ]
+       ],
+       "attack": true
       }
      }
     ]
@@ -1025,7 +1036,8 @@
    ],
    "luck": [
     10
-   ]
+   ],
+   "attack": true
   },
   "npcs": [
    "chernyy-mag"
@@ -1156,7 +1168,8 @@
     "hints": {
      "monsters": [
       "zombi"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -1858,7 +1871,8 @@
     "hints": {
      "monsters": [
       "gnom"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -1920,7 +1934,8 @@
       "hints": {
        "monsters": [
         "razboynik"
-       ]
+       ],
+       "attack": true
       },
       "then": [
        {
@@ -2187,7 +2202,8 @@
       "hints": {
        "monsters": [
         "fantom"
-       ]
+       ],
+       "attack": true
       }
      }
     ]
@@ -2328,7 +2344,8 @@
     "hints": {
      "monsters": [
       "zombi"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -2545,7 +2562,8 @@
         "hints": {
          "monsters": [
           "rakshas"
-         ]
+         ],
+         "attack": true
         },
         "then": [
          {
@@ -2599,7 +2617,8 @@
     "hints": {
      "monsters": [
       "kobold"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -2716,7 +2735,8 @@
      ],
      "monsterCounts": {
       "amazonka": 2
-     }
+     },
+     "attack": true
     }
    }
   ]
@@ -2950,7 +2970,8 @@
     "hints": {
      "monsters": [
       "zombi"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -3031,7 +3052,8 @@
     "hints": {
      "monsters": [
       "leshiy"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -3057,7 +3079,8 @@
     "hints": {
      "monsters": [
       "vurdalak"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -3458,7 +3481,8 @@
      ],
      "monsterCounts": {
       "berserker": 5
-     }
+     },
+     "attack": true
     }
    }
   ]
@@ -3488,7 +3512,8 @@
      ],
      "monsterCounts": {
       "volkolak": 2
-     }
+     },
+     "attack": true
     }
    }
   ]
@@ -3527,7 +3552,8 @@
        ],
        "monsterCounts": {
         "oboroten": 3
-       }
+       },
+       "attack": true
       },
       "effects": [
        {
@@ -3802,7 +3828,8 @@
      ],
      "monsterCounts": {
       "gurr": 2
-     }
+     },
+     "attack": true
     },
     "then": [
      {
@@ -3833,7 +3860,8 @@
     "hints": {
      "monsters": [
       "sgustok"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -3898,7 +3926,8 @@
      ],
      "monsterCounts": {
       "oboroten": 2
-     }
+     },
+     "attack": true
     },
     "effects": [
      {

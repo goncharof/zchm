@@ -76,7 +76,8 @@
       "hints": {
        "monsters": [
         "gnoll"
-       ]
+       ],
+       "attack": true
       },
       "then": [
        {
@@ -242,7 +243,8 @@
       "hints": {
        "monsters": [
         "skelet"
-       ]
+       ],
+       "attack": true
       }
      }
     ]
@@ -689,7 +691,8 @@
     "hints": {
      "monsters": [
       "feniks"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -1280,7 +1283,8 @@
     "hints": {
      "monsters": [
       "drakonid"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -1330,7 +1334,8 @@
          ],
          "monsterCounts": {
           "drakonid": 9
-         }
+         },
+         "attack": true
         },
         "then": [
          {

@@ -31,7 +31,8 @@
     "hints": {
      "monsters": [
       "gor"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -98,7 +99,8 @@
     "hints": {
      "monsters": [
       "duh"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -128,7 +130,8 @@
     "hints": {
      "monsters": [
       "vasilisk"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -143,7 +146,8 @@
     "hints": {
      "monsters": [
       "zombi"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -288,7 +292,8 @@
             "hints": {
              "monsters": [
               "zombi"
-             ]
+             ],
+             "attack": true
             }
            },
            {
@@ -341,7 +346,8 @@
     "hints": {
      "monsters": [
       "vurdalak"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -472,7 +478,8 @@
     "hints": {
      "monsters": [
       "vampir"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -873,7 +880,8 @@
     "hints": {
      "monsters": [
       "smert"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -1042,7 +1050,8 @@
     "hints": {
      "monsters": [
       "vampir"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -1087,7 +1096,8 @@
     "hints": {
      "monsters": [
       "vurdalak"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {

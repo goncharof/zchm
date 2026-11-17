@@ -51,7 +51,8 @@
      ],
      "monsterCounts": {
       "rytsar": 2
-     }
+     },
+     "attack": true
     },
     "then": [
      {
@@ -397,7 +398,8 @@
   "hints": {
    "monsters": [
     "ifrit"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -646,7 +648,8 @@
       "hints": {
        "monsters": [
         "lyudoed"
-       ]
+       ],
+       "attack": true
       }
      }
     ]
@@ -694,7 +697,8 @@
    ],
    "monsterCounts": {
     "vurdalak": 2
-   }
+   },
+   "attack": true
   },
   "then": [
    {
@@ -720,7 +724,8 @@
       "hints": {
        "monsters": [
         "vurdalak"
-       ]
+       ],
+       "attack": true
       },
       "then": [
        {
@@ -770,7 +775,8 @@
     "hints": {
      "monsters": [
       "smert"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -952,7 +958,8 @@
     "hints": {
      "monsters": [
       "mech"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -1115,7 +1122,8 @@
         "hints": {
          "monsters": [
           "vurdalak"
-         ]
+         ],
+         "attack": true
         }
        }
       ]
@@ -1173,7 +1181,8 @@
     "hints": {
      "monsters": [
       "ork"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -1255,7 +1264,8 @@
   "hints": {
    "monsters": [
     "zheleznyy-chelovek"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {

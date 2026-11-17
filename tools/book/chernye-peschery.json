@@ -43,7 +43,8 @@
    ],
    "monsterCounts": {
     "velikan": 2
-   }
+   },
+   "attack": true
   }
  },
  "4": {
@@ -560,7 +561,8 @@
   "hints": {
    "monsters": [
     "glaz-kroma"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -608,7 +610,8 @@
     "hints": {
      "monsters": [
       "ogr"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -690,7 +693,8 @@
      ],
      "monsterCounts": {
       "umertvie": 2
-     }
+     },
+     "attack": true
     },
     "then": [
      {
@@ -727,7 +731,8 @@
     "hints": {
      "monsters": [
       "barlog"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -778,7 +783,8 @@
     "hints": {
      "monsters": [
       "demon"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -795,7 +801,8 @@
     "hints": {
      "monsters": [
       "demon"
-     ]
+     ],
+     "attack": true
     },
     "effects": [
      {
@@ -850,7 +857,8 @@
   "hints": {
    "monsters": [
     "zhnets"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -893,7 +901,8 @@
   "hints": {
    "monsters": [
     "pesochnyy-cherv"
-   ]
+   ],
+   "attack": true
   }
  },
  "26": {
@@ -914,7 +923,8 @@
   "hints": {
    "monsters": [
     "zolotoy-drakon"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -1084,7 +1094,8 @@
       "hints": {
        "monsters": [
         "nazgul"
-       ]
+       ],
+       "attack": true
       },
       "then": [
        {
@@ -1119,7 +1130,8 @@
   "hints": {
    "monsters": [
     "ork"
-   ]
+   ],
+   "attack": true
   },
   "npcs": [
    "dvarf"
@@ -1268,7 +1280,8 @@
    ],
    "monsterCounts": {
     "lyudoed": 2
-   }
+   },
+   "attack": true
   },
   "then": [
    {
@@ -1414,7 +1427,8 @@
     "hints": {
      "monsters": [
       "smert"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -1475,7 +1489,8 @@
       "hints": {
        "monsters": [
         "smert"
-       ]
+       ],
+       "attack": true
       }
      }
     ]
@@ -1496,7 +1511,8 @@
    ],
    "monsterCounts": {
     "lyudoed": 3
-   }
+   },
+   "attack": true
   }
  }
 }

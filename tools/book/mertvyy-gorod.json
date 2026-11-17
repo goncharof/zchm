@@ -393,7 +393,8 @@
   "hints": {
    "monsters": [
     "mech"
-   ]
+   ],
+   "attack": true
   }
  },
  "13": {
@@ -512,7 +513,8 @@
   "hints": {
    "monsters": [
     "vampir"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -620,7 +622,8 @@
     "hints": {
      "monsters": [
       "zolotoy-zmey"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -635,7 +638,8 @@
     "hints": {
      "monsters": [
       "ifrit"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -791,7 +795,8 @@
      ],
      "monsterCounts": {
       "razboynik": 3
-     }
+     },
+     "attack": true
     },
     "then": [
      {
@@ -867,7 +872,8 @@
       "hints": {
        "monsters": [
         "minotavr"
-       ]
+       ],
+       "attack": true
       },
       "then": [
        {
@@ -982,7 +988,8 @@
   "hints": {
    "monsters": [
     "zolotoy-drakon"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {

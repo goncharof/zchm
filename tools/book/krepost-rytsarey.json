@@ -117,7 +117,8 @@
      ],
      "monsterCounts": {
       "skelet": 2
-     }
+     },
+     "attack": true
     }
    },
    {
@@ -135,7 +136,8 @@
      ],
      "monsterCounts": {
       "skelet": 2
-     }
+     },
+     "attack": true
     }
    }
   ]
@@ -161,7 +163,8 @@
     "hints": {
      "monsters": [
       "kobold"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -205,7 +208,8 @@
   "hints": {
    "monsters": [
     "ledyanoy-gigant"
-   ]
+   ],
+   "attack": true
   }
  },
  "12": {
@@ -356,7 +360,8 @@
     "hints": {
      "monsters": [
       "belyy-drakon"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -765,7 +770,8 @@
        ],
        "monsterCounts": {
         "drakonid": 3
-       }
+       },
+       "attack": true
       },
       "then": [
        {
@@ -910,7 +916,8 @@
     "hints": {
      "monsters": [
       "skelet"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -931,7 +938,8 @@
      ],
      "monsterCounts": {
       "skelet": 2
-     }
+     },
+     "attack": true
     }
    },
    {
@@ -952,7 +960,8 @@
      ],
      "monsterCounts": {
       "skelet": 3
-     }
+     },
+     "attack": true
     }
    },
    {
@@ -973,7 +982,8 @@
      ],
      "monsterCounts": {
       "skelet": 4
-     }
+     },
+     "attack": true
     }
    },
    {
@@ -994,7 +1004,8 @@
      ],
      "monsterCounts": {
       "skelet": 5
-     }
+     },
+     "attack": true
     }
    },
    {
@@ -1015,7 +1026,8 @@
      ],
      "monsterCounts": {
       "skelet": 6
-     }
+     },
+     "attack": true
     }
    }
   ]
@@ -1031,7 +1043,8 @@
   "hints": {
    "monsters": [
     "ten"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -1061,7 +1074,8 @@
   "hints": {
    "monsters": [
     "zheleznyy-chelovek"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -1091,7 +1105,8 @@
   "hints": {
    "monsters": [
     "ork"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -1148,7 +1163,8 @@
    },
    "luck": [
     4
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -1204,7 +1220,8 @@
     "hints": {
      "monsters": [
       "minotavr"
-     ]
+     ],
+     "attack": true
     }
    }
   ]

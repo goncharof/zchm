@@ -60,7 +60,8 @@
     "hints": {
      "monsters": [
       "berserker"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -86,7 +87,8 @@
     "hints": {
      "monsters": [
       "sgustok"
-     ]
+     ],
+     "attack": true
     },
     "effects": [
      {
@@ -507,7 +509,8 @@
          ],
          "monsterCounts": {
           "drakonid": 4
-         }
+         },
+         "attack": true
         }
        },
        {
@@ -627,7 +630,8 @@
     "hints": {
      "monsters": [
       "feniks"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {

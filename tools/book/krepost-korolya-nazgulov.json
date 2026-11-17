@@ -581,7 +581,8 @@
      ],
      "monsterCounts": {
       "uruk-hay": 8
-     }
+     },
+     "attack": true
     }
    }
   ]
@@ -791,7 +792,8 @@
       "hints": {
        "monsters": [
         "korol-nazgulov"
-       ]
+       ],
+       "attack": true
       },
       "then": [
        {
@@ -830,7 +832,8 @@
   "hints": {
    "monsters": [
     "ten"
-   ]
+   ],
+   "attack": true
   }
  },
  "32": {
@@ -1113,7 +1116,8 @@
     "hints": {
      "monsters": [
       "nazgul"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -1142,7 +1146,8 @@
      ],
      "monsterCounts": {
       "chernyy-drakon": 3
-     }
+     },
+     "attack": true
     },
     "then": [
      {

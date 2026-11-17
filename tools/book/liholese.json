@@ -107,7 +107,8 @@
      ],
      "monsterCounts": {
       "kentavr": 2
-     }
+     },
+     "attack": true
     }
    },
    {
@@ -125,7 +126,8 @@
     "hints": {
      "monsters": [
       "kentavr"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -267,7 +269,8 @@
        ],
        "monsterCounts": {
         "oboroten": 4
-       }
+       },
+       "attack": true
       }
      },
      {
@@ -428,7 +431,8 @@
     "hints": {
      "monsters": [
       "leviafan"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -471,7 +475,8 @@
     "hints": {
      "monsters": [
       "morskoy-zmey"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -619,7 +624,8 @@
     "hints": {
      "monsters": [
       "gidra"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -646,7 +652,8 @@
     "hints": {
      "monsters": [
       "kraken"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -661,7 +668,8 @@
     "hints": {
      "monsters": [
       "kraken"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -712,7 +720,8 @@
     "hints": {
      "monsters": [
       "zheleznyy-chelovek"
-     ]
+     ],
+     "attack": true
     },
     "then": [
      {
@@ -891,7 +900,8 @@
     "hints": {
      "monsters": [
       "sablezubyy-tigr"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -914,7 +924,8 @@
   "hints": {
    "monsters": [
     "gurr"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
@@ -977,7 +988,8 @@
     "hints": {
      "monsters": [
       "gigantskiy-voron"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -1022,7 +1034,8 @@
     "hints": {
      "monsters": [
       "oboroten"
-     ]
+     ],
+     "attack": true
     }
    }
   ]
@@ -1073,7 +1086,8 @@
      ],
      "monsterCounts": {
       "kobold": 3
-     }
+     },
+     "attack": true
     }
    }
   ]
@@ -1207,7 +1221,8 @@
     "hints": {
      "monsters": [
       "hazg"
-     ]
+     ],
+     "attack": true
     }
    },
    {
@@ -1285,7 +1300,8 @@
       "hints": {
        "monsters": [
         "ent"
-       ]
+       ],
+       "attack": true
       }
      }
     ]
@@ -1377,7 +1393,8 @@
   "hints": {
    "monsters": [
     "amazonka"
-   ]
+   ],
+   "attack": true
   },
   "then": [
    {
