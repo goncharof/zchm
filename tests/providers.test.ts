@@ -128,6 +128,47 @@ describe('цепочка моделей ведущего', () => {
     await until(() => g.chat.some((m) => m.author === 'Ведущий · сценарий' && /помещение 2/.test(m.text)))
   })
 
+  it('модель молчит — через паузу молчания ход уходит следующей, а не через полторы минуты', async () => {
+    // поток без единого куска; обрыв по сигналу, как у настоящего fetch
+    const hanging = (async (_url: string, init?: RequestInit) => {
+      const body = new ReadableStream({ start(ctrl) { init?.signal?.addEventListener('abort', () => ctrl.error(new Error('aborted'))) } })
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    }) as unknown as typeof fetch
+    const backup = fakeFetch([() => sse(textChunks('Ворота города.'))])
+    const g = await room([
+      [{ id: 'a', label: 'Молчун', baseUrl: 'http://a', model: 'm', stallMs: 60 }, hanging],
+      [{ id: 'b', label: 'Вторая', baseUrl: 'http://b', model: 'm' }, backup.f],
+    ])
+    const t0 = Date.now()
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.author === 'Ведущий · Вторая'))
+    expect(Date.now() - t0).toBeLessThan(2000)
+  })
+
+  it('оборванный рассказ остаётся у игроков с пометкой, следующая модель продолжает с этого места', async () => {
+    const started = 'Вы входите в Золотой город: мостовая блестит после дождя, а над крышами кружат вороны и кричат чайки'
+    const first = fakeFetch([
+      () => sse([...textChunks(started), { error: { message: 'упала' } }]),
+    ])
+    const second = fakeFetch([
+      (body) => {
+        const user = String(body.messages.filter((m) => m.role === 'user').at(-1)!.content)
+        expect(user).toContain('начала этот ход словами')
+        expect(user).toContain('кричат чайки')
+        return sse(textChunks('Куда направитесь?'))
+      },
+    ])
+    const g = await room([
+      [{ id: 'a', label: 'Первая', baseUrl: 'http://a', model: 'm' }, first.f],
+      [{ id: 'b', label: 'Вторая', baseUrl: 'http://b', model: 'm' }, second.f],
+    ])
+    await g.s.gm.idle()
+    await until(() => g.chat.some((m) => m.author === 'Ведущий · Вторая'))
+    const kept = g.chat.find((m) => m.author === 'Ведущий · Первая')!
+    expect(kept.text).toContain('кричат чайки…')
+    expect(kept.text).toContain('(ведущий не закончил — продолжает следующий)')
+  })
+
   it('названное помещение сервер открывает сам — ход стоит один запрос', async () => {
     const a = fakeFetch([
       () => sse(textChunks('Ворота.')),

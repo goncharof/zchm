@@ -34,7 +34,7 @@ export function buildProvidersFromEnv(env: Env = process.env): LlmProvider[] {
   const geminiModels = (env.GEMINI_MODEL || 'gemini-3.5-flash').split(',').map((s) => s.trim()).filter(Boolean)
   const make: Record<string, () => LlmProvider | LlmProvider[] | null> = {
     gemini: () => (env.GEMINI_API_KEY || env.GOOGLE_API_KEY)
-      ? geminiModels.map((model, i) => new OpenAiCompatProvider({ id: i ? `gemini-${model}` : 'gemini', label: i ? `Gemini ${model.replace(/^gemini-/, '')}` : 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY, model, usage: true, maxRetryWaitMs: 60_000, extraBody: { reasoning_effort: env.GEMINI_REASONING || 'low' } }))
+      ? geminiModels.map((model, i) => new OpenAiCompatProvider({ id: i ? `gemini-${model}` : 'gemini', label: i ? `Gemini ${model.replace(/^gemini-/, '')}` : 'Gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY, model, usage: true, maxRetryWaitMs: 25_000, extraBody: { reasoning_effort: env.GEMINI_REASONING || 'low' } }))
       : null,
     groq: () => {
       if (!env.GROQ_API_KEY) return null
@@ -52,7 +52,7 @@ export function buildProvidersFromEnv(env: Env = process.env): LlmProvider[] {
       ? new OpenAiCompatProvider({ id: 'openrouter', label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_MODEL || 'nvidia/nemotron-3.5-super-vl:free', historyLimit: 30, usage: true })
       : null,
     custom: () => env.LLM_BASE_URL && env.LLM_MODEL
-      ? new OpenAiCompatProvider({ id: 'custom', label: env.LLM_LABEL || 'своя модель', baseUrl: env.LLM_BASE_URL, apiKey: env.LLM_API_KEY, model: env.LLM_MODEL, timeoutMs: 180_000 })
+      ? new OpenAiCompatProvider({ id: 'custom', label: env.LLM_LABEL || 'своя модель', baseUrl: env.LLM_BASE_URL, apiKey: env.LLM_API_KEY, model: env.LLM_MODEL, timeoutMs: 180_000, stallMs: 60_000 })
       : null,
     claude: () => (env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN) ? new AnthropicProvider() : null,
   }

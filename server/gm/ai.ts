@@ -265,13 +265,16 @@ export class GmDirector implements GmDriver {
     // что уже сделали прерванные попытки этого хода (в том числе до перезапуска сервера): их изменения в игре остались,
     // следующая модель не должна их повторить
     const carried: string[] = [...room.gmDone]
+    // начатый и оборванный рассказ остаётся у игроков; следующая модель продолжает с этого места
+    let carriedText = ''
     for (const p of this.opts.providers) {
       if ((this.cooling.get(p.id) ?? 0) > Date.now()) continue
       const id = randomUUID()
       // помещения, открытые прошлой (сорвавшейся) моделью, эта откроет сама, если они ей нужны
       room.gmOpened = []
       room.gmChanges = 0
-      const already = carried.length ? `[Прошлая попытка этого хода прервалась, но уже выполнила в игре: ${carried.join('; ')}. Эти действия не повторяй — опиши их результат и продолжи.]\n\n` : ''
+      const already = (carried.length ? `[Прошлая попытка этого хода прервалась, но уже выполнила в игре: ${carried.join('; ')}. Эти действия не повторяй — опиши их результат и продолжи.]\n\n` : '')
+        + (carriedText ? `[Прошлая модель начала этот ход словами: «${carriedText.slice(-600)}» — игроки их уже видят. Продолжи с этого места, не повторяя.]\n\n` : '')
       try {
         const text = await p.turn(room, { userText: this.catchup(room, p.id, exclude) + already + userText, snapshot: snapshot(room) }, {
           delta: (d) => this.ctx.delta(room, id, d),
@@ -292,7 +295,13 @@ export class GmDirector implements GmDriver {
         this.ctx.persist(room)
         return
       } catch (e) {
-        // убрать у игроков недописанный текст и перейти к следующей модели
+        // недописанный рассказ не стирается, если в нём уже есть что читать: остаётся с пометкой, продолжит следующая
+        // модель или сценарный ведущий; обрывок короче — убирается
+        const partial = (room.live[id] ?? '').trim()
+        if (partial.length >= 80) {
+          this.ctx.chat(room, { id, from: 'gm', author: `Ведущий · ${p.label}`, text: `${partial.replace(/[\s…]+$/, '')}…\n\n(ведущий не закончил — продолжает следующий)` })
+          carriedText = partial
+        }
         this.ctx.done(room, id)
         const err = e instanceof ProviderError ? e : new ProviderError(String((e as Error)?.message ?? e), 30_000)
         carried.push(...err.done)
@@ -300,7 +309,7 @@ export class GmDirector implements GmDriver {
         console.warn('[ведущий]', err.message)
       }
     }
-    this.ctx.notice(room, 'ИИ-ведущий сейчас недоступен — ход ведёт сценарный ведущий.')
+    this.ctx.notice(room, carriedText ? 'Модель оборвала рассказ — дальше ход ведёт сценарный ведущий.' : 'ИИ-ведущий сейчас недоступен — ход ведёт сценарный ведущий.')
     room.gmDone = []
     room.gmOpened = []
     this.script.handle(room, events, texts)

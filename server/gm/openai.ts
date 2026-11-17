@@ -27,6 +27,8 @@ export interface OpenAiCompatConfig {
   maxRetryWaitMs?: number
   /** пауза перед повтором при временной ошибке провайдера (500/502/503) */
   transientRetryMs?: number
+  /** молчание модели дольше этого (до первого куска ответа и между кусками) — обрыв и следующая модель */
+  stallMs?: number
 }
 
 /** extra_content — служебные данные провайдера у вызова инструмента (подпись мысли Gemini 3); их надо вернуть в истории */
@@ -161,6 +163,25 @@ export class OpenAiCompatProvider implements LlmProvider {
   }
 
   private async request(hist: OaMsg[], onText: (d: string) => void, retried = false): Promise<{ content: string; toolCalls: OaToolCall[] }> {
+    // два таймера: общий на запрос и на молчание — повисшая модель уступает следующей за секунды, а не через полторы минуты
+    const ctrl = new AbortController()
+    const stallMs = this.cfg.stallMs ?? 20_000
+    let stalled = false
+    let stallTimer = setTimeout(() => { stalled = true; ctrl.abort() }, stallMs)
+    const alive = () => { clearTimeout(stallTimer); stallTimer = setTimeout(() => { stalled = true; ctrl.abort() }, stallMs) }
+    const total = setTimeout(() => ctrl.abort(), this.cfg.timeoutMs ?? 90_000)
+    try {
+      return await this.requestWith(ctrl.signal, alive, hist, onText, retried)
+    } catch (e) {
+      if (ctrl.signal.aborted) throw new ProviderError(`${this.label}: ${stalled ? `молчит дольше ${Math.round(stallMs / 1000)} с` : 'не ответил вовремя'}`, 30_000)
+      throw e
+    } finally {
+      clearTimeout(stallTimer)
+      clearTimeout(total)
+    }
+  }
+
+  private async requestWith(signal: AbortSignal, alive: () => void, hist: OaMsg[], onText: (d: string) => void, retried: boolean): Promise<{ content: string; toolCalls: OaToolCall[] }> {
     const res = await this.fetchImpl(`${this.cfg.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(this.cfg.apiKey ? { authorization: `Bearer ${this.cfg.apiKey}` } : {}) },
@@ -175,8 +196,9 @@ export class OpenAiCompatProvider implements LlmProvider {
         temperature: this.cfg.temperature ?? 0.8,
         ...this.cfg.extraBody,
       }),
-      signal: AbortSignal.timeout(this.cfg.timeoutMs ?? 90_000),
+      signal,
     })
+    alive()
     if (!res.ok || !res.body) {
       const body = await res.text().catch(() => '')
       // сколько ждать: заголовок retry-after (Groq) или retryDelay в теле ответа (Gemini)
@@ -188,13 +210,15 @@ export class OpenAiCompatProvider implements LlmProvider {
         // лимит на секунды (токены в минуту) — подождать один раз, а не отдавать ход другой модели
         console.log(`[ведущий ${this.label}] лимит, жду ${Math.ceil(wait / 1000)} с`)
         await new Promise((r) => setTimeout(r, wait))
-        return this.request(hist, onText, true)
+        alive()
+        return this.requestWith(signal, alive, hist, onText, true)
       }
       if ((res.status === 503 || res.status === 502 || res.status === 500) && !retried) {
         // «модель перегружена» обычно проходит за секунды — один повтор, потом уже следующая модель
         console.log(`[ведущий ${this.label}] HTTP ${res.status}, повтор через ${(this.cfg.transientRetryMs ?? 2000) / 1000} с`)
         await new Promise((r) => setTimeout(r, this.cfg.transientRetryMs ?? 2000))
-        return this.request(hist, onText, true)
+        alive()
+        return this.requestWith(signal, alive, hist, onText, true)
       }
       throw new ProviderError(`${this.label}: HTTP ${res.status} ${body.replace(/\s+/g, ' ').slice(0, 400)}`, wait)
     }
@@ -207,6 +231,7 @@ export class OpenAiCompatProvider implements LlmProvider {
     for (;;) {
       const { value, done } = await reader.read()
       if (done) break
+      alive()
       buf += dec.decode(value, { stream: true })
       let nl: number
       while ((nl = buf.indexOf('\n')) >= 0) {
