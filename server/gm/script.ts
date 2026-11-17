@@ -6,7 +6,7 @@
 import { randomUUID } from 'node:crypto'
 import { idx } from '@/data'
 import type { BookNode, ParagraphHints } from '@/types'
-import { allNodes, canFightHints, deadlyEffect, diceKey, effectLabel, findNode, gameLimit, gamesPlayed, hasResult, nodeFullText, nodeText, openNodes, paragraphTree, parentOf, revealedBy, rollOf, stakeLabel } from '@/game/tree'
+import { allNodes, canFightHints, deadlyEffect, diceKey, effectLabel, findNode, gameLimit, gamesPlayed, hasResult, nodeFullText, nodeText, openChoices, openNodes, paragraphTree, parentOf, revealedBy, rollOf, stakeLabel } from '@/game/tree'
 import type { Hero } from '@/engine/model'
 import { hasWard, isConscious } from '@/engine/character'
 import { UNDEAD } from '@/engine/combat'
@@ -399,6 +399,25 @@ export function matchChoice(text: string, choices: { id: string; label: string; 
   return best.length === 1 ? { pick: best[0].id } : { among: best.map((x) => x.id) }
 }
 
+/** Вопрос о положении партии: сводка вместо кнопок */
+const WHERE = /где (?:мы|партия|наход)|куда (?:дальше|идти|пойти|теперь)|что (?:дальше|теперь|осталось)|статус|сводк|что не пройден|какие помещения/i
+/** Вопрос: знак вопроса или вопросительное слово в начале */
+const QUESTION = /\?\s*$|^\s*(?:что|кто|где|куда|как|почему|зачем|сколько|можно ли|есть ли|какой|какая|какие|какое|чем|откуда|правда ли)(?![а-яё])/i
+const QUESTION_WORDS = new Set(['что', 'кто', 'где', 'куда', 'как', 'почему', 'зачем', 'сколько', 'можно', 'есть', 'какой', 'какая', 'какие', 'какое', 'чем', 'откуда', 'правда', 'ли', 'это', 'такое', 'значит', 'видим', 'вид', 'тут', 'там'])
+
+/** Список номеров словами: «3, 5–9, 12» */
+export function ranges(nums: number[]): string {
+  const sorted = [...new Set(nums)].sort((a, b) => a - b)
+  const out: string[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    let j = i
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++
+    out.push(j - i >= 2 ? `${sorted[i]}–${sorted[j]}` : j > i ? `${sorted[i]}, ${sorted[j]}` : String(sorted[i]))
+    i = j
+  }
+  return out.join(', ')
+}
+
 export function roomNumber(text: string): number | null {
   const m = text.match(/(?:помещени\S*|комнат\S*|номер|№|параграф\S*|§)\s*(\d{1,3})/i) ?? text.trim().match(/^(?:(?:идём|идем|идти|иду|заходим|входим)\s+)?(?:в\s+)?(\d{1,3})\s*[.!]?$/i)
   return m ? Number(m[1]) : null
@@ -471,11 +490,31 @@ export class ScriptedGm {
     const claimed = room.state.claimed ?? []
     const tree = treeAt(loc, n)
     const open = new Set(tree ? openNodes(tree, P, claimed).map((x) => x.id) : [])
-    offers.push(...fresh(room, nodes.flatMap((x) => nodeOffers(loc, n, x, claimed, open, room.state.heroes))), { label: 'Идти дальше', action: { t: 'next' } as ScriptAction })
+    // по книге монстры нападают сами: бой начнётся без кнопки (если другой бой не идёт)
+    const ambush = this.ambushIn(room, P, nodes)
+    const fromNodes = fresh(room, nodes.flatMap((x) => nodeOffers(loc, n, x, claimed, open, room.state.heroes))).filter((o) => !(ambush && o.action.t === 'fight' && o.action.id === ambush.id))
+    offers.push(...fromNodes, { label: 'Идти дальше', action: { t: 'next' } as ScriptAction })
     this.say(room, [...head, ...text].filter(Boolean).join('\n\n'), offers)
+    if (ambush) this.startAmbush(room, loc, n, ambush, playerId)
     // «летит в центр города (локация 41)» — партия переходит в названное помещение
     const to = jump ? nodes.find((x) => x.goto !== undefined)?.goto : undefined
     if (to !== undefined && to !== n) this.presentParagraph(room, loc, to, playerId)
+  }
+
+  /** Этап среди показанных, где монстры нападают сами (hints.attack) и бой ещё не выигран; пока идёт другой бой — нет */
+  private ambushIn(room: Room, P: string, nodes: BookNode[]): BookNode | undefined {
+    if (room.state.combat && !room.state.combat.finished) return undefined
+    return nodes.find((x) => x.hints?.attack && canFightHints(x.hints) && !hasResult(P, x.id, room.state.claimed ?? [], 'won'))
+  }
+
+  /** Начать бой нападающего этапа сам, как сделал бы живой ведущий */
+  private startAmbush(room: Room, loc: string, n: number, node: BookNode, playerId?: string): void {
+    const h = node.hints!
+    const specs = (h.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special).map((monsterId) => ({ monsterId, count: h.monsterCounts?.[monsterId] ?? 1 }))
+    try { this.apply(room, playerId ?? '', { t: 'fight', specs, loc, n, id: node.id, ambush: true }) } catch (e) {
+      if (!(e instanceof GameError) && !(e instanceof Error && e.name === 'GameError')) throw e
+      this.say(room, (e as Error).message)
+    }
   }
 
   /** События игры и реплики игроков */
@@ -530,6 +569,7 @@ export class ScriptedGm {
       else if (!this.freeReply(room, t.text, t.playerId)) unmatched.push(t)
     }
     if (unmatched.length) this.tableDecision(room, unmatched)
+    this.remind(room)
     // этапы, открытые событием (исход боя), могли изменить состояние: последствия, спутник
     this.ctx.stateChanged(room)
   }
@@ -541,14 +581,81 @@ export class ScriptedGm {
     return msg.choices!.filter((c) => !msg.used?.includes(c.id) && room.choiceActions[c.id]).map((c) => ({ msg, id: c.id, label: c.label, action: room.choiceActions[c.id].action }))
   }
 
-  /** Свободная реплика: «осмотреться» — сцена заново; иначе подходящая кнопка нажимается от имени игрока (в режиме
-   *  «когда все готовы» — голос за неё). Несколько подходящих — уточнение. Ничего не подошло — false */
+  /** Где партия и что здесь не доделано: непройденные помещения, невыбранные варианты, незаконченный бой, состояние героев */
+  private whereReply(room: Room): string {
+    const s = room.state
+    const lines: string[] = []
+    const loc = s.locationId ? idx.locationById.get(s.locationId) : null
+    if (loc) {
+      const visited = new Set(s.visited[loc.id] ?? [])
+      const left = loc.paragraphs.map((p) => p.n).filter((x) => !visited.has(x))
+      lines.push(`Вы в локации «${loc.name}»${room.script.n != null ? `, помещение ${room.script.n}` : ''}, день ${s.day}. Пройдено ${visited.size} из ${loc.paragraphs.length}${left.length ? `, не пройдены: ${ranges(left)}` : ', все помещения пройдены'}.`)
+      if (room.script.n != null) {
+        const P = `${loc.id}:${room.script.n}`
+        const tree = treeAt(loc.id, room.script.n)
+        const claimed = s.claimed ?? []
+        const choices = tree ? openChoices(tree, P, claimed) : []
+        const fights = tree ? openNodes(tree, P, claimed).filter((x) => canFightHints(x.hints) && !hasResult(P, x.id, claimed, 'won')) : []
+        if (choices.length) lines.push(`Здесь ещё не выбрано: ${choices.map((c) => `«${shown(c.label ?? '')}»`).join(', ')}.`)
+        if (fights.length) lines.push(`Не выигран бой: ${fights.flatMap((x) => (x.hints!.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special).map((m) => idx.monster(m).name)).join(', ')}.`)
+      }
+    } else {
+      const node = room.world?.nodes.find((x) => x.id === s.worldNodeId)
+      lines.push(`Партия на карте: ${node?.name ?? '—'}, день ${s.day}.${s.pendingRoad.length ? ` Встречи в пути: ${s.pendingRoad.map((x) => `§ ${x}`).join(', ')}.` : ' Войдите в локацию или выберите путь на карте.'}`)
+    }
+    if (s.combat && !s.combat.finished) lines.push('Идёт бой — на экране боя.')
+    lines.push(...this.reminders(room))
+    return lines.join('\n')
+  }
+
+  /** Напоминания-рефери: что по правилам назрело у героев и спутников */
+  private reminders(room: Room): string[] {
+    const out: string[] = []
+    for (const h of room.state.heroes) {
+      if (h.status.dead) { out.push(`${h.name} погиб: заменить героя можно на экране «Партия».`); continue }
+      if (h.status.unconscious) out.push(`${h.name} без сознания: нужны лечение, бутылка или отдых.`)
+      else if (h.lives <= Math.max(3, Math.floor(h.maxLives / 4))) out.push(`${h.name} при смерти (${h.lives} из ${h.maxLives}): лечение, бутылка или трактир.`)
+      if (h.status.poison) out.push(`${h.name} отравлен: противоядие или «Исцеление».`)
+      if (h.pendingSpellPicks > 0) out.push(`${h.name}: не выбрано заклинание за новый уровень (${h.pendingSpellPicks}) — экран героя.`)
+    }
+    for (const c of room.state.companions) if (c.battlesLeft === 1) out.push(`${c.name} остаётся с партией на один бой.`)
+    return out
+  }
+
+  /** Напоминания после хода — только вне боя и только когда они изменились */
+  private remind(room: Room): void {
+    if (room.state.combat && !room.state.combat.finished) return
+    const text = this.reminders(room).join('\n')
+    if (text === (room.script.reminded ?? '')) return
+    room.script = { ...room.script, reminded: text }
+    // системное сообщение, а не реплика ведущего: не заслоняет сцену и кнопки
+    if (text) this.ctx.chat(room, { from: 'system', author: 'Напоминание', text })
+  }
+
+  /** Ответ на вопрос по сцене: фразы открытых этапов, в которых есть слова вопроса; иначе — честное «в книге нет» */
+  private answerFromScene(room: Room, question: string): string {
+    const loc = room.script.locationId
+    const n = room.script.n
+    if (!loc || n == null) return 'Партия не в помещении: назовите номер на плане или выберите путь на карте.'
+    const tree = treeAt(loc, n)
+    const qs = stems(question.replace(/\?/g, ' ')).filter((w) => !QUESTION_WORDS.has(w))
+    const sentences = (tree ? openNodes(tree, `${loc}:${n}`, room.state.claimed ?? []) : []).flatMap((x) => shown(nodeText(x)).split(/(?<=[.!?…])\s+/)).filter((x) => x.trim())
+    const scored = sentences.map((sent) => ({ sent, score: stems(sent).filter((l) => qs.some((q) => sameStem(q, l))).length })).filter((x) => x.score > 0).sort((a, b) => b.score - a.score)
+    if (!scored.length) return 'В книге об этом ничего нет — решайте по смыслу или спросите иначе.'
+    return `По книге: «${scored.slice(0, 2).map((x) => x.sent.trim()).join(' ')}»`
+  }
+
+  /** Свободная реплика: «где мы» — сводка, «осмотреться» — сцена заново, вопрос — ответ по тексту сцены; иначе подходящая
+   *  кнопка нажимается от имени игрока (в режиме «когда все готовы» — голос за неё). Несколько подходящих — уточнение.
+   *  Ничего не подошло — false */
   private freeReply(room: Room, text: string, playerId?: string): boolean {
     const loc = room.script.locationId
+    if (WHERE.test(text)) { this.say(room, this.whereReply(room)); return true }
     if (/осмотр|огляд|смотр|обыск|ищем|ищу|поищ|разгляд|изуча/i.test(text) && loc && room.script.n != null) {
       this.presentParagraph(room, loc, room.script.n, playerId)
       return true
     }
+    if (QUESTION.test(text)) { this.say(room, this.answerFromScene(room, text)); return true }
     const choices = this.openChoices(room)
     const m = matchChoice(text, choices)
     if (!m) return false
@@ -575,6 +682,7 @@ export class ScriptedGm {
       { label: '👍 Стол решает: да', action: { t: 'decide', yes: true } },
       { label: '👎 Стол решает: нет', action: { t: 'decide', yes: false } },
       ...(room.script.locationId && room.script.n != null ? [{ label: '👁 Осмотреться', action: { t: 'look' } as ScriptAction }] : []),
+      { label: '🧭 Где мы', action: { t: 'where' } },
     ]
     this.say(room, `${what} — в книге такого действия нет. Решите за столом, как с живым ведущим: удача, кубик или общее решение; номер помещения на плане открывает его, кнопки выше — варианты книги.`, offers)
   }
@@ -679,7 +787,9 @@ export class ScriptedGm {
         const hit = (node.then ?? []).find((c) => rollOf(c)?.includes(r))
         if (d.repeat) {
           // список «для каждого» бросают много раз; награда исхода — своя у каждого варианта и берётся один раз
-          this.say(room, `Выпало ${r}: ${hit ? shown(nodeText(hit) || hit.label || '') : 'ничего не происходит'}`, hit ? fresh(room, nodeOffers(a.loc, a.n, hit, room.state.claimed ?? [], new Set(), room.state.heroes)) : [])
+          const ambush = hit ? this.ambushIn(room, P, [hit]) : undefined
+          this.say(room, `Выпало ${r}: ${hit ? shown(nodeText(hit) || hit.label || '') : 'ничего не происходит'}`, hit ? fresh(room, nodeOffers(a.loc, a.n, hit, room.state.claimed ?? [], new Set(), room.state.heroes)).filter((o) => !(ambush && o.action.t === 'fight')) : [])
+          if (ambush) this.startAmbush(room, a.loc, a.n, ambush, playerId)
           return
         }
         // бросок по списку — один раз (иначе перебрасывали бы до награды)
@@ -751,7 +861,7 @@ export class ScriptedGm {
         const loc = a.loc ?? room.script.locationId
         const n = a.n ?? room.script.n
         if (loc && n !== null && n !== undefined) room.script.fight = at ? { loc, n, id: a.id } : { loc, n }
-        this.say(room, `Бой! Противники: ${room.state.combat?.monsters.map((m) => m.name).join(', ')}. Сражайтесь на экране боя.`)
+        this.say(room, `${a.ambush ? 'Нападение! ' : 'Бой! '}Противники: ${room.state.combat?.monsters.map((m) => m.name).join(', ')}. Сражайтесь на экране боя.`)
         return
       }
       case 'coins': {
@@ -817,6 +927,9 @@ export class ScriptedGm {
       case 'look':
         if (room.script.locationId && room.script.n != null) this.presentParagraph(room, room.script.locationId, room.script.n, playerId)
         else this.say(room, 'Партия не в помещении: назовите номер на плане или выберите путь на карте.')
+        return
+      case 'where':
+        this.say(room, this.whereReply(room))
         return
     }
   }

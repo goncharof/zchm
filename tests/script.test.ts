@@ -160,12 +160,37 @@ describe('сценарный ведущий', () => {
     await g.c.chat('лезем на башню', true)
     await until(() => /в книге такого действия нет/.test(lastGm(g.chat).text))
     const kit = lastGm(g.chat)
-    expect(kit.choices!.map((c) => c.label)).toEqual(['🎲 Проверка удачи 8 (легко)', '🎲 Проверка удачи 12', '🎲 Проверка удачи 16 (трудно)', '🎲 Бросить к6', '👍 Стол решает: да', '👎 Стол решает: нет', '👁 Осмотреться'])
+    expect(kit.choices!.map((c) => c.label)).toEqual(['🎲 Проверка удачи 8 (легко)', '🎲 Проверка удачи 12', '🎲 Проверка удачи 16 (трудно)', '🎲 Бросить к6', '👍 Стол решает: да', '👎 Стол решает: нет', '👁 Осмотреться', '🧭 Где мы'])
     await g.c.choose(kit.id, kit.choices![1].id)
     await until(() => /испытывает удачу \(12\)/.test(lastGm(g.chat).text))
     expect(lastGm(g.chat).text).toContain('решите по смыслу')
     await g.c.choose(kit.id, kit.choices![4].id)
     await until(() => /Стол решает: да \(Иван\)/.test(lastGm(g.chat).text))
+  })
+
+  it('нападение по книге начинает бой само; «где мы» — сводка; вопрос — ответ по сцене; напоминание — отдельным сообщением', async () => {
+    const g = await setup()
+    await goTo(g, 'krepost-rytsarey')
+    await g.c.call('enterLocation', ['krepost-rytsarey'])
+    await g.c.chat('20', true)
+    // «от одной из стен отделяется металок и нападает на вас»
+    await until(() => !!g.state.combat && g.state.combat.monsters.some((m) => m.name.startsWith('Металок')))
+    expect(lastGm(g.chat).text).toContain('Нападение!')
+    const scene = g.chat.filter((m) => m.from === 'gm').at(-2)!
+    expect(scene.text).toContain('помещение 20')
+    expect(scene.choices!.some((c) => c.label.startsWith('⚔ Бой'))).toBe(false)
+    await winFight(g)
+    await g.c.chat('где мы?', true)
+    await until(() => /Вы в локации «Крепость рыцарей», помещение 20/.test(lastGm(g.chat).text))
+    expect(lastGm(g.chat).text).toContain('не пройдены:')
+    await g.c.chat('что здесь за комната?', true)
+    await until(() => /По книге: «|В книге об этом ничего нет/.test(lastGm(g.chat).text))
+    // напоминание-рефери: герой при смерти — системным сообщением после хода
+    const room = (await g.s.store.get(g.j.code))!
+    const hero = room.state.heroes[0]
+    room.session().adjustLives(hero.uid, -(hero.lives - 1))
+    await g.c.chat('где мы', true)
+    await until(() => g.chat.some((m) => m.from === 'system' && m.author === 'Напоминание' && m.text.includes(`${hero.name} при смерти`)))
   })
 
   it('финал: в зале с фонтаном — атака на Чёрного мага и фонтан; попадание — победа и текст книги о кучке пепла', async () => {
@@ -371,7 +396,9 @@ describe('сценарный ведущий', () => {
     const labels = after.choices!.map((c) => c.label)
     expect(labels).toEqual(expect.arrayContaining(['▸ Отдаете половину', '▸ Не отдаете']))
     await g.c.choose(after.id, after.choices!.find((c) => c.label === '▸ Не отдаете')!.id)
-    await until(() => lastGm(g.chat).choices?.some((c) => c.label === '⚔ Бой: Минотавр') ?? false)
+    // «не отдаете — нападает»: бой с минотавром начинается сам
+    await until(() => !!g.state.combat && !g.state.combat.finished && g.state.combat.monsters.some((m) => m.name.startsWith('Минотавр')))
+    expect(lastGm(g.chat).text).toContain('Нападение!')
   })
 
   it('выбор открывает бой, победа — награду; второй бой с теми же монстрами не предлагается', async () => {
@@ -444,8 +471,10 @@ describe('сценарный ведущий', () => {
     const ladder = lastGm(g.chat)
     setRng(() => 0) // к18 = 1 — провал
     await g.c.choose(ladder.id, ladder.choices!.find((c) => c.label === '🎲 Проверка удачи 10')!.id)
-    await until(() => lastGm(g.chat).text.includes('испытывает удачу'))
-    expect(lastGm(g.chat).choices!.map((c) => c.label)).toContain('⚔ Бой: Драконид ×4')
+    await until(() => lastGm(g.chat).text.includes('Нападение!'))
+    // дракониды «протискиваются сквозь бойницу и нападают»: бой начинается сам, кнопки боя нет
+    expect(g.chat.filter((m) => m.from === 'gm').at(-2)!.choices!.some((c) => c.label.startsWith('⚔ Бой'))).toBe(false)
+    await until(() => g.state.combat?.monsters.filter((m) => m.monsterId === 'drakonid').length === 4)
     await g.c.chat('2', true)
     await until(() => /вы здесь уже были/.test(lastGm(g.chat).text))
     expect(lastGm(g.chat).choices!.some((c) => c.label.startsWith('🎲 Бросить'))).toBe(false)

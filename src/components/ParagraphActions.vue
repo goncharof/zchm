@@ -77,7 +77,7 @@ const has = computed(() => !!props.hints && Object.values(props.hints).some((v) 
     <template v-for="t in hints?.luck ?? []" :key="'l' + t"><button class="small" @click="luck(t)">Бросок удачи {{ t }}</button></template>
     <button v-if="hints?.game && place" class="small" title="к6 против к6, ничья за соперником" @click="game()">Сыграть в кости{{ stakeLabel(hints.game) }}</button>
     <template v-for="m in fightable" :key="m">
-      <span class="row" style="gap:.2rem"><input type="number" min="0" :max="MAX_FOES" v-model.number="counts[m]" style="width:3.4rem" class="small" :aria-label="`Сколько: ${idx.monsterById.get(m)?.name}`" :title="'Сколько противников'" /><span class="small muted" aria-hidden="true">×</span><button class="small danger" @click="fight([m])"><Swords :size="15" />Бой: {{ idx.monsterById.get(m)?.name }}</button></span>
+      <span class="row" style="gap:.2rem"><input type="number" min="0" :max="MAX_FOES" v-model.number="counts[m]" style="width:3.4rem" class="small" :aria-label="`Сколько: ${idx.monsterById.get(m)?.name}`" :title="'Сколько противников'" /><span class="small muted" aria-hidden="true">×</span><button class="small danger" :title="hints?.attack ? 'По книге нападает сам' : ''" @click="fight([m])"><Swords :size="15" />Бой: {{ idx.monsterById.get(m)?.name }}{{ hints?.attack ? ' (нападает)' : '' }}</button></span>
     </template>
     <button v-if="fightable.length > 1" class="small danger" @click="fight(fightable)"><Swords :size="15" />Бой со всеми вместе</button>
     <details v-if="fightable.length" class="small" style="display:inline-block">

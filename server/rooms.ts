@@ -68,6 +68,8 @@ export interface ScriptState {
   taken?: string[]
   /** заклинание-разведка ждёт номера помещений: «Чувство зла» (evil) или тень и вселение души (scout), left — сколько ещё */
   sense?: { kind: 'evil' | 'scout'; left: number }
+  /** последнее напоминание-рефери (герой при смерти, не выбрано заклинание): повторяется только когда меняется */
+  reminded?: string
 }
 
 /** Действие за кнопкой-вариантом сценарного ведущего (сериализуемое) */
@@ -86,8 +88,9 @@ export type ScriptAction = (
   | { t: 'die'; sides: number }
   | { t: 'decide'; yes: boolean }
   | { t: 'look' }
+  | { t: 'where' }
   | { t: 'penalty'; heroUid: string; kind: 'death' | 'lives' | 'half'; amount?: number }
-  | { t: 'fight'; specs: { monsterId: string; count: number }[]; loc?: string; n?: number; id?: string }
+  | { t: 'fight'; specs: { monsterId: string; count: number }[]; loc?: string; n?: number; id?: string; ambush?: true }
   | { t: 'coins'; amount: number }
   | { t: 'pay'; amount: number }
   | { t: 'bottle'; n?: number; qty?: number; ns?: number[] }

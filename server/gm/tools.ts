@@ -144,6 +144,7 @@ function stagePayload(n: BookNode): Record<string, unknown> {
     ...(secret.length ? { тайное: secret } : {}),
     ...(n.teaser ? { намёк: n.teaser } : {}),
     ...(has(hints) ? { подсказки: hints } : {}),
+    ...(n.hints?.attack && fightable.length ? { нападают: 'монстры этапа нападают сами — start_combat в этом же ходе' } : {}),
     ...(npcs.length ? { не_враги: npcs } : {}),
     ...(n.passWith ? { проверку_заменяет: idx.itemById.get(n.passWith)?.name ?? n.passWith } : {}),
     ...(n.dice ? { бросок: `к${n.dice.sides}${n.dice.repeat ? ', бросают для каждого' : ''}` } : {}),
