@@ -20,6 +20,32 @@ import type { GmContext, GmEvent } from './types'
 
 export const SCRIPT_AUTHOR = 'Ведущий · сценарий'
 
+/** Короткие связки-атмосфера от ведущего (не текст книги): при первом входе в помещение локации и после боя. Выбор
+ *  детерминированный (номер помещения и день), чтобы не трогать генератор случайностей */
+const FLAVOR: Record<string, string[]> = {
+  'zolotoy-gorod': ['Где-то вдали звенит колокол.', 'Под сапогами скрипит песок, нанесённый ветром с улиц.', 'Солнце играет на золочёных крышах.'],
+  'krepost-rytsarey': ['На стенах висят выцветшие знамёна.', 'Эхо шагов гулко отдаётся под сводами.', 'Пахнет железом и конским потом.'],
+  'zamok-chernogo-maga': ['Воздух здесь тяжёлый, факелы горят синим.', 'По спине пробегает холодок.', 'Тени на стенах шевелятся сами по себе.'],
+  'zamok-zhretsov': ['Пахнет ладаном и старым воском.', 'Из-за стен доносится глухое пение.', 'Витражи бросают на пол цветные пятна.'],
+  'mertvyy-gorod': ['Тишина такая, что слышно собственное сердце.', 'Ветер гонит по камням сухие листья.', 'Окна домов смотрят пустыми глазницами.'],
+  'krepost-korolya-nazgulov': ['Со стен капает ледяная вода.', 'Тени здесь длиннее, чем должны быть.', 'Факел едва разгоняет мрак.'],
+  'krepost-posledney-nadezhdy': ['Стены исцарапаны чьими-то когтями.', 'Сквозняк приносит запах гари.', 'Где-то наверху хлопает ставня.'],
+  'chernye-peschery': ['Капли воды звонко падают в темноту.', 'Своды теряются во мраке, факел выхватывает лишь камень.', 'Под ногами хрустит каменная крошка.'],
+  'runnoe-more': ['Волны бьют о камни, в воздухе соль и йод.', 'Над водой кричат чайки.', 'Доски скрипят под ногами.'],
+  'liholese': ['Ветви смыкаются над головой, солнца почти не видно.', 'В чаще трещат сучья.', 'Мох глушит шаги.'],
+  'drevnie-razvaliny': ['Из трещин в плитах пробивается трава.', 'Ветер свистит в проломах стен.', 'Резьба на колоннах стёрта временем.'],
+  'broshennyy-gorod': ['Двери домов распахнуты, внутри темно.', 'На площади ржавеет перевёрнутая телега.', 'Ветер хлопает оторванной вывеской.'],
+  'severnyy-fort': ['С севера тянет стужей.', 'На бойницах лежит снег.', 'Дыхание вырывается паром.'],
+  'upokoische': ['Между могил стелется туман.', 'Где-то воет волк.', 'Кресты покосились, надписи не прочесть.'],
+  'doroga': ['Дорога пылит под ногами.', 'Над полями кружат вороны.', 'Вдоль обочины тянутся старые межевые камни.'],
+}
+const FLAVOR_END: Record<'victory' | 'fled' | 'defeat', string[]> = {
+  victory: ['Пыль оседает, звон стали смолкает.', 'Герои переводят дух и оглядываются.', 'Тишина после схватки кажется оглушительной.'],
+  fled: ['Погоня отстаёт, дыхание понемногу выравнивается.', 'Крики за спиной стихают.', 'Лишь отбежав подальше, герои останавливаются.'],
+  defeat: ['Темнота смыкается над полем боя.', 'Последнее, что слышно, — торжествующий рёв.', 'Силы оставляют героев.'],
+}
+const flavor = (lines: string[] | undefined, seed: number) => (lines?.length ? lines[Math.abs(seed) % lines.length] : '')
+
 interface Offer {
   label: string
   action: ScriptAction
@@ -413,8 +439,10 @@ export class ScriptedGm {
     if (loc.id === 'doroga') s.dismissRoad(n)
     room.script = { ...room.script, locationId: loc.id, n }
     const head = loc.id === 'doroga' ? `В пути (§ ${n}).` : `${loc.name}, помещение ${n}${before ? ' (вы здесь уже были)' : ''}.`
+    // связка-атмосфера при первом входе — от ведущего, не из книги
+    const mood = before ? '' : flavor(FLAVOR[loc.id], n + room.state.day)
     const nodes = openNodes(paragraphTree(p), `${loc.id}:${n}`, room.state.claimed)
-    this.sayNodes(room, loc.id, n, [head], nodes, [], playerId, !before)
+    this.sayNodes(room, loc.id, n, [mood ? `${head} ${mood}` : head], nodes, [], playerId, !before)
     this.ctx.stateChanged(room)
   }
 
@@ -477,8 +505,9 @@ export class ScriptedGm {
           if (f.id === undefined) room.session().bookMark(at, what)
           shownNodes = revealedBy(tree, `${f.loc}:${f.n}`, room.state.claimed ?? [], `${at}:${what}`)
         }
-        if (f && shownNodes.length) this.sayNodes(room, f.loc, f.n, [ev.text], shownNodes)
-        else this.say(room, `${ev.text} Продолжайте: выберите вариант выше или назовите номер следующего помещения.`)
+        const mood = ev.outcome ? flavor(FLAVOR_END[ev.outcome], room.state.day + (f?.n ?? 0)) : ''
+        if (f && shownNodes.length) this.sayNodes(room, f.loc, f.n, [`${ev.text} ${mood}`.trim()], shownNodes)
+        else this.say(room, `${ev.text} ${mood} Продолжайте: выберите вариант выше или назовите номер следующего помещения.`.replace(/\s+/g, ' '))
       } else if (ev.type === 'spell' && ev.spell) {
         const r = spellReply(room, ev.spell)
         this.say(room, r.text, r.offers ?? [])
