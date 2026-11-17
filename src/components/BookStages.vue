@@ -3,14 +3,14 @@ import { computed, ref, watch } from 'vue'
 import type { BookNode, Paragraph } from '@/types'
 import type { EncounterSpec } from '@/engine/combat'
 import { idx } from '@/data'
-import { deadlyEffect, diceKey, effectLabel, gameLimit, gamesPlayed, hasResult, nodeText, openNodes, paragraphTree, rollOf } from '@/game/tree'
+import { canFightHints, deadlyEffect, diceKey, effectLabel, gameLimit, gamesPlayed, hasResult, nodeText, openNodes, paragraphTree, rollOf } from '@/game/tree'
 import { useGameStore } from '@/stores/game'
 import ParagraphActions from './ParagraphActions.vue'
 
 /** Параграф по этапам (одиночная игра и живой ведущий): открытые этапы с их действиями и невыбранные варианты.
  *  Исходы боя, проверки удачи и броска по списку открываются сами — по отметкам прохождения в state.claimed */
 const props = defineProps<{ loc: string; locName: string; paragraph: Paragraph; heroUid: string }>()
-const emit = defineEmits<{ fight: [specs: EncounterSpec[], place: string]; goto: [n: number] }>()
+const emit = defineEmits<{ fight: [specs: EncounterSpec[], place: string]; ambush: [specs: EncounterSpec[], place: string]; goto: [n: number] }>()
 const store = useGameStore()
 
 const P = computed(() => `${props.loc}:${props.paragraph.n}`)
@@ -20,9 +20,24 @@ const open = computed(() => openNodes(tree.value, P.value, claimed.value))
 const openIds = computed(() => new Set(open.value.map((n) => n.id)))
 /** последний бросок списка «для каждого» (его исходы не открываются этапами, а показываются здесь) */
 const repeatRoll = ref<Record<string, number>>({})
-watch(P, () => { repeatRoll.value = {} })
+/** этапы, где бой уже начат сам (нападение по книге) — за этот показ параграфа второй раз не начинается */
+const ambushed = ref(new Set<string>())
+watch(P, () => { repeatRoll.value = {}; ambushed.value = new Set() })
 
 const place = (n: BookNode) => `${P.value}:${n.id}`
+// по книге монстры нападают сами (hints.attack): бой начинается при открытии этапа, пока не выигран и другой бой не идёт
+watch([open, () => store.game?.combat], () => {
+  const c = store.game?.combat
+  if (c && !c.finished) return
+  for (const n of open.value) {
+    const k = place(n)
+    if (!n.hints?.attack || !canFightHints(n.hints) || hasResult(P.value, n.id, claimed.value, 'won') || ambushed.value.has(k)) continue
+    ambushed.value = new Set([...ambushed.value, k])
+    const specs = (n.hints.monsters ?? []).filter((m) => !idx.monsterById.get(m)?.special).map((monsterId) => ({ monsterId, count: n.hints!.monsterCounts?.[monsterId] ?? 1 }))
+    emit('ambush', specs, k)
+    return
+  }
+}, { immediate: true })
 function head(n: BookNode): string {
   if (n.on === 'enter') return ''
   const roll = rollOf(n)

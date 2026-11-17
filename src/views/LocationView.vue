@@ -11,6 +11,7 @@ import { useGameStore } from '@/stores/game'
 import MonsterPicker from '@/components/MonsterPicker.vue'
 import ParagraphActions from '@/components/ParagraphActions.vue'
 import BookStages from '@/components/BookStages.vue'
+import { reminders } from '@/game/referee'
 import GmChat from '@/components/GmChat.vue'
 
 const props = defineProps<{ id: string }>()
@@ -61,6 +62,13 @@ onMounted(() => {
 })
 watch(() => route.query.p, (p) => { if (p) open(Number(p)) })
 
+/** напоминания-рефери: герой при смерти, яд, не выбрано заклинание (src/game/referee.ts) */
+const notes = computed(() => (store.game ? reminders(store.game) : []))
+/** бой начат сам — по книге монстры нападают: экран боя не открывается, чтобы сцену можно было дочитать */
+function startAmbush(specs: EncounterSpec[], place: string) {
+  if (current.value) store.markVisited(props.id, current.value)
+  void store.startEncounter(specs, `/location/${props.id}${current.value ? `?p=${current.value}` : ''}`, place)
+}
 /** place — этап книги, где начат бой: его итог откроет исходы этапа */
 function startFight(specs: EncounterSpec[], place?: string) {
   picker.value = false
@@ -112,6 +120,11 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
         <router-link v-else class="btn" to="/map"><MapIcon :size="16" aria-hidden="true" />Карта</router-link>
       </div>
     </div>
+    <div v-if="store.game?.combat && !store.game.combat.finished" class="card tight row between">
+      <span><b>⚔ Идёт бой</b> — противники ждут на экране боя.</span>
+      <router-link class="btn small danger" to="/combat">На экран боя</router-link>
+    </div>
+    <div v-if="notes.length" class="card tight small"><b>Напоминание:</b> {{ notes.join(' ') }}</div>
     <div v-if="id === 'doroga' && store.game?.pendingRoad.length" class="card tight row">
       <b>Встречи в пути:</b>
       <button v-for="(n, i) in store.game.pendingRoad" :key="i" class="small" @click="open(n)">§ {{ n }}</button>
@@ -154,7 +167,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
 
           <div v-if="gm && !revealed" class="row"><span class="muted">Режим ведущего: текст скрыт от игроков.</span><button class="small" @click="revealed = true">Показать текст</button></div>
           <template v-else-if="!fullText">
-            <BookStages :loc="loc.id" :loc-name="loc.name" :paragraph="paragraph" :hero-uid="heroUid" @fight="startFight" @goto="(n) => { done(); open(n) }" />
+            <BookStages :loc="loc.id" :loc-name="loc.name" :paragraph="paragraph" :hero-uid="heroUid" @fight="startFight" @ambush="startAmbush" @goto="(n) => { done(); open(n) }" />
             <p v-if="staged" class="small muted" style="margin-top:.5rem">Варианты со стрелкой — выбор партии. Исходы боя, проверки удачи и броска откроются сами.</p>
           </template>
           <template v-else>
