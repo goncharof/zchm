@@ -10,7 +10,9 @@
  *                       после привязки карты, 5 запросов в минуту), не проверено
  *   MISTRAL_API_KEY     [MISTRAL_MODEL=mistral-small-latest]            — Mistral, бесплатный тариф Experiment (телефон, согласие на
  *                       обучение; по сторонним данным ~1 запрос/с и 1 млрд токенов в месяц) — не проверено (2026-11-03)
- *   OPENROUTER_API_KEY  [OPENROUTER_MODEL=nvidia/nemotron-3-super-120b-a12b:free] — OpenRouter, модели :free с поддержкой tools
+ *   OPENROUTER_API_KEY  [OPENROUTER_MODEL=nvidia/nemotron-3.5-super-vl:free] — OpenRouter, модели :free с поддержкой tools (nemotron-3-super-120b
+ *                       перестал быть бесплатным 2026-11; 3.5-super-vl проверен 2026-11-17: ход 4–8 с, правила держит; gemma-4-31b — лимит у провайдера,
+ *                       3.5-lightning мешает языки)
  *   Модели по умолчанию проверены 2026-10-17; список бесплатных моделей OpenRouter: https://openrouter.ai/api/v1/models
  *   LLM_BASE_URL + LLM_MODEL [LLM_API_KEY, LLM_LABEL] — любая OpenAI-совместимая модель (например, Ollama: http://localhost:11434/v1)
  *   ANTHROPIC_API_KEY   [GM_MODEL=claude-opus-5-5, GM_EFFORT=medium]     — Claude API, платный
@@ -47,7 +49,7 @@ export function buildProvidersFromEnv(env: Env = process.env): LlmProvider[] {
       ? new OpenAiCompatProvider({ id: 'cerebras', label: 'Cerebras', baseUrl: 'https://api.cerebras.ai/v1', apiKey: env.CEREBRAS_API_KEY, model: env.CEREBRAS_MODEL || 'gpt-oss-120b', historyLimit: 30, usage: true })
       : null,
     openrouter: () => env.OPENROUTER_API_KEY
-      ? new OpenAiCompatProvider({ id: 'openrouter', label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free', historyLimit: 30, usage: true })
+      ? new OpenAiCompatProvider({ id: 'openrouter', label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_MODEL || 'nvidia/nemotron-3.5-super-vl:free', historyLimit: 30, usage: true })
       : null,
     custom: () => env.LLM_BASE_URL && env.LLM_MODEL
       ? new OpenAiCompatProvider({ id: 'custom', label: env.LLM_LABEL || 'своя модель', baseUrl: env.LLM_BASE_URL, apiKey: env.LLM_API_KEY, model: env.LLM_MODEL, timeoutMs: 180_000 })
