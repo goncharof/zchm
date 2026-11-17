@@ -324,6 +324,21 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
       } catch (e) { fail(ack, e) }
     })
 
+    socket.on('room:narrator', (raw, rawAck) => {
+      const ack = safeAck(rawAck)
+      try {
+        const on = parse(Schemas.narrator, raw)
+        if (!room || !player) throw new GameError('Вы не в комнате')
+        if (!player.isHost) throw new GameError('Это может только хозяин комнаты')
+        limit(limiters.choose.take(socket.id), 'Слишком часто')
+        room.narrator = on
+        ctx.chat(room, { from: 'system', author: 'Игра', text: on ? 'Рассказчик включён: модель дописывает фразу-другую атмосферы к сценам сценарного ведущего.' : 'Рассказчик выключен.' })
+        ctx.roomChanged(room)
+        store.touch(room)
+        ack({ ok: true })
+      } catch (e) { fail(ack, e) }
+    })
+
     socket.on('turn:ready', (raw, rawAck) => {
       const ack = safeAck(rawAck)
       try {

@@ -18,6 +18,7 @@ import type { ChatChoice, ChatMessage } from '@/net/protocol'
 import type { Room, ScriptAction } from '../rooms'
 import { castVote, resolveVote, voteComplete, votingOn } from '../votes'
 import type { GmContext, GmEvent } from './types'
+import type { NarrateRequest, Narrator } from './narrator'
 
 export const SCRIPT_AUTHOR = 'Ведущий · сценарий'
 
@@ -430,7 +431,25 @@ export function roomNumber(text: string): number | null {
 }
 
 export class ScriptedGm {
-  constructor(private ctx: GmContext) {}
+  constructor(private ctx: GmContext, private narrator?: Narrator) {}
+
+  /** Рассказчик включён: режим «сценарный», хозяин не выключил, есть модель */
+  private narratorOn(room: Room): boolean {
+    return room.gm === 'script' && room.narrator && !!this.narrator?.available()
+  }
+
+  /** Дописать к сообщению фразу-другую от модели; не ответила или занята — запасную строку из FLAVOR */
+  private narrateInto(room: Room, msg: ChatMessage, req: NarrateRequest, fallback: string): void {
+    const append = (text: string) => {
+      if (!text || !room.chatById(msg.id)) return
+      msg.text = `${msg.text}\n\n${text}`
+      this.ctx.updateChat(room, msg)
+      this.ctx.persist(room)
+    }
+    if (!this.narratorOn(room) || room.narrating) { append(fallback); return }
+    room.narrating = true
+    void this.narrator!.narrate({ ...req, previous: room.lastNarration || undefined }).then((text) => { if (text) room.lastNarration = text; append(text ?? fallback) }, () => append(fallback)).finally(() => { room.narrating = false })
+  }
 
   /** Отправить сообщение ведущего с кнопками */
   private say(room: Room, text: string, offers: Offer[] = []): ChatMessage {
@@ -464,16 +483,16 @@ export class ScriptedGm {
     if (loc.id === 'doroga') s.dismissRoad(n)
     room.script = { ...room.script, locationId: loc.id, n }
     const head = loc.id === 'doroga' ? `В пути (§ ${n}).` : `${loc.name}, помещение ${n}${before ? ' (вы здесь уже были)' : ''}.`
-    // связка-атмосфера при первом входе — от ведущего, не из книги
-    const mood = before ? '' : flavor(FLAVOR[loc.id], n + room.state.day)
     const nodes = openNodes(paragraphTree(p), `${loc.id}:${n}`, room.state.claimed)
-    this.sayNodes(room, loc.id, n, [mood ? `${head} ${mood}` : head], nodes, [], playerId, !before)
+    const msg = this.sayNodes(room, loc.id, n, [head], nodes, [], playerId, !before)
+    // связка-атмосфера при первом входе: от рассказчика (модель), иначе запасная строка — не текст книги
+    if (!before) this.narrateInto(room, msg, { place: loc.id === 'doroga' ? `в пути, встреча § ${n}` : `${loc.name}, помещение ${n}`, event: 'enter', scene: nodes.map(nodeSay).join(' ') }, flavor(FLAVOR[loc.id], n + room.state.day))
     this.ctx.stateChanged(room)
   }
 
   /** Рассказать открывшиеся этапы с их кнопками. Последствия этапов применяются сами (один раз, отметка в сессии);
    *  смерть и потеря половины жизней — кнопкой. jump — этапы открылись только что: переход в другое помещение выполняется */
-  private sayNodes(room: Room, loc: string, n: number, head: string[], nodes: BookNode[], extra: Offer[] = [], playerId?: string, jump = true, done: Record<string, string[]> = {}): void {
+  private sayNodes(room: Room, loc: string, n: number, head: string[], nodes: BookNode[], extra: Offer[] = [], playerId?: string, jump = true, done: Record<string, string[]> = {}): ChatMessage {
     const s = room.session()
     const P = `${loc}:${n}`
     const actor = this.actor(room, playerId)
@@ -500,11 +519,12 @@ export class ScriptedGm {
     const ambush = this.ambushIn(room, P, nodes)
     const fromNodes = fresh(room, nodes.flatMap((x) => nodeOffers(loc, n, x, claimed, open, room.state.heroes))).filter((o) => !(ambush && o.action.t === 'fight' && o.action.id === ambush.id))
     offers.push(...fromNodes, { label: 'Идти дальше', action: { t: 'next' } as ScriptAction })
-    this.say(room, [...head, ...text].filter(Boolean).join('\n\n'), offers)
+    const msg = this.say(room, [...head, ...text].filter(Boolean).join('\n\n'), offers)
     if (ambush) this.startAmbush(room, loc, n, ambush, playerId)
     // «летит в центр города (локация 41)» — партия переходит в названное помещение
     const to = jump ? nodes.find((x) => x.goto !== undefined)?.goto : undefined
     if (to !== undefined && to !== n) this.presentParagraph(room, loc, to, playerId)
+    return msg
   }
 
   /** Этап среди показанных, где монстры нападают сами (hints.attack) и бой ещё не выигран; пока идёт другой бой — нет */
@@ -551,8 +571,11 @@ export class ScriptedGm {
           shownNodes = revealedBy(tree, `${f.loc}:${f.n}`, room.state.claimed ?? [], `${at}:${what}`)
         }
         const mood = ev.outcome ? flavor(FLAVOR_END[ev.outcome], room.state.day + (f?.n ?? 0)) : ''
-        if (f && shownNodes.length) this.sayNodes(room, f.loc, f.n, [`${ev.text} ${mood}`.trim()], shownNodes)
-        else this.say(room, `${ev.text} ${mood} Продолжайте: выберите вариант выше или назовите номер следующего помещения.`.replace(/\s+/g, ' '))
+        const msg = f && shownNodes.length ? this.sayNodes(room, f.loc, f.n, [ev.text], shownNodes) : this.say(room, `${ev.text} Продолжайте: выберите вариант выше или назовите номер следующего помещения.`)
+        if (ev.outcome) {
+          const locName = f ? idx.locationById.get(f.loc)?.name ?? f.loc : ''
+          this.narrateInto(room, msg, { place: f ? `${locName}, помещение ${f.n}` : 'место боя', event: ev.outcome, scene: shownNodes.map(nodeSay).join(' ') || ev.text }, mood)
+        }
       } else if (ev.type === 'spell' && ev.spell) {
         const r = spellReply(room, ev.spell)
         this.say(room, r.text, r.offers ?? [])

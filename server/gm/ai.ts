@@ -14,6 +14,7 @@ import { randomUUID } from 'node:crypto'
 import type { Room } from '../rooms'
 import { buildSystemPrompt, plainText, recap, snapshot } from './prompt'
 import { ScriptedGm, roomNumber } from './script'
+import { Narrator } from './narrator'
 import { GM_TOOLS, executeGmTool, paragraphPayload } from './tools'
 import { ProviderError, describeTool, type GmContext, type GmDriver, type GmEvent, type GmFactory, type GmInput, type LlmProvider } from './types'
 
@@ -65,6 +66,17 @@ export class AnthropicProvider implements LlmProvider {
     this.effort = (opts.effort ?? (process.env.GM_EFFORT as AnthropicOptions['effort']) ?? 'medium')!
     // системный промпт неизменен: один и тот же текст для всех комнат и ходов
     this.system = [{ type: 'text', text: buildSystemPrompt(), cache_control: { type: 'ephemeral' } }]
+  }
+
+  /** Короткий ответ без инструментов (рассказчик) */
+  async complete(system: string, user: string, maxTokens: number): Promise<string> {
+    try {
+      const stream = this.client.stream({ model: this.model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }], betas: BETAS, fallbacks: 'default' })
+      const msg = await stream.finalMessage()
+      return msg.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map((b) => b.text).join('').trim()
+    } catch (e) {
+      throw new ProviderError(`Claude: ${(e as Error).message}`, cooldownForApiError(e))
+    }
   }
 
   async turn(room: Room, input: { userText: string; snapshot: string }, io: { delta(text: string): void; stateChanged(): void }): Promise<string> {
@@ -180,7 +192,8 @@ export class GmDirector implements GmDriver {
   private script: ScriptedGm
 
   constructor(private ctx: GmContext, private opts: DirectorOptions) {
-    this.script = new ScriptedGm(ctx)
+    // рассказчик делит с ведущим список моделей и паузы после ошибок: исчерпанную квоту не дёргает
+    this.script = new ScriptedGm(ctx, new Narrator(opts.providers, this.cooling, opts.cooldownScale ?? 1))
   }
 
   chain(): string[] {

@@ -133,6 +133,33 @@ export class OpenAiCompatProvider implements LlmProvider {
     return text.trim()
   }
 
+  /** Один короткий ответ без инструментов и истории (рассказчик): обычный запрос без потока */
+  async complete(system: string, user: string, maxTokens: number): Promise<string> {
+    const res = await this.fetchImpl(`${this.cfg.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(this.cfg.apiKey ? { authorization: `Bearer ${this.cfg.apiKey}` } : {}) },
+      body: JSON.stringify({
+        model: this.cfg.model,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+        max_tokens: maxTokens,
+        temperature: 0.9,
+        ...this.cfg.extraBody,
+      }),
+      // атмосфера нужна сразу или не нужна: перегруженная модель (Gemini под нагрузкой — до минуты) уступает следующей
+      signal: AbortSignal.timeout(Math.min(this.cfg.timeoutMs ?? 90_000, 12_000)),
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      const retryAfter = res.headers.get('retry-after') ?? body.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/)?.[1] ?? null
+      const wait = cooldownFor(res.status, retryAfter)
+      const daily = res.status === 429 && /PerDay/i.test(body)
+      throw new ProviderError(`${this.label}: HTTP ${res.status} ${body.replace(/\s+/g, ' ').slice(0, 200)}`, daily ? Math.max(wait, HOUR) : wait)
+    }
+    const data = (await res.json()) as { choices?: { message?: { content?: string | null } }[]; error?: { message?: string } }
+    if (data.error) throw new ProviderError(`${this.label}: ${data.error.message ?? 'ошибка'}`, 30_000)
+    return (data.choices?.[0]?.message?.content ?? '').trim()
+  }
+
   private async request(hist: OaMsg[], onText: (d: string) => void, retried = false): Promise<{ content: string; toolCalls: OaToolCall[] }> {
     const res = await this.fetchImpl(`${this.cfg.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',

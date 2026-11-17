@@ -47,6 +47,7 @@ export interface RoomData {
   gmSeen?: Record<string, string>
   script?: ScriptState
   turnMode?: TurnMode
+  narrator?: boolean
   held?: HeldInput[]
   votes?: Record<string, Record<string, string>>
   gmMarks?: Record<string, number>
@@ -152,6 +153,11 @@ export class Room {
   gmBusy = false
   /** ход по готовности: реплики ведущему копятся, пока все активные игроки не готовы */
   turnMode: TurnMode = 'instant'
+  /** рассказчик поверх сценарного ведущего: модель дописывает атмосферу к сценам (хозяин выключает) */
+  narrator = true
+  /** запрос рассказчика в полёте и его прошлая фраза (не сохраняются) */
+  narrating = false
+  lastNarration = ''
   held: HeldInput[] = []
   ready = new Set<string>()
   /** голосование за варианты сценарного ведущего: id сообщения → игрок → id варианта */
@@ -230,7 +236,7 @@ export class Room {
   view(p: Player, gmChain: string[]): RoomView {
     return {
       code: this.code, gm: this.gm, players: [...this.players.values()].map((x) => this.playerView(x)), me: this.playerView(p), aiAvailable: true, gmChain, gmBusy: this.gmBusy,
-      turnMode: this.turnMode, active: this.activePlayers().map((x) => x.id), ready: [...this.ready], held: this.held.length,
+      turnMode: this.turnMode, narrator: this.narrator, active: this.activePlayers().map((x) => x.id), ready: [...this.ready], held: this.held.length,
       hostAway: this.hostAway(),
     }
   }
@@ -240,7 +246,7 @@ export class Room {
       code: this.code, gm: this.gm, state: this.state,
       players: [...this.players.values()].map(({ sockets: _s, ...rest }) => { void _s; return rest }),
       chat: this.chat, gmHistories: this.gmHistories, gmSeen: this.gmSeen, script: this.script, choiceActions: this.choiceActions,
-      turnMode: this.turnMode, held: this.held, votes: this.votes,
+      turnMode: this.turnMode, narrator: this.narrator, held: this.held, votes: this.votes,
       gmMarks: this.gmMarks, gmQueue: this.gmQueue, gmInFlight: this.gmInFlight, gmDone: this.gmDone,
       createdAt: this.createdAt, updatedAt: this.updatedAt,
     }
@@ -255,6 +261,7 @@ export class Room {
     r.script = d.script ?? { locationId: null, n: null }
     r.choiceActions = d.choiceActions ?? {}
     r.turnMode = d.turnMode ?? 'instant'
+    r.narrator = d.narrator ?? true
     r.held = d.held ?? []
     r.votes = d.votes ?? {}
     // сервер упал посреди хода ведущего: отрезать недописанный ход (иначе API отвергает историю), ход повторится

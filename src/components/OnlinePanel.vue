@@ -99,6 +99,14 @@ function copyLink() {
         </template>
         <b v-else>{{ r.turnMode === 'ready' ? 'когда все готовы' : 'сразу на каждую реплику' }}</b>
       </div>
+      <div v-if="r.gm === 'script' && r.gmChain.length" class="row small" style="margin-bottom:.4rem">
+        <span class="muted">Рассказчик ИИ:</span>
+        <template v-if="r.me.isHost">
+          <button class="small" :disabled="r.narrator" title="Модель дописывает фразу-другую атмосферы к сценам; механику не трогает, тайн не знает" @click="store.setNarrator(true)">вкл</button>
+          <button class="small" :disabled="!r.narrator" @click="store.setNarrator(false)">выкл</button>
+        </template>
+        <b v-else>{{ r.narrator ? 'включён' : 'выключен' }}</b>
+      </div>
       <table class="list">
         <tbody>
           <tr v-for="p in r.players" :key="p.id">

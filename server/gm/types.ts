@@ -53,6 +53,8 @@ export interface LlmProvider {
    * откатить свою историю и бросить ProviderError.
    */
   turn(room: Room, input: { userText: string; snapshot: string }, io: { delta(text: string): void; stateChanged(): void }): Promise<string>
+  /** Короткий ответ без инструментов и истории (рассказчик поверх сценарного ведущего); ошибка — ProviderError */
+  complete?(system: string, user: string, maxTokens: number): Promise<string>
 }
 
 /** Провайдер недоступен: нет ключа, лимит, сбой. cooldownMs — сколько его не пробовать */

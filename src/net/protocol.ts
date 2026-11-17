@@ -35,6 +35,8 @@ export interface RoomView {
   /** ИИ-ведущий сейчас отвечает */
   gmBusy: boolean
   turnMode: TurnMode
+  /** рассказчик ИИ поверх сценарного ведущего включён */
+  narrator: boolean
   /** игроки, чьей готовности ждёт ход (в сети и с живыми героями) */
   active: string[]
   /** кто уже готов */
@@ -92,6 +94,7 @@ export interface ClientToServer {
   'room:join': (req: JoinRoomReq, ack: (a: Ack) => void) => void
   'room:setGm': (gm: GmMode, ack: (a: Ack) => void) => void
   'room:turnMode': (mode: TurnMode, ack: (a: Ack) => void) => void
+  'room:narrator': (on: boolean, ack: (a: Ack) => void) => void
   'turn:ready': (ready: boolean, ack: (a: Ack) => void) => void
   'turn:go': (ack: (a: Ack) => void) => void
   'room:leave': (ack: (a: Ack) => void) => void

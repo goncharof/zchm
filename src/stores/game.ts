@@ -217,6 +217,7 @@ export const useGameStore = defineStore('game', () => {
   const releaseHero = (heroUid: string) => netAction((c) => c.releaseHero(heroUid))
   const setGmMode = (gm: GmMode) => netAction((c) => c.setGm(gm))
   const setTurnMode = (mode: TurnMode) => netAction((c) => c.setTurnMode(mode))
+  const setNarrator = (on: boolean) => netAction((c) => c.setNarrator(on))
   const claimHost = () => netAction((c) => c.claimHost())
   const setReady = (ready: boolean) => netAction((c) => c.setReady(ready))
   const turnGo = () => netAction((c) => c.turnGo())
@@ -330,7 +331,7 @@ export const useGameStore = defineStore('game', () => {
 
   return {
     game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, isMine: isMineHero, chat, netStatus, rejoinState, abandonRejoin, unread, markChatSeen, isMineMsg: isMine, streaming, connecting,
-    createRoom, joinRoom, rejoin, leaveRoom, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, claimHost, setReady, turnGo, ownerOf,
+    createRoom, joinRoom, rejoin, leaveRoom, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, setNarrator, claimHost, setReady, turnGo, ownerOf,
     heroes, combat, location, worldNode, started,
     say, hero, cmd, cmdOk, attachNet, detachNet,
     resetGame, exportSave, importSave, slotInfo, saveSlot, loadSlot, clearSlot,
