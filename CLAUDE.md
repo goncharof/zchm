@@ -37,6 +37,7 @@ node tools/qa/online.mjs                    # при pnpm dev + демо-сер�
 tools/fetch_sources.sh   # скачать оцифрованную коробку (120 МБ) в source/pdf и создать tools/.venv
 pnpm data:bestiary  # source/pdf → src/data/bestiary.json + public/img/bestiary/*.jpg
 pnpm data:book      # → src/data/locations.json + public/img/locations/*.jpg
+tools/.venv/bin/python -I tools/mark_attacks.py   # пометить в tools/book/*.json этапы, где монстры нападают сами (hints.attack), затем pnpm data:book
 pnpm data:world     # → src/data/world.json + public/img/map/world.jpg
 pnpm data:rules     # → src/data/{classes,weapons,armor,items,artifacts,spells,rules}.json
 pnpm data:lore      # → src/data/lore.json (Книга Сумерек)
