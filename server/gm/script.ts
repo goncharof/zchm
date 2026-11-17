@@ -12,6 +12,7 @@ import { hasWard, isConscious } from '@/engine/character'
 import { UNDEAD } from '@/engine/combat'
 import { GameError } from '@/game/session'
 import { plural } from '@/ui/format'
+import { reminders } from '@/game/referee'
 import { DEAD_AT } from '@/engine/rules'
 import type { ChatChoice, ChatMessage } from '@/net/protocol'
 import type { Room, ScriptAction } from '../rooms'
@@ -346,7 +347,7 @@ function senseReply(room: Room, nums: number[]): string {
 }
 
 /** Служебные слова реплики, которые ничего не значат при сравнении с подписью кнопки */
-const STOP = new Set(['и', 'в', 'во', 'на', 'с', 'со', 'мы', 'я', 'к', 'ко', 'по', 'за', 'не', 'да', 'нет', 'его', 'их', 'ее', 'её', 'он', 'она', 'они', 'это', 'этот', 'эту', 'что', 'как', 'у', 'о', 'об', 'от', 'до', 'из', 'же', 'бы', 'ли', 'то', 'а', 'но', 'ну', 'вы', 'нас', 'нам', 'ему', 'ей', 'им', 'все', 'всё', 'тут', 'там', 'здесь', 'давай', 'давайте', 'хотим', 'хочу', 'пусть', 'если', 'сам', 'сами', 'свой', 'свою', 'герой', 'герои', 'партия', 'команда'])
+const STOP = new Set(['и', 'в', 'во', 'на', 'с', 'со', 'мы', 'я', 'к', 'ко', 'по', 'за', 'не', 'да', 'нет', 'его', 'их', 'ее', 'её', 'он', 'она', 'они', 'это', 'этот', 'эту', 'что', 'как', 'у', 'о', 'об', 'от', 'до', 'из', 'же', 'бы', 'ли', 'то', 'а', 'но', 'ну', 'вы', 'нас', 'нам', 'ему', 'ей', 'им', 'все', 'всё', 'тут', 'там', 'здесь', 'давай', 'давайте', 'хотим', 'хочу', 'пусть', 'если', 'сам', 'сами', 'свой', 'свою', 'герой', 'герои', 'партия', 'команда', 'ладно', 'ок', 'окей', 'хорошо', 'итак', 'тогда', 'ага', 'угу', 'хм', 'сначала', 'ещё', 'еще', 'тоже'])
 const ENDINGS = /(иями|ями|ами|ием|ого|его|ому|ему|ыми|ими|ешь|ете|ите|ают|яют|ует|уют|ать|ять|ить|еть|ала|яла|ила|ела|ись|ось|ие|ые|ой|ей|ий|ый|ая|яя|ое|ее|ую|юю|ом|ем|ам|ям|ах|ях|ов|ев|ью|ия|ть|ся|сь|а|я|у|ю|ы|и|е|о|й|ь)$/
 
 /** Основы слов реплики или подписи: строчные, без «ё», без служебных слов, с отрезанным окончанием (грубо, но для
@@ -404,6 +405,11 @@ const WHERE = /где (?:мы|партия|наход)|куда (?:дальше|
 /** Вопрос: знак вопроса или вопросительное слово в начале */
 const QUESTION = /\?\s*$|^\s*(?:что|кто|где|куда|как|почему|зачем|сколько|можно ли|есть ли|какой|какая|какие|какое|чем|откуда|правда ли)(?![а-яё])/i
 const QUESTION_WORDS = new Set(['что', 'кто', 'где', 'куда', 'как', 'почему', 'зачем', 'сколько', 'можно', 'есть', 'какой', 'какая', 'какие', 'какое', 'чем', 'откуда', 'правда', 'ли', 'это', 'такое', 'значит', 'видим', 'вид', 'тут', 'там'])
+
+/** Реплика по действиям: «берём монеты и идём в 5», «не отдаём, деремся», «осмотримся, потом дальше» (не больше четырёх) */
+export function clauses(text: string): string[] {
+  return text.split(/\s*(?:[,;]|(?<![а-яё])(?:и|а|потом|затем|после этого|а потом)(?![а-яё]))\s*/i).map((x) => x.trim()).filter(Boolean).slice(0, 4)
+}
 
 /** Список номеров словами: «3, 5–9, 12» */
 export function ranges(nums: number[]): string {
@@ -557,21 +563,31 @@ export class ScriptedGm {
       }
     }
     const unmatched: { author: string; text: string }[] = []
-    for (const t of texts) {
-      // разведка заклинанием ждёт номера помещений: «зло 7, 12», «разведка 5»
-      const sense = room.script.sense && t.text.match(/^\s*(?:зло|чу[юя]|чувств\S*|разведк\S*|тень|душ\S*)(?![а-яё])[^\d]*(\d[\d\s,и]*)/i)
-      if (sense) { this.say(room, senseReply(room, [...new Set(sense[1].match(/\d+/g)!.map(Number))])); continue }
-      const num = roomNumber(t.text)
-      if (num !== null && room.state.locationId) this.presentParagraph(room, room.state.locationId, num, t.playerId)
-      // в пути — только встречи, которые выпали партии
-      else if (num !== null && room.state.pendingRoad.includes(num)) this.presentParagraph(room, 'doroga', num, t.playerId)
-      else if (num !== null) this.say(room, room.state.pendingRoad.length ? `Встречи в пути: ${room.state.pendingRoad.map((x) => `§ ${x}`).join(', ')}.` : 'Сначала войдите в локацию с карты, потом назовите номер помещения.')
-      else if (!this.freeReply(room, t.text, t.playerId)) unmatched.push(t)
-    }
+    for (const t of texts) this.handleText(room, t, unmatched)
     if (unmatched.length) this.tableDecision(room, unmatched)
     this.remind(room)
     // этапы, открытые событием (исход боя), могли изменить состояние: последствия, спутник
     this.ctx.stateChanged(room)
+  }
+
+  /** Одна реплика: разведка, «где мы» и вопрос — целиком; остальное по действиям («берём монеты и идём в 5»):
+   *  номер помещения, «осмотреться», подходящая кнопка; что не разобрано — в «решение стола» */
+  private handleText(room: Room, t: { author: string; text: string; playerId?: string }, unmatched: { author: string; text: string }[]): void {
+    // разведка заклинанием ждёт номера помещений: «зло 7, 12», «разведка 5»
+    const sense = room.script.sense && t.text.match(/^\s*(?:зло|чу[юя]|чувств\S*|разведк\S*|тень|душ\S*)(?![а-яё])[^\d]*(\d[\d\s,и]*)/i)
+    if (sense) { this.say(room, senseReply(room, [...new Set(sense[1].match(/\d+/g)!.map(Number))])); return }
+    if (WHERE.test(t.text)) { this.say(room, this.whereReply(room)); return }
+    if (QUESTION.test(t.text)) { this.say(room, this.answerFromScene(room, t.text)); return }
+    for (const clause of clauses(t.text)) {
+      // «Ладно», «ну» — междометия без действия
+      if (!stems(clause).length) continue
+      const num = roomNumber(clause)
+      if (num !== null && room.state.locationId) this.presentParagraph(room, room.state.locationId, num, t.playerId)
+      // в пути — только встречи, которые выпали партии
+      else if (num !== null && room.state.pendingRoad.includes(num)) this.presentParagraph(room, 'doroga', num, t.playerId)
+      else if (num !== null) this.say(room, room.state.pendingRoad.length ? `Встречи в пути: ${room.state.pendingRoad.map((x) => `§ ${x}`).join(', ')}.` : 'Сначала войдите в локацию с карты, потом назовите номер помещения.')
+      else if (!this.freeReply(room, clause, t.playerId)) unmatched.push({ author: t.author, text: clause })
+    }
   }
 
   /** Кнопки последнего сообщения ведущего, которые ещё не нажаты */
@@ -608,18 +624,9 @@ export class ScriptedGm {
     return lines.join('\n')
   }
 
-  /** Напоминания-рефери: что по правилам назрело у героев и спутников */
+  /** Напоминания-рефери (src/game/referee.ts) */
   private reminders(room: Room): string[] {
-    const out: string[] = []
-    for (const h of room.state.heroes) {
-      if (h.status.dead) { out.push(`${h.name} погиб: заменить героя можно на экране «Партия».`); continue }
-      if (h.status.unconscious) out.push(`${h.name} без сознания: нужны лечение, бутылка или отдых.`)
-      else if (h.lives <= Math.max(3, Math.floor(h.maxLives / 4))) out.push(`${h.name} при смерти (${h.lives} из ${h.maxLives}): лечение, бутылка или трактир.`)
-      if (h.status.poison) out.push(`${h.name} отравлен: противоядие или «Исцеление».`)
-      if (h.pendingSpellPicks > 0) out.push(`${h.name}: не выбрано заклинание за новый уровень (${h.pendingSpellPicks}) — экран героя.`)
-    }
-    for (const c of room.state.companions) if (c.battlesLeft === 1) out.push(`${c.name} остаётся с партией на один бой.`)
-    return out
+    return reminders(room.state)
   }
 
   /** Напоминания после хода — только вне боя и только когда они изменились */
@@ -650,12 +657,10 @@ export class ScriptedGm {
    *  Ничего не подошло — false */
   private freeReply(room: Room, text: string, playerId?: string): boolean {
     const loc = room.script.locationId
-    if (WHERE.test(text)) { this.say(room, this.whereReply(room)); return true }
     if (/осмотр|огляд|смотр|обыск|ищем|ищу|поищ|разгляд|изуча/i.test(text) && loc && room.script.n != null) {
       this.presentParagraph(room, loc, room.script.n, playerId)
       return true
     }
-    if (QUESTION.test(text)) { this.say(room, this.answerFromScene(room, text)); return true }
     const choices = this.openChoices(room)
     const m = matchChoice(text, choices)
     if (!m) return false
@@ -861,7 +866,9 @@ export class ScriptedGm {
         const loc = a.loc ?? room.script.locationId
         const n = a.n ?? room.script.n
         if (loc && n !== null && n !== undefined) room.script.fight = at ? { loc, n, id: a.id } : { loc, n }
-        this.say(room, `${a.ambush ? 'Нападение! ' : 'Бой! '}Противники: ${room.state.combat?.monsters.map((m) => m.name).join(', ')}. Сражайтесь на экране боя.`)
+        // при встрече игрокам сообщаются только уровень и защита монстра (стр. 18)
+        const foes = a.specs.map((x) => { const m = idx.monster(x.monsterId); return `${m.name}${x.count > 1 ? ` ×${x.count}` : ''} (${m.level ?? '—'} ур., защита ${m.defense ?? '—'})` })
+        this.say(room, `${a.ambush ? 'Нападение! ' : 'Бой! '}Противники: ${foes.join(', ')}. Сражайтесь на экране боя.`)
         return
       }
       case 'coins': {
@@ -907,9 +914,14 @@ export class ScriptedGm {
         s.restAll(1)
         this.say(room, `Партия отдыхает сутки. День ${room.state.day}.`)
         return
-      case 'next':
-        this.say(room, room.state.locationId ? 'Куда дальше? Назовите номер помещения на плане.' : 'Куда дальше? Выберите путь на карте.')
+      case 'next': {
+        const loc = room.state.locationId ? idx.locationById.get(room.state.locationId) : null
+        if (!loc) { this.say(room, 'Куда дальше? Выберите путь на карте.'); return }
+        const visited = new Set(room.state.visited[loc.id] ?? [])
+        const left = loc.paragraphs.map((p) => p.n).filter((x) => !visited.has(x))
+        this.say(room, left.length ? `Куда дальше? Не пройдены: ${ranges(left)}. Назовите номер помещения на плане.` : 'Все помещения пройдены — можно покинуть локацию и выбрать путь на карте.')
         return
+      }
       case 'check': {
         const h = needHero()
         const r = s.luckCheck(h.uid, a.target)

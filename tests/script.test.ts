@@ -193,6 +193,19 @@ describe('сценарный ведущий', () => {
     await until(() => g.chat.some((m) => m.from === 'system' && m.author === 'Напоминание' && m.text.includes(`${hero.name} при смерти`)))
   })
 
+  it('составная реплика «деремся с зомби и потом идём дальше»: бой с уровнем и защитой противника, затем список непройденных', async () => {
+    const g = await setup()
+    await g.c.call('enterLocation', ['zolotoy-gorod'])
+    await g.c.chat('1', true)
+    await until(() => /помещение 1/.test(lastGm(g.chat).text))
+    await g.c.chat('деремся с зомби и потом идём дальше', true)
+    await until(() => !!g.state.combat)
+    const z = idx.monster('zombi')
+    // при встрече игрокам сообщаются только уровень и защита (стр. 18)
+    expect(g.chat.some((m) => m.from === 'gm' && m.text.includes(`Противники: Зомби (${z.level} ур., защита ${z.defense})`))).toBe(true)
+    await until(() => /Куда дальше\? Не пройдены: 2–41/.test(lastGm(g.chat).text))
+  })
+
   it('финал: в зале с фонтаном — атака на Чёрного мага и фонтан; попадание — победа и текст книги о кучке пепла', async () => {
     const g = await setup()
     await goTo(g, 'zamok-chernogo-maga')
