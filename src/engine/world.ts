@@ -49,6 +49,19 @@ export function neighbours(world: WorldMap, nodeId: string): { id: string; cells
     .map((e) => ({ id: e.from === nodeId ? e.to : e.from, cells: e.cells }))
 }
 
+/** Что партия знает о карте мира. ХАУСРУЛ: карта открывается постепенно — видны места, где партия была (seen), и
+ *  соседние узлы, куда от них ведут дороги (known = seen + соседи); остальное скрыто туманом. Локация с пройденными
+ *  помещениями считается посещённой и в старых сохранениях, где пути партии ещё не записывались. */
+export function knownNodes(world: WorldMap, state: { seenNodes?: string[]; worldNodeId: string | null; startNodeId?: string | null; visited?: Record<string, number[]> }): { seen: Set<string>; known: Set<string> } {
+  const seen = new Set<string>(state.seenNodes ?? [])
+  if (state.worldNodeId) seen.add(state.worldNodeId)
+  if (state.startNodeId) seen.add(state.startNodeId)
+  for (const n of world.nodes) if (n.locationId && (state.visited?.[n.locationId]?.length ?? 0) > 0) seen.add(n.id)
+  const known = new Set(seen)
+  for (const id of seen) for (const nb of neighbours(world, id)) known.add(nb.id)
+  return { seen, known }
+}
+
 /** ХАУСРУЛ: за каждый день пути к6, на 1–2 — случайная встреча из главы «Дорога» */
 export function rollRoadEncounters(days: number, roadParagraphNumbers: number[]): number[] {
   const out: number[] = []

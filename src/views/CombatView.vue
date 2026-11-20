@@ -145,7 +145,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
 <template>
   <div v-if="!c" class="card">
     <p>Бой не идёт.</p>
-    <button v-if="store.isGm && !store.aiGm" @click="picker = true">Начать произвольный бой</button>
+    <button v-if="store.gmTools" @click="picker = true">Начать произвольный бой</button>
     <MonsterPicker v-if="picker" @close="picker = false" @start="(s) => { picker = false; store.startEncounter(s) }" />
   </div>
   <template v-else>
@@ -168,8 +168,8 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
         <div v-if="!c.finished" class="cb-extra" :class="{ open: extraOpen }">
           <label class="switch-row" title="Ход монстров выполняется автоматически"><input v-model="autoMonsters" type="checkbox" class="switch" /> монстры ходят сами</label>
           <button v-if="c.turn === 'heroes'" class="small" title="Оставшиеся герои пропускают ход" @click="store.endHeroesTurn()">Закончить ход героев</button>
-          <button v-if="store.isGm && !store.aiGm" class="small" @click="picker = true">Добавить монстров</button>
-          <button v-if="store.isGm && !store.aiGm" class="small danger" @click="store.abortCombat()">Прервать</button>
+          <button v-if="store.gmTools" class="small" @click="picker = true">Добавить монстров</button>
+          <button v-if="store.gmTools" class="small danger" @click="store.abortCombat()">Прервать</button>
         </div>
       </div>
       <p v-if="bladesWait" class="cb-hint">Клинки — после «Сойтись вплотную»; на дистанции стреляют, метают и колдуют.</p>

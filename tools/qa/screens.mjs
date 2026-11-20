@@ -69,13 +69,27 @@ async function run(label, viewport, touch = false) {
   await page.goto(BASE + '#/map')
   await page.waitForSelector('.map-node')
   await shot('05-map')
-  await page.locator('.map-node', { hasText: 'Северный' }).click()
-  await shot('06-map-route')
-  await page.getByRole('button', { name: 'Отправиться' }).click()
+  // игрок: карта в тумане (старт и соседние узлы), в помещении нет кнопок обхода
+  if (await page.locator('.map-node').count() >= 10) problems.push(`[${label}] карта мира открыта игроку целиком`)
   await page.getByRole('button', { name: /^Войти/ }).click()
   await page.waitForSelector('.numgrid')
   await page.locator('.numgrid button').nth(0).click()
   await shot('07-location')
+  for (const name of ['Отметить пройденным', 'Дальше →', 'Произвольный бой', 'Весь текст']) {
+    if (await page.getByRole('button', { name }).count()) problems.push(`[${label}] игроку видна кнопка обхода «${name}»`)
+  }
+  await page.getByRole('button', { name: 'Покинуть локацию' }).click()
+  await page.waitForSelector('.map-node')
+  await page.locator('.map-node', { hasText: 'Северный' }).click()
+  await shot('06-map-route')
+  await page.getByRole('button', { name: 'Отправиться' }).click()
+  // дальше — инструменты ведущего (произвольный бой, чтение любой локации, вход мимо встреч в пути): «Режим ведущего»
+  await page.goto(BASE + '#/party')
+  await page.getByRole('checkbox', { name: 'режим ведущего' }).check()
+  await page.goto(BASE + '#/map')
+  await page.getByRole('button', { name: /^Войти/ }).click()
+  await page.waitForSelector('.numgrid')
+  await page.locator('.numgrid button').nth(0).click()
 
   // бой из параграфа или произвольный
   const fight = page.locator('button.danger', { hasText: 'Бой:' }).first()
@@ -103,7 +117,10 @@ async function run(label, viewport, touch = false) {
   const finish = page.getByRole('button', { name: 'Завершить бой' })
   if (await finish.count()) await finish.click()
 
-  await page.goto(BASE + '#/location/zolotoy-gorod?p=2'); await page.waitForSelector('.branch-head')
+  await page.goto(BASE + '#/location/zolotoy-gorod?p=2')
+  // в режиме ведущего текст параграфа скрыт, пока ведущий его не откроет
+  await page.getByRole('button', { name: 'Показать текст' }).click()
+  await page.waitForSelector('.branch-head')
   // по этапам: выбор открывает ветку, бросок — свой исход
   await page.locator('.branch-head').first().click()
   await page.getByRole('button', { name: /Бросить к/ }).first().click()

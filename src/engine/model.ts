@@ -230,6 +230,8 @@ export interface GameState {
   heroes: Hero[]
   /** текущий узел карты мира */
   worldNodeId: string | null
+  /** узлы карты мира, где партия уже была (ХАУСРУЛ: карта открывается постепенно — src/engine/world.ts, knownNodes) */
+  seenNodes?: string[]
   /** текущая локация Книги Жизни (если партия внутри) */
   locationId: string | null
   /** посещённые параграфы: locationId -> номера */

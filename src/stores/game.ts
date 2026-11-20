@@ -69,6 +69,10 @@ export const useGameStore = defineStore('game', () => {
   const aiGm = computed(() => online.value && (room.value?.gm === 'ai' || room.value?.gm === 'script'))
   /** этот зритель — ведущий (живой ведущий в сетевой игре) или игра без ведущего */
   const isGm = computed(() => !online.value || (room.value?.gm === 'human' && room.value.me.isHost) || room.value?.gm === 'book')
+  /** Ручные инструменты ведущего — отметить пройденным, весь текст, произвольный бой, правка жизней и монет, вся карта:
+   *  только у живого ведущего (в сети — хозяин комнаты с ведущим-человеком, за одним устройством — «Режим ведущего»).
+   *  Игроки проходят книгу сами, без обходов. */
+  const gmTools = computed(() => (online.value ? room.value?.gm === 'human' && !!room.value.me.isHost : !!game.value?.gmMode))
   /** герои, которыми управляет этот игрок (в одиночной игре — все) */
   /** Герои, которыми можно управлять (как в server/permissions.ts): свои; хозяин без автоведущего — любые; ничьи — любой игрок */
   const myHeroUids = computed<string[]>(() => {
@@ -367,7 +371,7 @@ export const useGameStore = defineStore('game', () => {
   }
 
   return {
-    game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, isMine: isMineHero, chat, netStatus, rejoinState, abandonRejoin, unread, markChatSeen, isMineMsg: isMine, streaming, connecting,
+    game, world, notice, net, room, online, aiGm, isGm, gmTools, myHeroUids, canControl, isMine: isMineHero, chat, netStatus, rejoinState, abandonRejoin, unread, markChatSeen, isMineMsg: isMine, streaming, connecting,
     savedAt, recent, createRoom, joinRoom, rejoin, leaveRoom, suspendRoom, resumeRoom, forgetRecent, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, setNarrator, claimHost, setReady, turnGo, ownerOf,
     heroes, combat, location, worldNode, started,
     say, hero, cmd, cmdOk, attachNet, detachNet,

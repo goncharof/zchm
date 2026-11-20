@@ -38,6 +38,7 @@ export function blankGame(startNodeId = 'zolotoy-gorod'): GameState {
     updatedAt: Date.now(),
     heroes: [],
     worldNodeId: startNodeId,
+    seenNodes: startNodeId ? [startNodeId] : [],
     locationId: null,
     visited: {},
     day: 1,
@@ -60,6 +61,8 @@ export function migrate(g: GameState): GameState {
   if (g.claimed?.some((k) => k.startsWith('severnyy-fort:38:'))) g.claimed = g.claimed.map((k) => k.replace(/^severnyy-fort:38:/, 'severnyy-fort:37:'))
   g.artifactsFound ??= []
   g.startNodeId ??= g.worldNodeId ?? 'zolotoy-gorod'
+  // карта мира открывается постепенно: в старом сохранении известны старт и место, где партия стоит
+  g.seenNodes ??= [...new Set([g.startNodeId, g.worldNodeId].filter((x): x is string => !!x))]
   g.companions ??= []
   if (g.combat) {
     g.combat.allies ??= []
@@ -195,6 +198,7 @@ export class GameSession {
     if (this.world && (!node?.locationId || node.locationId === 'zamok-chernogo-maga')) throw new GameError('Начать можно в городе или крепости, но не в замке Чёрного мага')
     this.state.worldNodeId = nodeId
     this.state.startNodeId = nodeId
+    this.state.seenNodes = [nodeId]
   }
   toggleGm(): void {
     this.state.gmMode = !this.state.gmMode
@@ -376,6 +380,8 @@ export class GameSession {
     const encounters = rollRoadEncounters(days, road ? road.paragraphs.map((p) => p.n) : [])
     this.state.day += days
     this.state.worldNodeId = nodeId
+    // карта открывается постепенно: партия запоминает все узлы, через которые прошла
+    this.state.seenNodes = [...new Set([...(this.state.seenNodes ?? []), ...route.nodes])]
     this.state.locationId = null
     this.state.pendingRoad.push(...encounters)
     // встреча в пути может повториться в другом походе — прежние отметки взятого на ней не действуют

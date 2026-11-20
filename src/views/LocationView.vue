@@ -37,6 +37,20 @@ const isFinal = computed(() => props.id === 'zamok-chernogo-maga' && current.val
 const lastFinal = ref('')
 /** текст Книги Жизни скрыт: его читает ИИ-ведущий или живой ведущий */
 const hideText = computed(() => store.aiGm || (store.online && !store.isGm))
+/** ручные инструменты ведущего («Отметить пройденным», «Весь текст», правка жизней и монет): игрокам недоступны —
+ *  книгу проходят сами, без обходов */
+const tools = computed(() => store.gmTools)
+/** читать можно там, где партия: в своей локации; глава «Дорога» — только выпавшие встречи в пути */
+const here = computed(() => tools.value || props.id === 'doroga' || store.game?.locationId === props.id)
+// встреча в пути, которую партия сейчас разыгрывает: из списка ожидающих она уходит, как только открыта,
+// а после боя к ней возвращаются — номер помнит вкладка
+const ROAD_KEY = 'zchm.road.open'
+function roadOpen(): number | null { try { return Number(sessionStorage.getItem(ROAD_KEY)) || null } catch { return null } }
+function canOpen(n: number): boolean {
+  if (tools.value) return true
+  if (!here.value) return false
+  return props.id !== 'doroga' || !!store.game?.pendingRoad.includes(n) || roadOpen() === n
+}
 const textCol = ref<HTMLElement | null>(null)
 /** на телефоне текст параграфа ниже номеров — прокрутить к нему после выбора */
 function revealText() {
@@ -50,13 +64,22 @@ function pick(n: number) {
 }
 
 function open(n: number) {
+  if (!canOpen(n)) return
   current.value = n
   revealed.value = false
   fullText.value = false
   lastFinal.value = ''
+  // игроки помещения сами не отмечают: вошли — значит, были; встреча в пути считается состоявшейся
+  if (!tools.value && !hideText.value) {
+    if (!visited.value.includes(n)) void store.markVisited(props.id, n)
+    if (props.id === 'doroga' && store.game?.pendingRoad.includes(n)) {
+      try { sessionStorage.setItem(ROAD_KEY, String(n)) } catch { /* без хранилища к встрече не вернуться после боя */ }
+      void store.dismissRoad(n)
+    }
+  }
 }
-onMounted(() => {
-  if (store.game && store.game.locationId !== props.id && props.id !== 'doroga' && store.worldNode?.locationId === props.id) store.enterLocation(props.id)
+onMounted(async () => {
+  if (store.game && store.game.locationId !== props.id && props.id !== 'doroga' && store.worldNode?.locationId === props.id) await store.enterLocation(props.id)
   const p = Number(route.query.p)
   if (p) open(p)
 })
@@ -115,7 +138,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
       <h1>{{ loc.name }} <span class="badge">Книга Жизни, стр. {{ loc.pages[0] }}–{{ loc.pages[1] }}</span> <span v-if="visited.length" class="badge accent">пройдено {{ visited.length }} из {{ loc.paragraphs.length }}</span></h1>
       <div class="row loc-tools">
         <router-link v-if="services.includes('shop') || services.includes('tavern')" class="btn" to="/shop" aria-label="Лавка и трактир"><Store :size="16" aria-hidden="true" /><span>Лавка<span class="hide-phone"> / трактир</span></span></router-link>
-        <button v-if="store.isGm && !store.aiGm" aria-label="Произвольный бой" title="Бой с любыми монстрами из Бестиария" @click="picker = true"><Swords :size="16" aria-hidden="true" /><span class="hide-phone">Произвольный бой</span><span class="phone-only">Бой</span></button>
+        <button v-if="tools" aria-label="Произвольный бой" title="Бой с любыми монстрами из Бестиария" @click="picker = true"><Swords :size="16" aria-hidden="true" /><span class="hide-phone">Произвольный бой</span><span class="phone-only">Бой</span></button>
         <button v-if="store.game?.locationId === id" aria-label="Покинуть локацию" @click="leave"><LogOut :size="16" aria-hidden="true" /><span>Покинуть<span class="hide-phone"> локацию</span></span></button>
         <router-link v-else class="btn" to="/map"><MapIcon :size="16" aria-hidden="true" />Карта</router-link>
       </div>
@@ -129,13 +152,20 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
       <b>Встречи в пути:</b>
       <button v-for="(n, i) in store.game.pendingRoad" :key="i" class="small" @click="open(n)">§ {{ n }}</button>
     </div>
-    <div class="loc-layout" :class="{ 'chat-first': hideText }">
+    <div v-if="!here" class="card">
+      <p>Партия не в этой локации. Войти можно с карты, когда партия до неё дойдёт.</p>
+      <router-link class="btn" to="/map"><MapIcon :size="16" aria-hidden="true" />К карте</router-link>
+    </div>
+    <div v-else class="loc-layout" :class="{ 'chat-first': hideText }">
       <div class="loc-nums">
-        <div class="card tight">
+        <div v-if="id === 'doroga' && !tools && !hideText" class="card tight">
+          <p class="small muted" style="margin:0">{{ store.game?.pendingRoad.length ? 'В пути случились встречи — откройте их по порядку.' : paragraph ? 'Встреча в пути. Когда она разыграна, возвращайтесь к карте.' : 'Встреч в пути нет.' }}</p>
+        </div>
+        <div v-else class="card tight">
           <div class="numgrid">
-            <button v-for="p in loc.paragraphs" :key="p.n" :class="{ visited: visited.includes(p.n), active: p.n === current }" :title="hideText ? 'идти сюда' : p.segments || p.tree ? 'есть выбор' : ''" @click="pick(p.n)">{{ p.n }}<sup v-if="(p.segments || p.tree) && !hideText" style="color:var(--accent)">•</sup></button>
+            <button v-for="p in loc.paragraphs" :key="p.n" :class="{ visited: visited.includes(p.n), active: p.n === current }" :title="hideText ? 'идти сюда' : tools && (p.segments || p.tree) ? 'есть выбор' : ''" @click="pick(p.n)">{{ p.n }}<sup v-if="tools && (p.segments || p.tree) && !hideText" style="color:var(--accent)">•</sup></button>
           </div>
-          <p class="small muted" style="margin:.4rem 0 0">{{ hideText ? 'Нажмите номер, чтобы пойти в это помещение. Пройденные приглушены.' : id === 'doroga' ? 'Ведущий выбирает любое приключение из главы «Дорога».' : 'Номера соответствуют плану локации. Пройденные приглушены, точкой отмечены параграфы с выбором.' }}</p>
+          <p class="small muted" style="margin:.4rem 0 0">{{ hideText ? 'Нажмите номер, чтобы пойти в это помещение. Пройденные приглушены.' : !tools ? 'Номера соответствуют плану локации. Приглушены помещения, где партия уже была.' : id === 'doroga' ? 'Ведущий выбирает любое приключение из главы «Дорога».' : 'Номера соответствуют плану локации. Пройденные приглушены, точкой отмечены параграфы с выбором.' }}</p>
         </div>
       </div>
       <div v-if="planSrc" class="loc-plan">
@@ -188,12 +218,13 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
             <button class="small" @click="fountain">Выпить из фонтана (+5 жизней каждому)</button>
           </div>
 
-          <div class="row" style="margin-top:.8rem">
+          <!-- ручные инструменты ведущего: игроки проходят параграф по этапам, без «пропустить» и правки героев -->
+          <div v-if="tools" class="row" style="margin-top:.8rem">
             <button class="small" @click="done">Отметить пройденным</button>
             <button class="small" @click="next">Дальше →</button>
             <button v-if="staged && (!gm || revealed)" class="small" @click="fullText = !fullText">{{ fullText ? 'По этапам' : 'Весь текст' }}</button>
           </div>
-          <details style="margin-top:.6rem"><summary class="small muted">Другие действия</summary>
+          <details v-if="tools" style="margin-top:.6rem"><summary class="small muted">Другие действия</summary>
             <div class="row" style="margin-top:.4rem">
               <button class="small" @click="trap">Ловушка/тайник найден (+400)</button>
               <button class="small" @click="coins(-10)">−10 монет</button>
