@@ -12,7 +12,7 @@
 - `docs/RULES.md` — конспект правил игры со ссылками на страницы Инструкции и список неоднозначностей.
 - `docs/SOURCES.md` — происхождение материалов, разрешение автора, что можно и нельзя.
 - `docs/BOOK_STRUCTURE.md` — как устроена Книга Жизни и как её размечать для ИИ- и сценарного ведущего; `docs/book-review/` — найденные ошибки разметки по главам.
-- `docs/DEPLOY.md` — как вывести игру в сеть: туннель на вечер, VPS с Docker, Fly.io; переменные окружения.
+- `docs/DEPLOY.md` — как вывести игру в сеть: бесплатно (Render + Neon, `render.yaml`), туннель на вечер, VPS с Docker, Fly.io; переменные окружения.
 
 ## Стек
 Фронтенд: Vue 3 + Vite + TypeScript + Pinia + vue-router (hash-режим); одиночная игра работает без сервера
@@ -29,7 +29,8 @@ pnpm typecheck      # vue-tsc --noEmit
 pnpm build          # typecheck + vite build → dist/
 pnpm server         # сервер сетевой игры (tsx watch, порт 8787); вместе с pnpm dev — Vite проксирует /socket.io
 pnpm build:server && pnpm start   # продакшен: node server-dist/index.js раздаёт dist и сокеты на одном порту
-# окружение сервера: PORT, HOST, DATA_DIR (data/rooms), STATIC_DIR (dist); модели ведущего — server/gm/providers.ts
+# окружение сервера: PORT, HOST, DATA_DIR (data/rooms), DATABASE_URL (комнаты в Postgres вместо файлов), STATIC_DIR (dist);
+#   модели ведущего — server/gm/providers.ts
 #   (GEMINI_API_KEY, MISTRAL_API_KEY, CEREBRAS_API_KEY, OPENROUTER_API_KEY, GROQ_API_KEY, LLM_BASE_URL+LLM_MODEL, ANTHROPIC_API_KEY, GM_CHAIN);
 #   без ключей ходы ведёт сценарный ведущий; ключи можно положить в .env.local (KEY=value, не в git и не в Docker)
 pnpm exec tsx tools/qa/fake-gm-server.ts   # сервер с демо-ведущим без Claude API (для проверки интерфейса)

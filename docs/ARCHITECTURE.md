@@ -74,7 +74,8 @@ source/pdf ──(tools/*.py)──► src/data/*.json + public/img/**
 | `index.ts` | точка входа: порт, каталоги, включение ИИ-ведущего по `ANTHROPIC_API_KEY` |
 | `app.ts` | `createGameServer`: HTTP (статика `dist`, `/health`) + socket.io; события `room:create/join/setGm/loadState`, `hero:claim/release`, `cmd`, `chat`; рассылка `state`, `room`, `chat`, `gm:delta`, `gm:done`, `notice`; события для ведущего после пути, входа в локацию, отдыха и боя |
 | `permissions.ts` | `authorize(gm, player, command, args)` по ролям `owner/party/gm/host` |
-| `rooms.ts` | `Room` (состояние, игроки, чат, история ведущего), `RoomStore` (память + JSON-файлы с отложенной записью) |
+| `rooms.ts` | `Room` (состояние, игроки, чат, история ведущего), `RoomStore` (память + хранилище с отложенной записью) |
+| `storage.ts` | `RoomStorage` — где лежат сохранённые комнаты: `FileStorage` (JSON-файлы в `DATA_DIR`) или `PgStorage` (таблица `zchm_rooms` в Postgres, `DATABASE_URL`) |
 | `gm/types.ts` | общие типы ведущих: `GmContext`, `GmDriver`, `GmEvent`, `LlmProvider`, `ProviderError` |
 | `gm/ai.ts` | `GmDirector` — очередь ходов по комнатам, перебор провайдеров с паузами после ошибок, передача хода сценарному ведущему, сводка пропущенного; `AnthropicProvider` — Claude API (кэш, резервная модель, откат) |
 | `gm/openai.ts` | `OpenAiCompatProvider` — любые OpenAI-совместимые API (fetch + SSE, function calling, окно истории) |
