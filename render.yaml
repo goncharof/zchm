@@ -1,0 +1,20 @@
+# Render: бесплатный веб-сервис из Dockerfile — фронтенд и сетевая игра на одном адресе.
+# Как завести — docs/DEPLOY.md, раздел «Бесплатно и постоянно: Render + Neon».
+# Диска на бесплатном тарифе нет: комнаты лежат в Postgres (DATABASE_URL). Сервис засыпает через 15 минут без
+# игроков и просыпается около минуты. Ключи моделей ведущего добавляются в панели Render (Environment).
+services:
+  - type: web
+    name: zchm
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: "8787"
+      - key: TRUST_PROXY
+        value: "1"
+      # строка подключения к базе (Neon): Render спросит её один раз, при создании сервиса
+      - key: DATABASE_URL
+        sync: false
