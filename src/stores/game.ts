@@ -155,7 +155,9 @@ export const useGameStore = defineStore('game', () => {
     client.onStatus((st) => { netStatus.value = st })
     client.onLost((why) => { say(`Не удалось вернуться за стол: ${why}`); detachNet() })
     // история приходит при входе: недописанный текст ведущего сервер пришлёт заново целиком
-    client.onChatHistory((ms) => { chat.value = ms; streaming.value = {} })
+    // отсчёт командного решения идёт по часам клиента: сервер прислал, сколько осталось
+    const stamp = (m: ChatMessage): ChatMessage => (m.voteLeft != null ? { ...m, voteEnds: Date.now() + m.voteLeft } : m)
+    client.onChatHistory((ms) => { chat.value = ms.map(stamp); streaming.value = {} })
     client.onRoom((r) => {
       netStatus.value = 'online'
       rejoinState.value = 'idle'
@@ -165,14 +167,14 @@ export const useGameStore = defineStore('game', () => {
       if (seen === null) { chatSeenT.value = 0; markChatSeen() } else chatSeenT.value = Math.max(chatSeenT.value, seen)
     })
     client.onChat((m) => {
-      chat.value.push(m)
+      chat.value.push(stamp(m))
       if (chat.value.length > 300) chat.value.splice(0, chat.value.length - 300)
       if (streaming.value[m.id] !== undefined) { const s = { ...streaming.value }; delete s[m.id]; streaming.value = s }
     })
     client.onGmDelta(({ id, text }) => { streaming.value = { ...streaming.value, [id]: (streaming.value[id] ?? '') + text } })
     // ход закончен: недописанный текст (модель упала и ход передан дальше) убирается
     client.onGmDone(({ id }) => { if (streaming.value[id] !== undefined) { const s = { ...streaming.value }; delete s[id]; streaming.value = s } })
-    client.onChatUpdate((m) => { const i = chat.value.findIndex((x) => x.id === m.id); if (i >= 0) chat.value.splice(i, 1, m) })
+    client.onChatUpdate((m) => { const i = chat.value.findIndex((x) => x.id === m.id); if (i >= 0) chat.value.splice(i, 1, stamp(m)) })
   }
   function detachNet(): void {
     net.value?.close()
@@ -254,6 +256,8 @@ export const useGameStore = defineStore('game', () => {
   }
   const sendChat = (text: string, toGm: boolean, asGm = false) => netAction((c) => c.chat(text, toGm, asGm))
   const choose = (messageId: string, choiceId: string) => netAction((c) => c.choose(messageId, choiceId))
+  /** вести партию в помещение (сценарный ведущий): за столом из нескольких игроков — предложение команде */
+  const moveRoom = (n: number) => netAction((c) => c.move(n))
   const claimHero = (heroUid: string) => netAction((c) => c.claimHero(heroUid))
   const releaseHero = (heroUid: string) => netAction((c) => c.releaseHero(heroUid))
   const setGmMode = (gm: GmMode) => netAction((c) => c.setGm(gm))
@@ -373,7 +377,7 @@ export const useGameStore = defineStore('game', () => {
 
   return {
     game, world, notice, net, room, online, aiGm, isGm, gmTools, myHeroUids, canControl, isMine: isMineHero, chat, netStatus, rejoinState, abandonRejoin, unread, markChatSeen, isMineMsg: isMine, streaming, connecting,
-    savedAt, recent, createRoom, joinRoom, rejoin, leaveRoom, suspendRoom, resumeRoom, forgetRecent, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, setNarrator, claimHost, setReady, turnGo, ownerOf,
+    savedAt, recent, createRoom, joinRoom, rejoin, leaveRoom, suspendRoom, resumeRoom, forgetRecent, sendChat, choose, moveRoom, claimHero, releaseHero, setGmMode, setTurnMode, setNarrator, claimHost, setReady, turnGo, ownerOf,
     heroes, combat, location, worldNode, started,
     say, hero, cmd, cmdOk, attachNet, detachNet,
     resetGame, exportSave, importSave, slotInfo, saveSlot, loadSlot, clearSlot,

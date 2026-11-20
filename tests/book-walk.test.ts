@@ -81,7 +81,7 @@ describe('обход Книги Жизни', () => {
     p.heroUids = room.state.heroes.map((h) => h.uid)
     room.state.locationId = 'zamok-chernogo-maga'
     room.state.heroes[0].status.unconscious = true
-    const gm = new ScriptedGm({ stateChanged() {}, roomChanged() {}, chat: (r, m) => r.addChat(m), updateChat() {}, delta() {}, done() {}, notice() {}, persist() {} })
+    const gm = new ScriptedGm({ stateChanged() {}, roomChanged() {}, chat: (r, m) => r.addChat(m), updateChat() {}, delta() {}, done() {}, notice() {}, persist() {}, voting: () => false, vote() {} })
     gm.presentParagraph(room, 'zamok-chernogo-maga', 13, p.id)
     const msg = room.chat.at(-1)!
     const duel = msg.choices!.find((c) => c.label.startsWith('⚔ Атаковать'))!

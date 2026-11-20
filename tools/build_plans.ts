@@ -11,8 +11,12 @@
 //       { "a": 40, "b": 34, "via": "дверь" },                         // проход в обе стороны; сторона считается по координатам
 //       { "a": 40, "b": 29, "via": "проход" },                        // «проход» — открытый путь: подсказка назовёт место («улица»)
 //       { "a": 34, "b": 2, "via": "лестница", "side": "U" },          // side — сторона от a, если координаты её не передают
-//       { "a": 5, "b": 9, "via": "люк", "oneway": true }              // только из a в b
+//       { "a": 5, "b": 9, "via": "люк", "oneway": true },             // только из a в b
+//       { "a": 7, "b": 17, "via": "провал", "oneway": true, "hidden": true }  // скрытый путь: партия его не видит, туда ведёт текст книги
 //     ],
+//     // Место без параграфа — двор между зданиями, перекрёсток без номера: ключ — отрицательное число, at — его середина.
+//     // Через него идут («впереди двор»), читать там нечего. Двери зданий, выходящие во двор, связываются с ним.
+//     //   "rooms": { "-1": { "at": [540, 900], "kind": "двор" }, … },  "links": [{ "a": -1, "b": 5, "via": "дверь" }, …]
 //     "notes": "что на плане было неясно"
 //   }
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
@@ -33,7 +37,7 @@ interface RawPlan {
   id: string
   entrances: { to: number; via: string; heading: PlanSide }[]
   rooms: Record<string, { at: [number, number]; kind: string }>
-  links: { a: number; b: number; via: string; side?: PlanSide; oneway?: boolean }[]
+  links: { a: number; b: number; via: string; side?: PlanSide; oneway?: boolean; hidden?: boolean }[]
   notes?: string
 }
 
@@ -48,7 +52,8 @@ export function buildPlan(raw: RawPlan): { plan: LocationPlan; errors: string[];
   const want = new Set(loc.paragraphs.map((p) => p.n))
   const have = new Set(Object.keys(raw.rooms ?? {}).map(Number))
   const missing = [...want].filter((n) => !have.has(n))
-  const extra = [...have].filter((n) => !want.has(n))
+  // отрицательные номера — места без параграфа (двор, перекрёсток): их в книге нет, и это не ошибка
+  const extra = [...have].filter((n) => !want.has(n) && !(n < 0))
   if (missing.length) errors.push(`нет помещений: ${missing.join(', ')}`)
   if (extra.length) errors.push(`лишние помещения (таких параграфов нет): ${extra.join(', ')}`)
   for (const [n, r] of Object.entries(raw.rooms ?? {})) {
@@ -74,8 +79,8 @@ export function buildPlan(raw: RawPlan): { plan: LocationPlan; errors: string[];
       const turn = Math.abs(COMPASS.indexOf(l.side as (typeof COMPASS)[number]) - COMPASS.indexOf(computed))
       if (Math.min(turn, 8 - turn) >= 3) warnings.push(`${where}: указана сторона ${l.side}, а по координатам ${computed} — проверьте`)
     }
-    exits.get(l.a)!.push({ to: l.b, side, via: l.via })
-    if (!l.oneway) exits.get(l.b)!.push({ to: l.a, side: opposite(side), via: l.via })
+    exits.get(l.a)!.push({ to: l.b, side, via: l.via, ...(l.hidden ? { hidden: true as const } : {}) })
+    if (!l.oneway) exits.get(l.b)!.push({ to: l.a, side: opposite(side), via: l.via, ...(l.hidden ? { hidden: true as const } : {}) })
   }
   if (!raw.entrances?.length) errors.push('не указан вход в локацию (entrances)')
   for (const e of raw.entrances ?? []) {
@@ -93,7 +98,7 @@ export function buildPlan(raw: RawPlan): { plan: LocationPlan; errors: string[];
     const ok = reachable(plan)
     const lost = [...have].filter((n) => !ok.has(n)).sort((a, b) => a - b)
     if (lost.length) errors.push(`от входа не дойти до помещений: ${lost.join(', ')}`)
-    const deadEnds = plan.rooms.filter((r) => !r.exits.length).map((r) => r.n)
+    const deadEnds = plan.rooms.filter((r) => !r.exits.some((e) => !e.hidden)).map((r) => r.n)
     if (deadEnds.length) errors.push(`помещения без выходов (из них не выйти): ${deadEnds.join(', ')}`)
   }
   return { plan, errors, warnings }

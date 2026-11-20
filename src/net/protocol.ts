@@ -61,8 +61,13 @@ export interface ChatMessage {
   choices?: ChatChoice[]
   /** уже выбранные варианты */
   used?: string[]
-  /** голоса за варианты (режим «когда все готовы»): id варианта → проголосовавшие */
+  /** голоса за варианты (командное решение, server/votes.ts): id варианта или 'reject' → проголосовавшие */
   votes?: Record<string, { id: string; name: string }[]>
+  /** когда решение сработает само (время сервера) и сколько до этого оставалось в момент отправки, мс */
+  voteUntil?: number
+  voteLeft?: number
+  /** только у клиента: момент решения по его часам (ставится при получении сообщения) */
+  voteEnds?: number
 }
 
 export interface Ack<T = unknown> {
@@ -105,6 +110,8 @@ export interface ClientToServer {
   cmd: (req: CmdReq, ack: (a: Ack) => void) => void
   chat: (req: ChatReq, ack: (a: Ack) => void) => void
   'gm:choose': (req: { messageId: string; choiceId: string }, ack: (a: Ack) => void) => void
+  /** партия хочет в помещение n своей локации (сценарный ведущий): за столом из нескольких игроков — предложение команде */
+  'gm:move': (req: { n: number }, ack: (a: Ack) => void) => void
 }
 
 /** Состояние для отправки клиентам: журнал урезан до последних записей */

@@ -410,6 +410,11 @@ table.shop td:last-child button + button { margin-left: .3rem; }
 .plan-wrap .fog-fill { opacity: 1; }
 .plan-here { fill: var(--blood); stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .exits button { text-align: left; }
+/* командное решение в чате: что предложено, «Согласен» / «Против», отсчёт */
+.decision { margin-top: .4rem; padding: .45rem .6rem; border: 1px solid var(--line); border-left: 3px solid var(--note); border-radius: 8px; background: var(--bg-2); }
+/* куда вернуться: у двора вместо номера — слово, кнопке нужна ширина по тексту */
+.numgrid.back { display: flex; flex-wrap: wrap; }
+.numgrid.back button { min-width: 42px; padding: 0 .5rem; }
 /* связи помещений поверх плана (ведущему): двери и лестницы — цветом крови, открытые проходы — зелёным */
 .plan-link { stroke: var(--stone); stroke-width: 3; opacity: .8; vector-effect: non-scaling-stroke; }
 .plan-link.door { stroke: var(--blood); }

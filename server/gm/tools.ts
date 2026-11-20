@@ -1,5 +1,5 @@
 /** Инструменты ИИ-ведущего: схемы для Claude API и исполнение через GameSession. */
-import { REL_SEE, headingAfter, lookAround, type ExitView } from '@/engine/plans'
+import { REL_SEE, headingAfter, isYard, lookAround, type ExitView } from '@/engine/plans'
 import type Anthropic from '@anthropic-ai/sdk'
 import { paragraphTree } from '@/game/tree'
 import { z } from 'zod'
@@ -168,7 +168,7 @@ export function exitsNote(room: Room): string {
   const plan = id && !room.state.gmMode ? idx.planById.get(id) : undefined
   if (!plan) return ''
   const views = lookAround(plan, room.state.room, room.state.heading, room.state.visited[plan.id] ?? [])
-  return `Выходы отсюда: ${views.map((v) => `${REL_SEE[v.rel]} — ${v.what} (§ ${v.to}${v.known ? ', пройдено' : ''})`).join('; ') || 'нет'}.`
+  return `Выходы отсюда: ${views.map((v) => `${REL_SEE[v.rel]} — ${v.what} (${isYard(v.to) ? `место ${v.to}, без параграфа` : `§ ${v.to}`}${v.known ? ', пройдено' : ''})`).join('; ') || 'нет'}.`
 }
 /** Что партия увидит, войдя в помещение n: поле «выходы» в ответе open_paragraph */
 function exitsAfter(room: Room, n: number): { выходы?: ReturnType<typeof exitList> } {
@@ -182,6 +182,13 @@ function exitsAfter(room: Room, n: number): { выходы?: ReturnType<typeof e
 export function paragraphPayload(room: Room, locationId: string, n: number): string {
   const loc = idx.locationById.get(locationId)
   if (!loc) throw new GameError(`Нет локации ${locationId}`)
+  // двор, перекрёсток — место плана без параграфа (отрицательный номер): текста нет, только выходы
+  const yard = isYard(n) && room.state.locationId === loc.id ? idx.planById.get(loc.id)?.rooms.find((r) => r.n === n) : undefined
+  if (yard) {
+    const why = room.session().roomBlocked(n)
+    if (why) throw new GameError(`${why} ${exitsNote(room)}`)
+    return JSON.stringify({ локация: loc.name, место: yard.kind, параграфа_нет: true, ...exitsAfter(room, n), напоминание: 'Это место без параграфа: событий книги здесь нет. Опиши его одной фразой и назови выходы.' })
+  }
   const p = loc.paragraphs.find((x) => x.n === n)
   if (!p) throw new GameError(`В локации «${loc.name}» нет параграфа ${n}`)
   const before = (room.state.visited[loc.id] ?? []).includes(p.n)

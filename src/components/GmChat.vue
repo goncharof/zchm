@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { ChatMessage } from '@/net/protocol'
 import { SendHorizontal, Volume2, VolumeX } from 'lucide-vue-next'
 import { useGameStore } from '@/stores/game'
 import { onVoicesChanged, russianVoices, saveSpeechPrefs, speak, speaking, speechPrefs, speechSupported, stopSpeaking } from '@/ui/speech'
@@ -49,6 +50,31 @@ function myVote(m: { votes?: Record<string, { id: string }[]> }, choiceId: strin
   const me = store.room?.me.id
   return !!me && !!m.votes?.[choiceId]?.some((v) => v.id === me)
 }
+/** Командное решение (server/votes.ts): что предложено, кто за и кто против, сколько осталось до решения.
+ *  Молчание — согласие: когда отсчёт кончится, сработает вариант с большинством поданных голосов. */
+const REJECT = 'reject'
+const now = ref(Date.now())
+let tick: ReturnType<typeof setInterval> | undefined
+onMounted(() => { tick = setInterval(() => { now.value = Date.now() }, 500) })
+onBeforeUnmount(() => clearInterval(tick))
+function decision(m: ChatMessage) {
+  const votes = m.votes ?? {}
+  const options = Object.entries(votes).filter(([id]) => id !== REJECT).sort((a, b) => b[1].length - a[1].length)
+  if (!options.length && !votes[REJECT]) return null
+  const lead = options[0]
+  const label = (m.choices?.find((c) => c.id === lead?.[0])?.label ?? '').replace(/^[▸⚔🎲🚪🗝]\s*/u, '')
+  const me = store.room?.me.id
+  return {
+    leadId: lead?.[0] ?? '',
+    label,
+    by: (lead?.[1] ?? []).map((v) => v.name).join(', '),
+    others: options.slice(1).map(([id, vs]) => `«${(m.choices?.find((c) => c.id === id)?.label ?? '').replace(/^[▸⚔🎲🚪🗝]\s*/u, '')}» — ${vs.map((v) => v.name).join(', ')}`),
+    against: (votes[REJECT] ?? []).map((v) => v.name).join(', '),
+    left: m.voteEnds ? Math.max(0, Math.ceil((m.voteEnds - now.value) / 1000)) : null,
+    iAgreed: !!me && !!lead?.[1].some((v) => v.id === me),
+    iRejected: !!me && !!votes[REJECT]?.some((v) => v.id === me),
+  }
+}
 
 /** поле ввода растёт по мере набора (до четырёх строк) */
 const input = ref<HTMLTextAreaElement | null>(null)
@@ -84,7 +110,14 @@ async function send() {
         <div v-if="m.choices?.length" class="row" style="margin-top:.35rem">
           <button v-for="c in m.choices" :key="c.id" class="small" :class="{ primary: !m.used?.includes(c.id) && c.label.startsWith('▸'), voted: myVote(m, c.id) }" :disabled="m.used?.includes(c.id)" :title="m.votes?.[c.id]?.length ? `Голоса: ${m.votes[c.id].map((v) => v.name).join(', ')}` : ''" @click="store.choose(m.id, c.id)">{{ c.label }}<span v-if="m.votes?.[c.id]?.length" class="vote-count"> · {{ m.votes[c.id].length }}</span></button>
         </div>
-        <div v-if="m.votes && Object.keys(m.votes).length" class="small muted" style="margin-top:.2rem">Голосование: вариант сработает, когда проголосуют все{{ store.room?.me.isHost ? ' (или нажмите «Ход ведущего»)' : '' }}.</div>
+        <div v-if="decision(m)" class="decision">
+          <div class="small"><b>Решение команды:</b> «{{ decision(m)!.label }}» — {{ decision(m)!.by }}<span v-if="decision(m)!.others.length">; ещё предложено: {{ decision(m)!.others.join('; ') }}</span><span v-if="decision(m)!.against">. Против: {{ decision(m)!.against }}</span>.</div>
+          <div class="row" style="margin-top:.3rem">
+            <button class="small primary" :disabled="decision(m)!.iAgreed" @click="store.choose(m.id, decision(m)!.leadId)">Согласен</button>
+            <button class="small ghost danger" :disabled="decision(m)!.iRejected" @click="store.choose(m.id, REJECT)">Против</button>
+            <span class="small muted">{{ decision(m)!.left == null ? 'молчание — согласие' : `сработает через ${decision(m)!.left} с, молчание — согласие` }}</span>
+          </div>
+        </div>
       </div>
       <div v-for="[id, t] in live" :key="id" class="gm-msg gm">
         <div class="gm-author">Ведущий <span class="muted">пишет…</span></div>

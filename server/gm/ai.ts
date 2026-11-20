@@ -217,6 +217,11 @@ export class GmDirector implements GmDriver {
   choose(room: Room, playerId: string, messageId: string, choiceId: string): void {
     this.script.choose(room, playerId, messageId, choiceId)
   }
+  /** кнопка выхода на экране локации: у сценарного ведущего — переход или предложение команде */
+  move(room: Room, playerId: string, n: number): void {
+    this.script.goRoom(room, n, playerId)
+    this.ctx.stateChanged(room)
+  }
 
   async idle(): Promise<void> {
     while (this.running.size) await Promise.all([...this.running.values()])
@@ -282,7 +287,12 @@ export class GmDirector implements GmDriver {
         })
         // ход разыгран: заранее открытые помещения и встречи пройдены, список выполненного больше не нужен
         const s = room.session()
-        for (const w of [...opened.places, ...room.gmOpened]) { s.markVisited(w.loc, w.n); if (w.loc === 'doroga') s.dismissRoad(w.n) }
+        for (const w of [...opened.places, ...room.gmOpened]) {
+          // помещение своей локации (в том числе двор без параграфа) — партия в нём и оно пройдено; прочее — только отметка
+          if (w.loc === room.state.locationId && w.loc !== 'doroga') s.placeIn(w.n)
+          else s.markVisited(w.loc, w.n)
+          if (w.loc === 'doroga') s.dismissRoad(w.n)
+        }
         room.gmDone = []
         room.gmOpened = []
         // исход боя описал ИИ — привязка боя к параграфу для сценарного ведущего больше не нужна

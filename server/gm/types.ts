@@ -27,6 +27,10 @@ export interface GmContext {
   done(room: Room, id: string): void
   notice(room: Room, text: string): void
   persist(room: Room): void
+  /** за столом несколько игроков и включено согласование: нажатие кнопки — предложение команде (server/votes.ts) */
+  voting(room: Room): boolean
+  /** голос игрока за вариант сообщения (или 'reject'); первый голос запускает отсчёт */
+  vote(room: Room, playerId: string, messageId: string, choiceId: string): void
 }
 
 export interface GmDriver {
@@ -36,6 +40,8 @@ export interface GmDriver {
   resume?(room: Room): void
   /** нажата кнопка-вариант сценарного ведущего */
   choose(room: Room, playerId: string, messageId: string, choiceId: string): void
+  /** игрок ведёт партию в помещение n (кнопка выхода на экране локации) */
+  move?(room: Room, playerId: string, n: number): void
   /** настроенные модели ИИ по порядку перебора */
   chain(): string[]
   /** дождаться окончания всех ходов (тесты, остановка сервера) */

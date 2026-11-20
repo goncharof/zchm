@@ -81,9 +81,9 @@ export function snapshot(room: Room): string {
   const node = room.world?.nodes.find((n) => n.id === s.worldNodeId)
   const loc = s.locationId ? idx.locationById.get(s.locationId) : null
   const lines: string[] = [`Состояние партии. День ${s.day}. Место на карте: ${node?.name ?? '—'}.`]
-  if (loc) lines.push(`Партия в локации «${loc.name}» (id ${loc.id}). Пройденные параграфы: ${(s.visited[loc.id] ?? []).join(', ') || 'нет'}.`)
+  if (loc) lines.push(`Партия в локации «${loc.name}» (id ${loc.id}). Пройденные параграфы: ${(s.visited[loc.id] ?? []).filter((n) => n > 0).join(', ') || 'нет'}.`)
   // по размеченному плану: где стоит партия и что видно вокруг (номера за выходами — только ведущему)
-  if (loc && idx.planById.has(loc.id) && !s.gmMode) lines.push(`Партия ${s.room != null ? `в помещении ${s.room}` : 'у входа в локацию'}. ${exitsNote(room)}`)
+  if (loc && idx.planById.has(loc.id) && !s.gmMode) lines.push(`Партия ${s.room == null ? 'у входа в локацию' : s.room < 0 ? `в месте без параграфа (${idx.planById.get(loc.id)!.rooms.find((r) => r.n === s.room)?.kind ?? 'двор'}, номер ${s.room})` : `в помещении ${s.room}`}. ${exitsNote(room)}`)
   else lines.push('Партия вне локации (на карте мира или в пути).')
   const visited = visitedSummary(room)
   if (visited) lines.push(`Пройдено за игру: ${visited}.`)

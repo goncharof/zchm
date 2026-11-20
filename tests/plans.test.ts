@@ -156,6 +156,45 @@ describe('перемещение по плану', () => {
   })
 })
 
+describe('двор без номера и скрытый путь', () => {
+  const FORT = 'severnyy-fort'
+  const fortNode = W.nodes.find((n) => n.locationId === FORT)!
+
+  it('Северный форт: ворота ведут во двор — место без параграфа; из двора видны двери и соседние дворы', () => {
+    const s = new GameSession(blankGame(fortNode.id), W)
+    s.quickStart()
+    s.setStart(fortNode.id)
+    s.enterLocation(FORT)
+    const plan = idx.planById.get(FORT)!
+    const gate = lookAround(plan, null, s.state.heading)
+    expect(gate).toHaveLength(1)
+    expect(gate[0]).toMatchObject({ what: 'ворота' })
+    expect(gate[0].to).toBeLessThan(0)
+    s.moveTo(gate[0].to)
+    expect(s.state.room).toBe(gate[0].to)
+    const yard = lookAround(plan, s.state.room, s.state.heading, s.state.visited[FORT])
+    expect(yard.some((e) => e.what.includes('дверь'))).toBe(true)
+    expect(yard.some((e) => /двор|переулок/.test(e.what))).toBe(true)
+    // у двора нет параграфа: номером его не называют, даже когда партия там была
+    expect(describeExits(lookAround(plan, yard.find((e) => e.to > 0)!.to, 'N', s.state.visited[FORT]))).not.toMatch(/§ -/)
+    // из двора в здание и обратно
+    const door = yard.find((e) => e.to > 0)!
+    s.moveTo(door.to)
+    expect(s.state.room).toBe(door.to)
+    s.moveTo(gate[0].to)
+    expect(s.state.room).toBe(gate[0].to)
+  })
+
+  it('Замок жрецов: провал из 7 в 17 партия не видит и сама туда не идёт — туда её отправляет текст книги', () => {
+    const plan = idx.planById.get('zamok-zhretsov')!
+    expect(roomOf(plan, 7)!.exits.find((e) => e.to === 17)).toMatchObject({ hidden: true })
+    expect(lookAround(plan, 7, 'N', [7]).some((e) => e.to === 17)).toBe(false)
+    expect(whyBlocked(plan, { room: 7, visited: [7] }, 17)).toMatch(/прохода нет/)
+    // переход из § 7 записан в дереве книги — он разрешён
+    expect(whyBlocked(plan, { room: 7, visited: [7] }, 17, [17])).toBeNull()
+  })
+})
+
 describe('ведущие ходят по плану', () => {
   const wait = (ms = 40) => new Promise((r) => setTimeout(r, ms))
   async function until(fn: () => boolean, ms = 3000) {
@@ -208,6 +247,34 @@ describe('ведущие ходят по плану', () => {
     await t.c.chat('где мы?', true)
     await until(() => t.gm().some((m) => /Пройдено 2 из 41\./.test(m.text)))
     expect(t.gm().find((m) => /Пройдено 2 из 41\./.test(m.text))!.text).not.toMatch(/не пройдены/)
+  })
+
+  it('двор без номера: сценарный ведущий называет место и выходы, ИИ-ведущему отдаёт место без параграфа', async () => {
+    const s = await createGameServer({ port: 0, staticDir: null, world: W }); servers.push(s)
+    const c = new NetClient(s.url); clients.push(c)
+    const chat: ChatMessage[] = []
+    c.onChat((m) => chat.push(m))
+    const j = await c.create('Иван', 'script')
+    await c.call('quickStart', [])
+    await c.call('setStart', [W.nodes.find((n) => n.locationId === 'severnyy-fort')!.id])
+    await c.call('enterLocation', ['severnyy-fort'])
+    const room = (await s.store.get(j.code))!
+    await until(() => chat.some((m) => m.from === 'gm' && /Вы входите/.test(m.text)))
+    const enter = chat.find((m) => m.from === 'gm' && /Вы входите/.test(m.text))!
+    await c.choose(enter.id, enter.choices![0].id)
+    await until(() => (room.state.room ?? 0) < 0)
+    await until(() => chat.some((m) => m.from === 'gm' && /^Двор у ворот\./.test(m.text)))
+    const yard = chat.find((m) => m.from === 'gm' && /^Двор у ворот\./.test(m.text))!
+    expect(yard.choices!.length).toBeGreaterThan(3)
+    expect(yard.text).not.toMatch(/§ -/)
+    // «где мы» называет двор, а не «помещение -1»
+    await c.chat('где мы?', true)
+    await until(() => chat.some((m) => m.from === 'gm' && /двор у ворот, день/.test(m.text)))
+    // ИИ-ведущему: место без параграфа и его выходы
+    const payload = JSON.parse(paragraphPayload(room, 'severnyy-fort', room.state.room!)) as { место: string; параграфа_нет: boolean; выходы: unknown[] }
+    expect(payload).toMatchObject({ место: 'двор у ворот', параграфа_нет: true })
+    expect(payload.выходы.length).toBeGreaterThan(3)
+    expect(snapshot(room)).toMatch(/в месте без параграфа \(двор у ворот/)
   })
 
   it('ИИ-ведущий: open_paragraph не открывает помещение без прохода и отдаёт выходы; в снимке — где партия и что вокруг', async () => {

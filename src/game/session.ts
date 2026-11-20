@@ -419,7 +419,7 @@ export class GameSession {
     const locId = this.state.locationId
     if (!locId) throw new GameError('Партия не в локации: войдите в неё с карты')
     n = Number(n)
-    if (!idx.locationById.get(locId)?.paragraphs.some((p) => p.n === n)) throw new GameError('Нет такого помещения')
+    if (!this.roomExists(locId, n)) throw new GameError('Нет такого помещения')
     if (this.state.room !== n) this.noFight()
     const why = this.roomBlocked(n)
     if (why) throw new GameError(why)
@@ -431,12 +431,17 @@ export class GameSession {
     const locId = this.state.locationId
     if (!locId) throw new GameError('Партия не в локации')
     n = Number(n)
-    if (!idx.locationById.get(locId)?.paragraphs.some((p) => p.n === n)) throw new GameError('Нет такого помещения')
+    if (!this.roomExists(locId, n)) throw new GameError('Нет такого помещения')
     const plan = idx.planById.get(locId)
     if (plan) this.state.heading = headingAfter(plan, this.state.room, n, this.state.heading)
     this.state.room = n
     const visited = (this.state.visited[locId] ??= [])
     if (visit && !visited.includes(n)) visited.push(n)
+  }
+  /** Помещение есть в локации: параграф книги или место плана без параграфа (двор, перекрёсток — отрицательный номер) */
+  private roomExists(locId: string, n: number): boolean {
+    if (n < 0) return !!idx.planById.get(locId)?.rooms.some((r) => r.n === n)
+    return !!idx.locationById.get(locId)?.paragraphs.some((p) => p.n === n)
   }
   /** Куда текст книги отправляет партию из помещения, где она стоит (этапы с переходом): туда можно и не по соседству */
   private bookTargets(): number[] {

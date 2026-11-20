@@ -284,7 +284,7 @@ export function walkBook(locIds?: string[]): Finding[] {
 
 /** Тихий контекст ведущего: сообщения только в комнате */
 const QUIET: GmContext = {
-  stateChanged() {}, roomChanged() {}, chat: (room, m) => room.addChat(m), updateChat() {}, delta() {}, done() {}, notice() {}, persist() {},
+  stateChanged() {}, roomChanged() {}, chat: (room, m) => room.addChat(m), updateChat() {}, delta() {}, done() {}, notice() {}, persist() {}, voting: () => false, vote() {},
 }
 
 /** Что сценарный ведущий не должен говорить никогда: сбой разметки или кода */

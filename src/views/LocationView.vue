@@ -12,7 +12,7 @@ import MonsterPicker from '@/components/MonsterPicker.vue'
 import ParagraphActions from '@/components/ParagraphActions.vue'
 import BookStages from '@/components/BookStages.vue'
 import { reminders } from '@/game/referee'
-import { REL_GO, describeExits, lookAround, roomOf } from '@/engine/plans'
+import { REL_GO, describeExits, isYard, lookAround, roomOf } from '@/engine/plans'
 import GmChat from '@/components/GmChat.vue'
 
 const props = defineProps<{ id: string }>()
@@ -63,8 +63,15 @@ const around = computed(() => describeExits(exits.value))
 /** «Площадь, § 41.» — где партия стоит */
 const hereTitle = computed(() => {
   const r = plan.value ? roomOf(plan.value, room.value) : undefined
-  return r ? `${r.kind[0].toUpperCase()}${r.kind.slice(1)}, § ${r.n}.` : 'Вы у входа.'
+  if (!r) return 'Вы у входа.'
+  const kind = `${r.kind[0].toUpperCase()}${r.kind.slice(1)}`
+  // у двора и перекрёстка параграфа нет — называем только место
+  return isYard(r.n) ? `${kind}.` : `${kind}, § ${r.n}.`
 })
+/** подпись помещения, куда можно вернуться: номер параграфа, у места без параграфа — его название */
+const backLabel = (n: number) => (isYard(n) ? roomOf(plan.value!, n)?.kind ?? 'двор' : String(n))
+/** сколько параграфов локации партия прошла (дворы без параграфа не считаются) */
+const visitedCount = computed(() => visited.value.filter((n) => n > 0).length)
 /** куда можно вернуться: помещения, где партия уже была */
 const back = computed(() => [...visited.value].filter((n) => n !== room.value).sort((a, b) => a - b))
 /** просветы в тумане над планом: помещения, где партия была; координаты — проценты ширины и высоты картинки */
@@ -90,7 +97,10 @@ const planLinks = computed(() => {
 })
 /** перейти в помещение по плану: с ведущим — сказать ему, куда идём; без него — команда партии */
 async function go(n: number) {
-  if (hideText.value) { void store.sendChat(`Идём в помещение ${n}.`, store.aiGm); return }
+  // сценарный ведущий: переход, а за столом из нескольких игроков — предложение команде (отсчёт в чате)
+  if (hideText.value && store.room?.gm === 'script') { void store.moveRoom(n); return }
+  // ИИ-ведущему и живому ведущему говорим словами, куда идём
+  if (hideText.value) { void store.sendChat(n > 0 ? `Идём в помещение ${n}.` : 'Идём туда.', store.aiGm); return }
   if (await store.cmdOk('moveTo', n)) revealText()
 }
 const textCol = ref<HTMLElement | null>(null)
@@ -188,7 +198,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
   <div v-if="!loc" class="card">Локация не найдена.</div>
   <template v-else>
     <div class="row between" style="margin-bottom:.6rem">
-      <h1>{{ loc.name }} <span class="badge">Книга Жизни, стр. {{ loc.pages[0] }}–{{ loc.pages[1] }}</span> <span v-if="visited.length" class="badge accent">пройдено {{ visited.length }} из {{ loc.paragraphs.length }}</span></h1>
+      <h1>{{ loc.name }} <span class="badge">Книга Жизни, стр. {{ loc.pages[0] }}–{{ loc.pages[1] }}</span> <span v-if="visitedCount" class="badge accent">пройдено {{ visitedCount }} из {{ loc.paragraphs.length }}</span></h1>
       <div class="row loc-tools">
         <router-link v-if="services.includes('shop') || services.includes('tavern')" class="btn" to="/shop" aria-label="Лавка и трактир"><Store :size="16" aria-hidden="true" /><span>Лавка<span class="hide-phone"> / трактир</span></span></router-link>
         <button v-if="tools" aria-label="Произвольный бой" title="Бой с любыми монстрами из Бестиария" @click="picker = true"><Swords :size="16" aria-hidden="true" /><span class="hide-phone">Произвольный бой</span><span class="phone-only">Бой</span></button>
@@ -217,11 +227,11 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
         <div v-else-if="walk" class="card tight">
           <p style="margin:0 0 .5rem"><b>{{ hereTitle }}</b> {{ around }}</p>
           <div class="row exits">
-            <button v-for="e in exits" :key="e.to" class="small" :class="{ ghost: e.known }" @click="go(e.to)">{{ REL_GO[e.rel] }}: {{ e.what }}<span v-if="e.known"> · § {{ e.to }}</span></button>
+            <button v-for="e in exits" :key="e.to" class="small" :class="{ ghost: e.known }" @click="go(e.to)">{{ REL_GO[e.rel] }}: {{ e.what }}<span v-if="e.known && !isYard(e.to)"> · § {{ e.to }}</span></button>
           </div>
           <template v-if="back.length">
             <p class="small muted" style="margin:.6rem 0 .3rem">Вернуться туда, где партия уже была:</p>
-            <div class="numgrid"><button v-for="n in back" :key="n" class="visited" @click="go(n)">{{ n }}</button></div>
+            <div class="numgrid back"><button v-for="n in back" :key="n" class="visited" @click="go(n)">{{ backLabel(n) }}</button></div>
           </template>
           <p class="small muted" style="margin:.5rem 0 0">Идти можно в соседнее помещение или вернуться в пройденное. План открывается по мере пути.</p>
         </div>
@@ -273,7 +283,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
             <GmChat height="40vh" />
           </template>
         </div>
-        <div v-else-if="!paragraph" class="card muted">{{ walk ? 'Партия у входа в локацию. Выберите, куда идти.' : 'Выберите номер параграфа.' }}</div>
+        <div v-else-if="!paragraph" class="card muted">{{ !walk ? 'Выберите номер параграфа.' : isYard(room) ? `${hereTitle} Здесь тихо — выберите, куда идти дальше.` : 'Партия у входа в локацию. Выберите, куда идти.' }}</div>
         <div v-else class="card">
           <div class="row between">
             <h2>§ {{ paragraph.n }}</h2>

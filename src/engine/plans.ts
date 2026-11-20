@@ -39,11 +39,15 @@ export function relative(heading: PlanSide | null | undefined, side: PlanSide): 
 
 export const roomOf = (plan: LocationPlan, n: number | null | undefined): PlanRoom | undefined => (n == null ? undefined : plan.rooms.find((r) => r.n === n))
 
-/** Выходы оттуда, где стоит партия: из помещения — его выходы, от входа в локацию — сами входы */
+/** Выходы оттуда, где стоит партия: из помещения — его выходы, от входа в локацию — сами входы.
+ *  Скрытые пути (провал, ловушка) сюда не входят: по ним партию ведёт только текст книги */
 export function exitsFrom(plan: LocationPlan, room: number | null | undefined): PlanExit[] {
   if (room == null) return plan.entrances.map((e) => ({ to: e.to, side: e.heading, via: e.via }))
-  return roomOf(plan, room)?.exits ?? []
+  return (roomOf(plan, room)?.exits ?? []).filter((e) => !e.hidden)
 }
+
+/** Место без параграфа — двор между зданиями, перекрёсток: у него отрицательный номер, и номером его не называют */
+export const isYard = (n: number | null | undefined): boolean => n != null && n < 0
 
 export interface ExitView {
   to: number
@@ -88,7 +92,7 @@ export function describeExits(views: readonly ExitView[]): string {
   if (!views.length) return 'Выходов отсюда не видно.'
   const parts: string[] = []
   for (const rel of REL_ORDER) {
-    const list = views.filter((v) => v.rel === rel).map((v) => (v.known ? `${v.what} (§ ${v.to})` : v.what))
+    const list = views.filter((v) => v.rel === rel).map((v) => (v.known && !isYard(v.to) ? `${v.what} (§ ${v.to})` : v.what))
     if (list.length) parts.push(`${REL_SEE[rel]} ${list.length > 1 ? `${list.slice(0, -1).join(', ')} и ${list.at(-1)}` : list[0]}`)
   }
   const text = parts.join(', ')
@@ -100,7 +104,7 @@ export function whyBlocked(plan: LocationPlan, at: { room?: number | null; visit
   if (!roomOf(plan, n)) return null // помещения нет на плане — граф о нём ничего не знает, не мешаем
   if (at.room === n || at.visited.includes(n) || bookTargets.includes(n)) return null
   if (exitsFrom(plan, at.room).some((e) => e.to === n)) return null
-  return at.room == null ? 'Партия ещё у входа в локацию: сначала войдите.' : `Из помещения ${at.room} туда прохода нет.`
+  return at.room == null ? 'Партия ещё у входа в локацию: сначала войдите.' : isYard(at.room) ? 'Отсюда туда прохода нет.' : `Из помещения ${at.room} туда прохода нет.`
 }
 
 /** Куда партия смотрит после перехода: по стороне выхода, которым прошла; лестница, возврат и переход по книге взгляда не меняют,
