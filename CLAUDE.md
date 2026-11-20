@@ -43,6 +43,8 @@ tools/.venv/bin/python -I tools/mark_attacks.py   # пометить в tools/bo
 pnpm data:world     # → src/data/world.json + public/img/map/world.jpg
 pnpm data:rules     # → src/data/{classes,weapons,armor,items,artifacts,spells,rules}.json
 pnpm data:lore      # → src/data/lore.json (Книга Сумерек)
+pnpm data:plans     # tools/plans/<локация>.json → src/data/plans.json (графы помещений; проверка разметки: tsx tools/build_plans.ts --check <id>)
+pnpm exec tsx tools/plan_text.ts <id>   # начало текста каждого параграфа локации — помощник разметки плана
 node tools/qa/screens.mjs [url] [outDir]  # при запущенном pnpm dev: проход по экранам в Chrome, скриншоты desktop/mobile в tools/qa/out, отчёт об ошибках и горизонтальной прокрутке
 node tools/qa/offline.mjs [url]           # при pnpm build && pnpm preview --port 5178: проверка игры без сети
 pnpm qa:book        # обход Книги Жизни ботом: все пути кнопок + сценарный ведущий → tools/qa/out/book-walk.md (после правки разметки)
@@ -54,7 +56,8 @@ source/pdf/      оцифрованные книги (не в git, см. tools/f
 tools/           Python-скрипты извлечения данных (tools/.venv: pypdfium2, pillow)
 src/types.ts     схема всех данных (JSON в src/data должен ей соответствовать)
 src/data/        сгенерированные JSON — НЕ править руками, править скрипты в tools/; разметка книги: деревья этапов — tools/book/<локация>.json
-                 (docs/BOOK_STRUCTURE.md, раздел 7), точечные правки старой разметки — tools/book_overrides.json
+                 (docs/BOOK_STRUCTURE.md, раздел 7), точечные правки старой разметки — tools/book_overrides.json;
+                 планы локаций (связи помещений) — tools/plans/<локация>.json, формат в шапке tools/build_plans.ts
 src/engine/      чистая логика без Vue: dice, character, combat, spells, inventory
 src/game/        GameSession — все команды партии (общие для браузера и сервера), таблица прав COMMANDS
 src/net/         протокол и клиент сетевой игры (socket.io)
@@ -86,6 +89,8 @@ docs/            документация проекта
   проверять на 390 и 1280 px и на телефоне в альбомной ориентации (`node tools/qa/screens.mjs`). Подсветку при наведении
   писать внутри `@media (hover: hover)` (на тач-экране она залипает). Картинки бренда — `public/img/brand`.
 - Случайность только через `src/engine/dice.ts` (подменяемый генератор, чтобы тесты были детерминированы).
+- По локации партия идёт из помещения в соседнее (`src/engine/plans.ts`, `GameSession.moveTo`); тесты механики книги
+  открывают помещения по номеру — правило планов в них выключено в `tests/setup.ts`, включает его `enablePlans()`.
 - После заметных изменений обновлять `docs/PROGRESS.md` (что сделано, что дальше) и при необходимости `docs/DECISIONS.md`.
 - Коммиты — по скиллу `.claude/skills/commit`: Conventional Commits `type(scope): описание строчными` на английском,
   одно логическое изменение на коммит, **без `Co-Authored-By`**; вариант сообщения 1 («что сделано») без ожидания выбора.

@@ -76,6 +76,11 @@ source/pdf ──(tools/*.py)──► src/data/*.json + public/img/**
 | `permissions.ts` | `authorize(gm, player, command, args)` по ролям `owner/party/gm/host` |
 | `rooms.ts` | `Room` (состояние, игроки, чат, история ведущего), `RoomStore` (память + хранилище с отложенной записью) |
 | `storage.ts` | `RoomStorage` — где лежат сохранённые комнаты: `FileStorage` (JSON-файлы в `DATA_DIR`) или `PgStorage` (таблица `zchm_rooms` в Postgres, `DATABASE_URL`) |
+
+**Планы локаций** — `src/engine/plans.ts`: граф помещений (`src/data/plans.json` из ручной разметки `tools/plans/`),
+что партия видит вокруг (`lookAround`, `describeExits`), можно ли в помещение (`whyBlocked`). Сессия хранит
+`state.room` и `state.heading`; ходят командой `moveTo`. Этими же функциями пользуются экран локации, сценарный и
+ИИ-ведущий.
 | `gm/types.ts` | общие типы ведущих: `GmContext`, `GmDriver`, `GmEvent`, `LlmProvider`, `ProviderError` |
 | `gm/ai.ts` | `GmDirector` — очередь ходов по комнатам, перебор провайдеров с паузами после ошибок, передача хода сценарному ведущему, сводка пропущенного; `AnthropicProvider` — Claude API (кэш, резервная модель, откат) |
 | `gm/openai.ts` | `OpenAiCompatProvider` — любые OpenAI-совместимые API (fetch + SSE, function calling, окно истории) |

@@ -20,6 +20,7 @@ digitisation freely. Commercial use needs the author's separate permission.
 - `src/data/*.json` — данные, собранные из этих книг: бестиарий, параграфы Книги Жизни, заклинания, снаряжение,
   правила, карта мира, Книга Сумерек;
 - `tools/book/` и `tools/book_overrides.json` — разметка Книги Жизни с фрагментами её текста;
+- `tools/plans/` и `src/data/plans.json` — разметка планов локаций (связи помещений по рисункам планов);
 - `public/img/bestiary`, `public/img/locations`, `public/img/map`, `public/img/brand` и `public/icons` —
   иллюстрации, планы локаций, карта мира, логотип и обложка с коробки, значки приложения;
 - `docs/img/` — снимки экрана с этими материалами; `docs/RULES.md` — конспект Инструкции.
