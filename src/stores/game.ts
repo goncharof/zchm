@@ -339,6 +339,7 @@ export const useGameStore = defineStore('game', () => {
     enterLocation: (locationId: string) => cmd('enterLocation', locationId),
     leaveLocation: () => cmd('leaveLocation'),
     markVisited: (locationId: string, n: number) => cmd('markVisited', locationId, n),
+    moveTo: (n: number) => cmd('moveTo', n),
     dismissRoad: (n: number) => cmd('dismissRoad', n),
     rollDie: (sides: number, context?: string) => cmd('rollDie', sides, context),
     rollDice: (formula: string) => cmd('rollDice', formula),

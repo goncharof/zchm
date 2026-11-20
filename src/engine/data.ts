@@ -1,5 +1,5 @@
 /** Контейнер справочных данных. Движок получает его параметром и не импортирует JSON сам. */
-import type { Armor, Artifact, CharacterClass, Item, Monster, Spell, Weapon, Location, WorldMap } from '@/types'
+import type { Armor, Artifact, CharacterClass, Item, Monster, Spell, Weapon, Location, LocationPlan, WorldMap } from '@/types'
 
 export interface GameData {
   classes: CharacterClass[]
@@ -10,6 +10,8 @@ export interface GameData {
   spells: Spell[]
   bestiary: Monster[]
   locations: Location[]
+  /** планы локаций как графы помещений (src/data/plans.json); у локации без плана ходят по номерам, как раньше */
+  plans?: LocationPlan[]
   world: WorldMap | null
 }
 
@@ -22,6 +24,7 @@ export class DataIndex {
   readonly spellById = new Map<string, Spell>()
   readonly monsterById = new Map<string, Monster>()
   readonly locationById = new Map<string, Location>()
+  readonly planById = new Map<string, LocationPlan>()
 
   constructor(readonly data: GameData) {
     for (const c of data.classes) this.classById.set(c.id, c)
@@ -32,6 +35,7 @@ export class DataIndex {
     for (const s of data.spells) this.spellById.set(s.id, s)
     for (const m of data.bestiary) this.monsterById.set(m.id, m)
     for (const l of data.locations) this.locationById.set(l.id, l)
+    for (const p of data.plans ?? []) this.planById.set(p.id, p)
   }
 
   cls(id: string): CharacterClass {

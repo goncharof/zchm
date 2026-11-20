@@ -320,6 +320,34 @@ export interface Location {
   paragraphs: Paragraph[]
 }
 
+/** Сторона на плане локации (север — вверх листа) либо лестница вверх или вниз */
+export type PlanSide = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW' | 'U' | 'D'
+
+/** Выход из помещения: куда ведёт, в какую сторону по плану и что это — дверь, ворота, лестница; «проход» — открытый путь */
+export interface PlanExit {
+  to: number
+  side: PlanSide
+  via: string
+}
+
+/** Помещение на плане локации: номер параграфа, место на картинке плана (доли ширины и высоты) и что это за место */
+export interface PlanRoom {
+  n: number
+  x: number
+  y: number
+  /** площадь, улица, переулок, коридор, комната, зал… — так помещение называется в подсказке, пока партия в нём не была */
+  kind: string
+  exits: PlanExit[]
+}
+
+/** План локации как граф помещений (src/data/plans.json, собирается из tools/plans/<id>.json командой pnpm data:plans) */
+export interface LocationPlan {
+  id: string
+  /** откуда партия попадает в локацию с карты мира: heading — куда она при этом смотрит */
+  entrances: { to: number; via: string; heading: PlanSide }[]
+  rooms: PlanRoom[]
+}
+
 /** Точка на карте мира (координаты в долях ширины/высоты изображения) */
 export interface WorldNode {
   id: string

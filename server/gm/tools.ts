@@ -1,4 +1,5 @@
 /** Инструменты ИИ-ведущего: схемы для Claude API и исполнение через GameSession. */
+import { REL_SEE, headingAfter, lookAround, type ExitView } from '@/engine/plans'
 import type Anthropic from '@anthropic-ai/sdk'
 import { paragraphTree } from '@/game/tree'
 import { z } from 'zod'
@@ -157,13 +158,40 @@ function stagePayload(n: BookNode): Record<string, unknown> {
 
 /** Параграф для ведущего (дерево этапов, src/game/tree.ts) — без побочных эффектов: отметку «пройден» ставит тот, кто
  *  его действительно разыгрывает (инструмент open_paragraph или сервер после удачного хода) */
+/** Выходы оттуда, где стоит партия, — для модели: направление, что видно и номер параграфа за выходом */
+function exitList(views: ExitView[]): { куда: string; что: string; параграф: number; пройдено: boolean }[] {
+  return views.map((v) => ({ куда: REL_SEE[v.rel], что: v.what, параграф: v.to, пройдено: v.known }))
+}
+/** Строка для отказа и снимка: «Выходы отсюда: впереди — площадь (§ 41); направо — дверь (§ 5)» */
+export function exitsNote(room: Room): string {
+  const id = room.state.locationId
+  const plan = id && !room.state.gmMode ? idx.planById.get(id) : undefined
+  if (!plan) return ''
+  const views = lookAround(plan, room.state.room, room.state.heading, room.state.visited[plan.id] ?? [])
+  return `Выходы отсюда: ${views.map((v) => `${REL_SEE[v.rel]} — ${v.what} (§ ${v.to}${v.known ? ', пройдено' : ''})`).join('; ') || 'нет'}.`
+}
+/** Что партия увидит, войдя в помещение n: поле «выходы» в ответе open_paragraph */
+function exitsAfter(room: Room, n: number): { выходы?: ReturnType<typeof exitList> } {
+  const id = room.state.locationId
+  const plan = id && !room.state.gmMode ? idx.planById.get(id) : undefined
+  if (!plan) return {}
+  const visited = [...(room.state.visited[plan.id] ?? []), n]
+  return { выходы: exitList(lookAround(plan, n, headingAfter(plan, room.state.room, n, room.state.heading), visited)) }
+}
+
 export function paragraphPayload(room: Room, locationId: string, n: number): string {
   const loc = idx.locationById.get(locationId)
   if (!loc) throw new GameError(`Нет локации ${locationId}`)
   const p = loc.paragraphs.find((x) => x.n === n)
   if (!p) throw new GameError(`В локации «${loc.name}» нет параграфа ${n}`)
   const before = (room.state.visited[loc.id] ?? []).includes(p.n)
-  return JSON.stringify({ локация: loc.name, параграф: p.n, уже_пройден: before, этапы: stagePayload(paragraphTree(p)), напоминание: 'Этап без «когда» герои видят сразу. Остальные раскрывай, только когда наступило их условие: выбор игроков, итог боя, проверки удачи или броска. «тайное» — пометки ведущего, игрокам их не пересказывай.' })
+  // по размеченному плану партия идёт из помещения в соседнее или возвращается в пройденное (ХАУСРУЛ, src/engine/plans.ts)
+  const inside = loc.id !== 'doroga' && room.state.locationId === loc.id
+  if (inside) {
+    const why = room.session().roomBlocked(p.n)
+    if (why) throw new GameError(`${why} ${exitsNote(room)}`)
+  }
+  return JSON.stringify({ локация: loc.name, параграф: p.n, уже_пройден: before, ...(inside ? exitsAfter(room, p.n) : {}), этапы: stagePayload(paragraphTree(p)), напоминание: 'Этап без «когда» герои видят сразу. Остальные раскрывай, только когда наступило их условие: выбор игроков, итог боя, проверки удачи или броска. «тайное» — пометки ведущего, игрокам их не пересказывай.' })
 }
 
 /** Монстр по id или имени, в том числе в падеже и числе из текста («гномы», «рыцарей смерти»).
@@ -225,6 +253,8 @@ function runGmTool(room: Room, name: string, input: unknown): ToolOutcome {
       case 'open_paragraph': {
         const content = paragraphPayload(room, String(a.location_id), Number(a.n))
         room.gmOpened.push({ loc: String(a.location_id), n: Number(a.n) })
+        // партия уже стоит в этом помещении (следующее открывается от него); пройденным оно станет после удачного хода
+        if (String(a.location_id) === room.state.locationId) s.placeIn(Number(a.n), false)
         return { content }
       }
       case 'roll_luck': {

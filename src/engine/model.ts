@@ -1,7 +1,7 @@
 /**
  * Модель состояния партии. Всё сериализуемо в JSON (сохранения в localStorage / файл).
  */
-import type { ClassId, ExtraAttackKind, WardKind } from '@/types'
+import type { ClassId, ExtraAttackKind, PlanSide, WardKind } from '@/types'
 import type { LootItem } from './loot'
 
 export type InventoryKind = 'weapon' | 'armor' | 'item' | 'artifact' | 'bottle' | 'scroll' | 'trophy'
@@ -234,6 +234,10 @@ export interface GameState {
   seenNodes?: string[]
   /** текущая локация Книги Жизни (если партия внутри) */
   locationId: string | null
+  /** помещение локации, где стоит партия (null — у входа); ХАУСРУЛ: по локации идут из помещения в соседнее (src/engine/plans.ts) */
+  room?: number | null
+  /** куда партия смотрит на плане — сторона, в которую она шла последний раз: от неё считаются «впереди», «направо», «налево» */
+  heading?: PlanSide | null
   /** посещённые параграфы: locationId -> номера */
   visited: Record<string, number[]>
   /** игровой день */

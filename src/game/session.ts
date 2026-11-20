@@ -15,7 +15,8 @@ import { makeAlly, cleanupAfterCombat, grantRoundActions, heroRoll, endHeroesTur
 import { rollRoadEncounters, shortestRoute } from '@/engine/world'
 import { TROPHIES, takeLootItem } from '@/engine/loot'
 import { plural } from '@/ui/format'
-import { effectLabel, findNode, gameHasOutcomes, gameLimit, gamesPlayed, paragraphTree } from './tree'
+import { allNodes, effectLabel, findNode, gameHasOutcomes, gameLimit, gamesPlayed, paragraphTree } from './tree'
+import { headingAfter, whyBlocked } from '@/engine/plans'
 import { DEAD_AT, REST_COST_PER_DAY, REST_LIVES_PER_DAY, REST_MANA_PER_DAY, XP_ARTIFACT_FOUND, XP_TRAP_FOUND } from '@/engine/rules'
 
 export const LOG_CAP = 500
@@ -383,6 +384,8 @@ export class GameSession {
     // карта открывается постепенно: партия запоминает все узлы, через которые прошла
     this.state.seenNodes = [...new Set([...(this.state.seenNodes ?? []), ...route.nodes])]
     this.state.locationId = null
+    this.state.room = null
+    this.state.heading = null
     this.state.pendingRoad.push(...encounters)
     // встреча в пути может повториться в другом походе — прежние отметки взятого на ней не действуют
     if (encounters.length && this.state.claimed) this.state.claimed = this.state.claimed.filter((k) => !encounters.some((n) => k.startsWith(`doroga:${n}:`)))
@@ -399,10 +402,54 @@ export class GameSession {
       if (node?.locationId !== locationId) throw new GameError('Сначала дойдите до этой локации по карте')
     }
     this.state.locationId = locationId
+    // партия у входа: в помещения идут по плану, из одного в соседнее
+    this.state.room = null
+    this.state.heading = idx.planById.get(locationId)?.entrances[0]?.heading ?? null
     this.log(`Партия входит: ${idx.locationById.get(locationId)?.name ?? locationId}.`)
   }
   leaveLocation(): void {
     this.state.locationId = null
+    this.state.room = null
+    this.state.heading = null
+  }
+  /** Перейти в помещение локации. ХАУСРУЛ: у размеченного плана — только в соседнее помещение, в уже пройденное или
+   *  туда, куда отправляет книга («Перейти в помещение N»); ведущий в «Режиме ведущего» ходит куда угодно. Локация без
+   *  разметки плана — как раньше, по номеру. */
+  moveTo(n: number): void {
+    const locId = this.state.locationId
+    if (!locId) throw new GameError('Партия не в локации: войдите в неё с карты')
+    n = Number(n)
+    if (!idx.locationById.get(locId)?.paragraphs.some((p) => p.n === n)) throw new GameError('Нет такого помещения')
+    if (this.state.room !== n) this.noFight()
+    const why = this.roomBlocked(n)
+    if (why) throw new GameError(why)
+    this.placeIn(n)
+  }
+  /** Поставить партию в помещение без проверки пути — для ведущих, которые проверили его сами (roomBlocked).
+   *  visit = false: партия уже стоит там, но помещение ещё не разыграно (ИИ-ведущий отмечает его после удачного хода) */
+  placeIn(n: number, visit = true): void {
+    const locId = this.state.locationId
+    if (!locId) throw new GameError('Партия не в локации')
+    n = Number(n)
+    if (!idx.locationById.get(locId)?.paragraphs.some((p) => p.n === n)) throw new GameError('Нет такого помещения')
+    const plan = idx.planById.get(locId)
+    if (plan) this.state.heading = headingAfter(plan, this.state.room, n, this.state.heading)
+    this.state.room = n
+    const visited = (this.state.visited[locId] ??= [])
+    if (visit && !visited.includes(n)) visited.push(n)
+  }
+  /** Куда текст книги отправляет партию из помещения, где она стоит (этапы с переходом): туда можно и не по соседству */
+  private bookTargets(): number[] {
+    const locId = this.state.locationId
+    const p = locId && this.state.room != null ? idx.locationById.get(locId)?.paragraphs.find((x) => x.n === this.state.room) : undefined
+    return p ? allNodes(paragraphTree(p)).map((x) => x.goto).filter((x): x is number => x !== undefined) : []
+  }
+  /** Можно ли партии в помещение n текущей локации (для ведущих: ответить отказом, не меняя состояния) */
+  roomBlocked(n: number): string | null {
+    const locId = this.state.locationId
+    const plan = locId ? idx.planById.get(locId) : undefined
+    if (!plan || !locId || this.state.gmMode) return null
+    return whyBlocked(plan, { room: this.state.room, visited: this.state.visited[locId] ?? [] }, Number(n), this.bookTargets())
   }
   markVisited(locationId: string, n: number): void {
     if (!idx.locationById.get(locationId)?.paragraphs.some((p) => p.n === Number(n))) throw new GameError('Нет такого помещения')
@@ -874,7 +921,7 @@ export const COMMANDS = {
   buyItem: 'owner', sellItem: 'owner', equipItem: 'owner', unequipItem: 'owner', dropItem: 'owner', transferItem: 'owner',
   drink: 'owner', identifyBottle: 'owner', copyScroll: 'owner', learnSpell: 'owner', useAntidote: 'owner', useParalysisPotion: 'owner', poisonWeapon: 'owner',
   adjustLives: 'gm', adjustMana: 'gm', adjustMoney: 'gm', giveXp: 'gm', giveItem: 'gm',
-  restAll: 'party', travelTo: 'party', enterLocation: 'party', leaveLocation: 'party', markVisited: 'party', dismissRoad: 'party',
+  restAll: 'party', travelTo: 'party', enterLocation: 'party', leaveLocation: 'party', moveTo: 'party', placeIn: 'gm', markVisited: 'party', dismissRoad: 'party',
   rollDie: 'party', rollDice: 'party', claim: 'gm', unclaim: 'gm', bookMark: 'gm', bookEffects: 'gm', luckCheck: 'gm', diceGame: 'gm', findArtifact: 'gm', giveScroll: 'gm', trapFound: 'gm', finalDuelAttack: 'gm', drinkFountain: 'gm',
   addCompanion: 'gm', dismissCompanion: 'party',
   startEncounter: 'gm', addMonstersToCombat: 'gm', abortCombat: 'gm',

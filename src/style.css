@@ -402,6 +402,18 @@ table.shop td:last-child button + button { margin-left: .3rem; }
 .numgrid button.visited { opacity: .5; }
 .numgrid button.active { background: linear-gradient(180deg, var(--blood-2), var(--blood)); color: var(--blood-ink); border-color: #e8475f; opacity: 1; }
 .plan-img { max-height: 78vh; width: auto; margin: 0 auto; border-radius: 10px; }
+/* план в тумане: слой поверх картинки точно по её размеру; точка — где стоит партия */
+.plan-wrap { position: relative; display: table; margin: 0 auto; }
+.plan-wrap .plan-img { display: block; }
+.plan-wrap .map-svg { border-radius: 10px; }
+/* план — чёрные линии на белом листе: полупрозрачный туман их выдаёт, поэтому здесь он глухой */
+.plan-wrap .fog-fill { opacity: 1; }
+.plan-here { fill: var(--blood); stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.exits button { text-align: left; }
+/* связи помещений поверх плана (ведущему): двери и лестницы — цветом крови, открытые проходы — зелёным */
+.plan-link { stroke: var(--stone); stroke-width: 3; opacity: .8; vector-effect: non-scaling-stroke; }
+.plan-link.door { stroke: var(--blood); }
+.plan-dot { fill: var(--blood); stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }
 
 /* экран локации: на компьютере две колонки, на телефоне — номера, текст, план */
 .loc-layout { display: grid; gap: 0 1rem; grid-template-columns: 1fr 1fr; grid-template-areas: 'nums text' 'plan text'; align-items: start; }

@@ -12,6 +12,7 @@ import MonsterPicker from '@/components/MonsterPicker.vue'
 import ParagraphActions from '@/components/ParagraphActions.vue'
 import BookStages from '@/components/BookStages.vue'
 import { reminders } from '@/game/referee'
+import { REL_GO, describeExits, lookAround, roomOf } from '@/engine/plans'
 import GmChat from '@/components/GmChat.vue'
 
 const props = defineProps<{ id: string }>()
@@ -51,6 +52,47 @@ function canOpen(n: number): boolean {
   if (!here.value) return false
   return props.id !== 'doroga' || !!store.game?.pendingRoad.includes(n) || roadOpen() === n
 }
+/** план локации как граф помещений. ХАУСРУЛ: игроки идут из помещения в соседнее и видят только выходы оттуда, где
+ *  стоят; ведущий с инструментами и локация без разметки плана — по номерам, как раньше */
+const plan = computed(() => idx.planById.get(props.id) ?? null)
+const walk = computed(() => !!plan.value && !tools.value && props.id !== 'doroga')
+/** помещение, где стоит партия (null — у входа в локацию) */
+const room = computed(() => (store.game?.locationId === props.id ? store.game.room ?? null : null))
+const exits = computed(() => (walk.value && plan.value ? lookAround(plan.value, room.value, store.game?.heading, visited.value) : []))
+const around = computed(() => describeExits(exits.value))
+/** «Площадь, § 41.» — где партия стоит */
+const hereTitle = computed(() => {
+  const r = plan.value ? roomOf(plan.value, room.value) : undefined
+  return r ? `${r.kind[0].toUpperCase()}${r.kind.slice(1)}, § ${r.n}.` : 'Вы у входа.'
+})
+/** куда можно вернуться: помещения, где партия уже была */
+const back = computed(() => [...visited.value].filter((n) => n !== room.value).sort((a, b) => a - b))
+/** просветы в тумане над планом: помещения, где партия была; координаты — проценты ширины и высоты картинки */
+const PLAN_ASPECT = 1087 / 1654
+const spots = computed(() => {
+  if (!walk.value || !plan.value) return []
+  const big = /площад|двор|улиц|полян|озер|мор|берег|поле/
+  return visited.value.map((n) => roomOf(plan.value!, n)).filter((r) => !!r).map((r) => { const rx = big.test(r!.kind) ? 12 : 8; return { n: r!.n, x: r!.x * 100, y: r!.y * 100, rx, ry: rx * PLAN_ASPECT } })
+})
+const hereSpot = computed(() => (walk.value && plan.value ? roomOf(plan.value, room.value) ?? null : null))
+/** ведущему: связи помещений поверх плана — чтобы разметку (tools/plans) можно было проверить глазами */
+const showLinks = ref(false)
+const planLinks = computed(() => {
+  if (!plan.value) return []
+  const out: { key: string; x1: number; y1: number; x2: number; y2: number; door: boolean }[] = []
+  for (const r of plan.value.rooms) for (const e of r.exits) {
+    const b = roomOf(plan.value, e.to)
+    // связь в обе стороны рисуется один раз; односторонняя — от своего помещения
+    if (!b || (r.n > e.to && b.exits.some((x) => x.to === r.n))) continue
+    out.push({ key: `${r.n}-${e.to}-${e.via}`, x1: r.x * 100, y1: r.y * 100, x2: b.x * 100, y2: b.y * 100, door: e.via !== 'проход' })
+  }
+  return out
+})
+/** перейти в помещение по плану: с ведущим — сказать ему, куда идём; без него — команда партии */
+async function go(n: number) {
+  if (hideText.value) { void store.sendChat(`Идём в помещение ${n}.`, store.aiGm); return }
+  if (await store.cmdOk('moveTo', n)) revealText()
+}
 const textCol = ref<HTMLElement | null>(null)
 /** на телефоне текст параграфа ниже номеров — прокрутить к нему после выбора */
 function revealText() {
@@ -64,6 +106,8 @@ function pick(n: number) {
 }
 
 function open(n: number) {
+  // по плану открытый параграф — это помещение, где стоит партия: «открыть» значит перейти туда
+  if (walk.value && !hideText.value) { if (n !== room.value) void go(n); return }
   if (!canOpen(n)) return
   current.value = n
   revealed.value = false
@@ -83,6 +127,15 @@ onMounted(async () => {
   const p = Number(route.query.p)
   if (p) open(p)
 })
+// по плану текст показывает то помещение, где партия стоит (в сетевой игре её ведёт любой из игроков)
+watch([walk, room, hideText], () => {
+  if (!walk.value || hideText.value) return
+  if (current.value === room.value) return
+  current.value = room.value
+  revealed.value = false
+  fullText.value = false
+  lastFinal.value = ''
+}, { immediate: true })
 watch(() => route.query.p, (p) => { if (p) open(Number(p)) })
 
 /** напоминания-рефери: герой при смерти, яд, не выбрано заклинание (src/game/referee.ts) */
@@ -161,6 +214,17 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
         <div v-if="id === 'doroga' && !tools && !hideText" class="card tight">
           <p class="small muted" style="margin:0">{{ store.game?.pendingRoad.length ? 'В пути случились встречи — откройте их по порядку.' : paragraph ? 'Встреча в пути. Когда она разыграна, возвращайтесь к карте.' : 'Встреч в пути нет.' }}</p>
         </div>
+        <div v-else-if="walk" class="card tight">
+          <p style="margin:0 0 .5rem"><b>{{ hereTitle }}</b> {{ around }}</p>
+          <div class="row exits">
+            <button v-for="e in exits" :key="e.to" class="small" :class="{ ghost: e.known }" @click="go(e.to)">{{ REL_GO[e.rel] }}: {{ e.what }}<span v-if="e.known"> · § {{ e.to }}</span></button>
+          </div>
+          <template v-if="back.length">
+            <p class="small muted" style="margin:.6rem 0 .3rem">Вернуться туда, где партия уже была:</p>
+            <div class="numgrid"><button v-for="n in back" :key="n" class="visited" @click="go(n)">{{ n }}</button></div>
+          </template>
+          <p class="small muted" style="margin:.5rem 0 0">Идти можно в соседнее помещение или вернуться в пройденное. План открывается по мере пути.</p>
+        </div>
         <div v-else class="card tight">
           <div class="numgrid">
             <button v-for="p in loc.paragraphs" :key="p.n" :class="{ visited: visited.includes(p.n), active: p.n === current }" :title="hideText ? 'идти сюда' : tools && (p.segments || p.tree) ? 'есть выбор' : ''" @click="pick(p.n)">{{ p.n }}<sup v-if="tools && (p.segments || p.tree) && !hideText" style="color:var(--accent)">•</sup></button>
@@ -169,7 +233,32 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
         </div>
       </div>
       <div v-if="planSrc" class="loc-plan">
-        <div class="card tight"><a :href="planSrc" target="_blank" rel="noopener" title="Открыть план целиком"><img class="plan-img" :src="planSrc" :alt="`План: ${loc.name}`" /></a></div>
+        <div v-if="walk" class="card tight">
+          <div class="plan-wrap">
+            <img class="plan-img" :src="planSrc" :alt="`План: ${loc.name}`" />
+            <svg class="map-svg map-fog" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <radialGradient id="plan-hole"><stop offset="0" stop-color="#000" /><stop offset=".6" stop-color="#000" /><stop offset="1" stop-color="#000" stop-opacity="0" /></radialGradient>
+                <mask id="plan-mask">
+                  <rect width="100" height="100" fill="#fff" />
+                  <ellipse v-for="s in spots" :key="s.n" :cx="s.x" :cy="s.y" :rx="s.rx" :ry="s.ry" fill="url(#plan-hole)" />
+                </mask>
+              </defs>
+              <rect class="fog-fill" width="100" height="100" mask="url(#plan-mask)" />
+              <ellipse v-if="hereSpot" class="plan-here" :cx="hereSpot.x * 100" :cy="hereSpot.y * 100" rx="2.6" :ry="2.6 * PLAN_ASPECT" />
+            </svg>
+          </div>
+        </div>
+        <div v-else class="card tight">
+          <div class="plan-wrap">
+            <a :href="planSrc" target="_blank" rel="noopener" title="Открыть план целиком"><img class="plan-img" :src="planSrc" :alt="`План: ${loc.name}`" /></a>
+            <svg v-if="showLinks && plan" class="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <line v-for="l in planLinks" :key="l.key" :x1="l.x1" :y1="l.y1" :x2="l.x2" :y2="l.y2" class="plan-link" :class="{ door: l.door }" />
+              <ellipse v-for="r in plan.rooms" :key="r.n" :cx="r.x * 100" :cy="r.y * 100" rx=".55" :ry=".55 * PLAN_ASPECT" class="plan-dot" />
+            </svg>
+          </div>
+          <label v-if="plan && tools" class="row small" style="gap:.4rem;margin-top:.4rem"><input v-model="showLinks" type="checkbox" /> показать связи помещений (красные — двери и лестницы, зелёные — открытые проходы)</label>
+        </div>
       </div>
       <div ref="textCol" class="loc-text">
         <div v-if="hideText" class="card">
@@ -184,7 +273,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
             <GmChat height="40vh" />
           </template>
         </div>
-        <div v-else-if="!paragraph" class="card muted">Выберите номер параграфа.</div>
+        <div v-else-if="!paragraph" class="card muted">{{ walk ? 'Партия у входа в локацию. Выберите, куда идти.' : 'Выберите номер параграфа.' }}</div>
         <div v-else class="card">
           <div class="row between">
             <h2>§ {{ paragraph.n }}</h2>
@@ -197,7 +286,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
 
           <div v-if="gm && !revealed" class="row"><span class="muted">Режим ведущего: текст скрыт от игроков.</span><button class="small" @click="revealed = true">Показать текст</button></div>
           <template v-else-if="!fullText">
-            <BookStages :loc="loc.id" :loc-name="loc.name" :paragraph="paragraph" :hero-uid="heroUid" @fight="startFight" @ambush="startAmbush" @goto="(n) => { done(); open(n) }" />
+            <BookStages :loc="loc.id" :loc-name="loc.name" :paragraph="paragraph" :hero-uid="heroUid" @fight="startFight" @ambush="startAmbush" @goto="(n) => { if (!walk) done(); open(n) }" />
             <p v-if="staged" class="small muted" style="margin-top:.5rem">Варианты со стрелкой — выбор партии. Исходы боя, проверки удачи и броска откроются сами.</p>
           </template>
           <template v-else>

@@ -88,6 +88,8 @@ export type ScriptAction = (
   | { t: 'decide'; yes: boolean }
   | { t: 'look' }
   | { t: 'where' }
+  /** выход из помещения по плану локации: перейти в помещение n */
+  | { t: 'room'; n: number }
   | { t: 'penalty'; heroUid: string; kind: 'death' | 'lives' | 'half'; amount?: number }
   | { t: 'fight'; specs: { monsterId: string; count: number }[]; loc?: string; n?: number; id?: string; ambush?: true }
   | { t: 'coins'; amount: number }

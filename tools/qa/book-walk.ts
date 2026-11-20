@@ -14,6 +14,10 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { idx } from '@/data'
+
+// бот проверяет разметку параграфов и открывает их по номеру; правило «по плану — только в соседнее помещение»
+// (src/engine/plans.ts) здесь выключено, как и в тестах механики (tests/setup.ts)
+idx.planById.clear()
 import world from '@/data/world.json'
 import type { BookNode, WorldMap } from '@/types'
 import { allNodes, canFightHints, diceKey, findNode, gameHasOutcomes, nodeFullText, openNodes, paragraphTree, parentOf, rollOf } from '@/game/tree'

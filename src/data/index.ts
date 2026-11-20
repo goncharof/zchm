@@ -1,5 +1,5 @@
 /** Загрузка справочных данных из JSON и построение индекса. */
-import type { Armor, Artifact, CharacterClass, Item, Location, Monster, Spell, Weapon, WorldMap } from '@/types'
+import type { Armor, Artifact, CharacterClass, Item, Location, LocationPlan, Monster, Spell, Weapon, WorldMap } from '@/types'
 import { DataIndex, type GameData } from '@/engine/data'
 import classes from './classes.json'
 import weapons from './weapons.json'
@@ -9,6 +9,7 @@ import artifacts from './artifacts.json'
 import spells from './spells.json'
 import bestiary from './bestiary.json'
 import locations from './locations.json'
+import plans from './plans.json'
 
 export const gameData: GameData = {
   classes: classes as unknown as CharacterClass[],
@@ -19,6 +20,7 @@ export const gameData: GameData = {
   spells: spells as unknown as Spell[],
   bestiary: bestiary as unknown as Monster[],
   locations: locations as unknown as Location[],
+  plans: plans as unknown as LocationPlan[],
   world: null,
 }
 

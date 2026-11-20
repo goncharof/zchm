@@ -72,9 +72,15 @@ async function run(label, viewport, touch = false) {
   // игрок: карта в тумане (старт и соседние узлы), в помещении нет кнопок обхода
   if (await page.locator('.map-node').count() >= 10) problems.push(`[${label}] карта мира открыта игроку целиком`)
   await page.getByRole('button', { name: /^Войти/ }).click()
-  await page.waitForSelector('.numgrid')
-  await page.locator('.numgrid button').nth(0).click()
+  // по плану идут из помещения в соседнее: у входа виден один выход, сетки всех номеров нет, план в тумане
+  await page.waitForSelector('.exits button')
+  if (await page.locator('.numgrid button').count()) problems.push(`[${label}] игроку у входа видны номера помещений`)
+  await page.locator('.exits button').first().click()
+  await page.waitForSelector('.loc-text h2')
+  await page.locator('.exits button').first().click()
+  await page.waitForTimeout(300)
   await shot('07-location')
+  if (!(await page.locator('.plan-wrap .map-fog').count())) problems.push(`[${label}] план локации открыт игроку целиком`)
   for (const name of ['Отметить пройденным', 'Дальше →', 'Произвольный бой', 'Весь текст']) {
     if (await page.getByRole('button', { name }).count()) problems.push(`[${label}] игроку видна кнопка обхода «${name}»`)
   }

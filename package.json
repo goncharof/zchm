@@ -17,6 +17,7 @@
     "data:world": "tools/.venv/bin/python -I tools/build_world.py",
     "data:rules": "tools/.venv/bin/python -I tools/build_rules.py",
     "data:lore": "tools/.venv/bin/python -I tools/build_lore.py",
+    "data:plans": "tsx tools/build_plans.ts",
     "data:text": "tools/.venv/bin/python -I tools/extract_text.py source/pdf source/text",
     "server": "tsx watch server/index.ts",
     "build:server": "vite build --ssr server/index.ts --outDir server-dist --emptyOutDir",

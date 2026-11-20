@@ -337,7 +337,15 @@ export class GmDirector implements GmDriver {
       const key = `${w.loc}:${w.n}`
       if (seen.has(key)) continue
       seen.add(key)
-      try { parts.push(paragraphPayload(room, w.loc, w.n)); places.push(w) } catch { /* нет такого параграфа — модель разберётся сама */ }
+      try {
+        parts.push(paragraphPayload(room, w.loc, w.n))
+        places.push(w)
+        // партия встаёт в названное помещение сразу: следующее из названных открывается уже от него
+        if (w.loc === room.state.locationId) room.session().placeIn(w.n, false)
+      } catch (e) {
+        // нет такого параграфа — модель разберётся сама; прохода по плану нет — сказать ей об этом вместе с выходами
+        if (e instanceof Error && /прохода нет|у входа в локацию/.test(e.message)) parts.push(`[Сервер: в помещение ${w.n} партия не попала. ${e.message}]`)
+      }
     }
     if (!parts.length) return { text: '', places }
     return { text: `\n\n[Сервер уже открыл параграфы для этого хода — open_paragraph для них не вызывай]\n${parts.join('\n')}`, places }

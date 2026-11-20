@@ -13,6 +13,7 @@ import { UNDEAD } from '@/engine/combat'
 import { GameError } from '@/game/session'
 import { plural } from '@/ui/format'
 import { reminders } from '@/game/referee'
+import { REL_GO, describeExits, lookAround, type ExitView, type Rel } from '@/engine/plans'
 import { DEAD_AT } from '@/engine/rules'
 import type { ChatChoice, ChatMessage } from '@/net/protocol'
 import type { Room, ScriptAction } from '../rooms'
@@ -56,6 +57,43 @@ interface Offer {
 
 /** Где в книге стоит кнопка: параграф и этап (src/game/tree.ts) */
 interface Place { loc: string; n: number; id: string }
+
+/** Выходы оттуда, где стоит партия, — если у локации размечен план (ХАУСРУЛ: идут из помещения в соседнее).
+ *  Пусто — плана нет или включён «Режим ведущего»: ходят по номерам, как раньше */
+function exitsView(room: Room): ExitView[] {
+  const id = room.state.locationId
+  const plan = id && !room.state.gmMode ? idx.planById.get(id) : undefined
+  return plan ? lookAround(plan, room.state.room, room.state.heading, room.state.visited[plan.id] ?? []) : []
+}
+const exitOffers = (views: ExitView[]): Offer[] => views.map((v) => ({ label: `🚪 ${REL_GO[v.rel]}: ${v.what}${v.known ? ` · § ${v.to}` : ''}`, action: { t: 'room', n: v.to } }))
+
+/** «Идём направо», «в дверь налево», «вперёд»: слова направления → стороны, с которых начинать поиск выхода */
+const WAY_WORDS: [RegExp, Rel[]][] = [
+  [/(^|[^а-яё])(вперёд|вперед|прямо)(?![а-яё])/i, ['F', 'FR', 'FL']],
+  [/(^|[^а-яё])(направо|вправо|справа)(?![а-яё])/i, ['R', 'FR', 'BR']],
+  [/(^|[^а-яё])(налево|влево|слева)(?![а-яё])/i, ['L', 'FL', 'BL']],
+  [/(^|[^а-яё])(назад|обратно)(?![а-яё])/i, ['B', 'BR', 'BL']],
+  [/(^|[^а-яё])(наверх|вверх|поднима\S*|подним\S*)(?![а-яё])/i, ['U']],
+  [/(^|[^а-яё])(вниз|спуска\S*|спустим\S*)(?![а-яё])/i, ['D']],
+]
+const WAY_VERB = /(^|[^а-яё])(ид[её]м|иду|пойд[её]м|пойду|зайд[её]м|заходим|входим|войд[её]м|сворачиваем|поворачиваем|шагаем|лезем|проходим|пройд[её]м)(?![а-яё])/i
+/** Куда ведёт реплика по плану: один выход, несколько на выбор, «туда прохода нет»; null — реплика не про дорогу.
+ *  strong — в реплике названо направление (такую реплику не отдаём словарю намерений) */
+function wayTarget(views: ExitView[], text: string): { strong: boolean; found: ExitView[] } | null {
+  if (!views.length) return null
+  const rels = WAY_WORDS.filter(([re]) => re.test(text)).map(([, r]) => r)
+  // существительное из подписи выхода: «двер», «площад», «переул» — по первым буквам слова
+  const lower = text.toLowerCase()
+  const named = views.filter((v) => v.what.split(' ').some((w) => w.length > 3 && !/^(перв|втор|трет|четв|пят|шест)/.test(w) && lower.includes(w.slice(0, Math.max(4, w.length - 2)))))
+  if (!rels.length && !(named.length && WAY_VERB.test(text))) return null
+  let found = named.length ? named : views
+  if (rels.length) {
+    const wanted = rels.flat()
+    const exact = found.filter((v) => rels.some((r) => r[0] === v.rel))
+    found = exact.length ? exact : found.filter((v) => wanted.includes(v.rel))
+  }
+  return { strong: rels.length > 0, found }
+}
 
 function treeAt(loc: string, n: number): BookNode | undefined {
   const p = idx.locationById.get(loc)?.paragraphs.find((x) => x.n === n)
@@ -472,14 +510,33 @@ export class ScriptedGm {
     return alive.find((h) => mine(h) && awake(h)) ?? alive.find(mine) ?? alive.find(awake) ?? alive[0]
   }
 
+  /** Пойти выходом, названным словами: один подходит — идём, несколько — уточнить, ни одного — сказать, что там глухо */
+  private takeWay(room: Room, found: ExitView[], playerId?: string): void {
+    if (found.length === 1 && room.state.locationId) { this.presentParagraph(room, room.state.locationId, found[0].to, playerId); return }
+    const views = found.length ? found : exitsView(room)
+    this.say(room, `${found.length ? 'Уточните, куда именно.' : 'В ту сторону прохода нет.'} ${describeExits(views)}`, exitOffers(views))
+  }
+
   /** Открыть параграф: открытые этапы (при первом входе — сцена) и их кнопки */
   presentParagraph(room: Room, locId: string, n: number, playerId?: string): void {
     const loc = idx.locationById.get(locId)
     const p = loc?.paragraphs.find((x) => x.n === n)
     if (!loc || !p) { this.say(room, `В «${loc?.name ?? locId}» нет помещения ${n}. Назовите номер с плана.`); return }
     const s = room.session()
+    const inside = loc.id !== 'doroga' && room.state.locationId === loc.id
+    if (inside) {
+      // по плану идут из помещения в соседнее или возвращаются в пройденное; во время боя с места не уходят
+      const fighting = !!room.state.combat && !room.state.combat.finished
+      const why = n !== room.state.room && fighting && idx.planById.has(loc.id) && !room.state.gmMode ? 'Сначала закончите бой.' : s.roomBlocked(n)
+      if (why) {
+        const views = exitsView(room)
+        this.say(room, `${why} ${describeExits(views)}`, exitOffers(views))
+        return
+      }
+    }
     const before = (room.state.visited[loc.id] ?? []).includes(n)
-    s.markVisited(loc.id, n)
+    if (inside) s.placeIn(n)
+    else s.markVisited(loc.id, n)
     if (loc.id === 'doroga') s.dismissRoad(n)
     room.script = { ...room.script, locationId: loc.id, n }
     const head = loc.id === 'doroga' ? `В пути (§ ${n}).` : `${loc.name}, помещение ${n}${before ? ' (вы здесь уже были)' : ''}.`
@@ -518,8 +575,11 @@ export class ScriptedGm {
     // по книге монстры нападают сами: бой начнётся без кнопки (если другой бой не идёт)
     const ambush = this.ambushIn(room, P, nodes)
     const fromNodes = fresh(room, nodes.flatMap((x) => nodeOffers(loc, n, x, claimed, open, room.state.heroes))).filter((o) => !(ambush && o.action.t === 'fight' && o.action.id === ambush.id))
-    offers.push(...fromNodes, { label: 'Идти дальше', action: { t: 'next' } as ScriptAction })
-    const msg = this.say(room, [...head, ...text].filter(Boolean).join('\n\n'), offers)
+    // куда дальше: по размеченному плану — выходы из помещения, иначе общая кнопка
+    const views = loc !== 'doroga' && room.state.locationId === loc ? exitsView(room) : []
+    offers.push(...fromNodes, ...(views.length ? exitOffers(views) : [{ label: 'Идти дальше', action: { t: 'next' } as ScriptAction }]))
+    // при входе в помещение (есть заголовок) выходы названы и словами: «Впереди площадь, направо дверь…»
+    const msg = this.say(room, [...head, ...text, head.length && views.length ? describeExits(views) : ''].filter(Boolean).join('\n\n'), offers)
     if (ambush) this.startAmbush(room, loc, n, ambush, playerId)
     // «летит в центр города (локация 41)» — партия переходит в названное помещение
     const to = jump ? nodes.find((x) => x.goto !== undefined)?.goto : undefined
@@ -555,7 +615,9 @@ export class ScriptedGm {
       } else if (ev.type === 'enter') {
         const loc = room.state.locationId ? idx.locationById.get(room.state.locationId) : null
         room.script = { ...room.script, locationId: loc?.id ?? null, n: null }
-        this.say(room, `Вы входите: «${loc?.name ?? ''}». Назовите номер помещения или нажмите его на плане.`)
+        const views = exitsView(room)
+        if (views.length) this.say(room, `Вы входите: «${loc?.name ?? ''}». ${describeExits(views)}`, exitOffers(views))
+        else this.say(room, `Вы входите: «${loc?.name ?? ''}». Назовите номер помещения или нажмите его на плане.`)
       } else if (ev.type === 'combatEnd') {
         // бой начат не кнопкой ведущего (экран боя) — итог относится к параграфу, где стоит партия, и открывает исходы корня
         const here = room.script.locationId && room.script.n != null ? { loc: room.script.locationId, n: room.script.n } : undefined
@@ -605,11 +667,16 @@ export class ScriptedGm {
       // «Ладно», «ну» — междометия без действия
       if (!stems(clause).length) continue
       const num = roomNumber(clause)
+      // «идём направо», «в дверь налево» — выход по плану локации; без названного направления — после словаря намерений
+      const way = num === null && room.state.locationId ? wayTarget(exitsView(room), clause) : null
+      if (way?.strong) { this.takeWay(room, way.found, t.playerId); continue }
       if (num !== null && room.state.locationId) this.presentParagraph(room, room.state.locationId, num, t.playerId)
       // в пути — только встречи, которые выпали партии
       else if (num !== null && room.state.pendingRoad.includes(num)) this.presentParagraph(room, 'doroga', num, t.playerId)
       else if (num !== null) this.say(room, room.state.pendingRoad.length ? `Встречи в пути: ${room.state.pendingRoad.map((x) => `§ ${x}`).join(', ')}.` : 'Сначала войдите в локацию с карты, потом назовите номер помещения.')
-      else if (!this.freeReply(room, clause, t.playerId)) unmatched.push({ author: t.author, text: clause })
+      else if (this.freeReply(room, clause, t.playerId)) continue
+      else if (way) this.takeWay(room, way.found, t.playerId)
+      else unmatched.push({ author: t.author, text: clause })
     }
   }
 
@@ -628,7 +695,10 @@ export class ScriptedGm {
     if (loc) {
       const visited = new Set(s.visited[loc.id] ?? [])
       const left = loc.paragraphs.map((p) => p.n).filter((x) => !visited.has(x))
-      lines.push(`Вы в локации «${loc.name}»${room.script.n != null ? `, помещение ${room.script.n}` : ''}, день ${s.day}. Пройдено ${visited.size} из ${loc.paragraphs.length}${left.length ? `, не пройдены: ${ranges(left)}` : ', все помещения пройдены'}.`)
+      const views = exitsView(room)
+      // по размеченному плану непройденные номера не называем — только выходы оттуда, где стоит партия
+      if (views.length) lines.push(`Вы в локации «${loc.name}»${room.script.n != null ? `, помещение ${room.script.n}` : ', у входа'}, день ${s.day}. Пройдено ${visited.size} из ${loc.paragraphs.length}. ${describeExits(views)}`)
+      else lines.push(`Вы в локации «${loc.name}»${room.script.n != null ? `, помещение ${room.script.n}` : ''}, день ${s.day}. Пройдено ${visited.size} из ${loc.paragraphs.length}${left.length ? `, не пройдены: ${ranges(left)}` : ', все помещения пройдены'}.`)
       if (room.script.n != null) {
         const P = `${loc.id}:${room.script.n}`
         const tree = treeAt(loc.id, room.script.n)
@@ -942,9 +1012,16 @@ export class ScriptedGm {
         if (!loc) { this.say(room, 'Куда дальше? Выберите путь на карте.'); return }
         const visited = new Set(room.state.visited[loc.id] ?? [])
         const left = loc.paragraphs.map((p) => p.n).filter((x) => !visited.has(x))
-        this.say(room, left.length ? `Куда дальше? Не пройдены: ${ranges(left)}. Назовите номер помещения на плане.` : 'Все помещения пройдены — можно покинуть локацию и выбрать путь на карте.')
+        // по размеченному плану непройденные номера не называем: партия видит только выходы оттуда, где стоит
+        const views = exitsView(room)
+        if (views.length) this.say(room, `Куда дальше? ${describeExits(views)}${left.length ? '' : ' Все помещения пройдены — можно покинуть локацию.'}`, exitOffers(views))
+        else this.say(room, left.length ? `Куда дальше? Не пройдены: ${ranges(left)}. Назовите номер помещения на плане.` : 'Все помещения пройдены — можно покинуть локацию и выбрать путь на карте.')
         return
       }
+      case 'room':
+        if (room.state.locationId) this.presentParagraph(room, room.state.locationId, a.n, playerId)
+        else this.say(room, 'Партия не в локации: войдите в неё с карты.')
+        return
       case 'check': {
         const h = needHero()
         const r = s.luckCheck(h.uid, a.target)
