@@ -1,8 +1,6 @@
-/** Комнаты сетевой игры: состояние, игроки, чат, сохранение на диск. */
+/** Комнаты сетевой игры: состояние, игроки, чат, сохранение в хранилище (файлы или база — server/storage.ts). */
 import { randomBytes, randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import path from 'node:path'
+import { FileStorage, type RoomStorage } from './storage'
 import type { WorldMap } from '@/types'
 import type { GameState } from '@/engine/model'
 import { GameSession, blankGame, migrate } from '@/game/session'
@@ -279,18 +277,27 @@ export class Room {
   }
 }
 
-/** Хранилище комнат в памяти с сохранением в JSON-файлы */
+/** Комнаты в памяти с сохранением в хранилище: каталог с JSON-файлами (строка) или другое хранилище; null — только память */
 export class RoomStore {
   private rooms = new Map<string, Room>()
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
-  /** загрузки с диска в процессе: два игрока, входящие одновременно, получают один и тот же объект комнаты */
+  /** загрузки из хранилища в процессе: два игрока, входящие одновременно, получают один и тот же объект комнаты */
   private loading = new Map<string, Promise<Room | undefined>>()
+  private storage: RoomStorage | null
 
-  constructor(private dir: string | null, private world: WorldMap | null) {}
+  constructor(storage: RoomStorage | string | null, private world: WorldMap | null) {
+    this.storage = typeof storage === 'string' ? new FileStorage(storage) : storage
+  }
 
   async create(gm: GmMode, state?: GameState): Promise<Room> {
     let code = newCode()
-    while (this.rooms.has(code) || (this.dir && existsSync(this.file(code)))) code = newCode()
+    try {
+      while (this.rooms.has(code) || await this.storage?.has(code)) code = newCode()
+    } catch (e) {
+      // комнату, которую некуда сохранить, не создаём: игроки потеряли бы её при перезапуске сервера
+      console.error('[комнаты] хранилище не ответило при создании комнаты:', (e as Error).message)
+      throw new Error('Сервер не смог обратиться к хранилищу комнат — попробуйте ещё раз')
+    }
     const room = new Room(code, gm, state ? migrate(state) : blankGame(), this.world)
     this.rooms.set(code, room)
     this.touch(room)
@@ -301,18 +308,29 @@ export class RoomStore {
     const c = code.trim().toUpperCase()
     const cached = this.rooms.get(c)
     if (cached) return cached
-    if (!this.dir || !/^[A-Z0-9]{4,8}$/.test(c) || !existsSync(this.file(c))) return undefined
+    const storage = this.storage
+    if (!storage || !/^[A-Z0-9]{4,8}$/.test(c)) return undefined
     const pending = this.loading.get(c)
     if (pending) return pending
     const load = (async () => {
       try {
-        const data = JSON.parse(await readFile(this.file(c), 'utf8')) as RoomData
-        const room = this.rooms.get(c) ?? Room.fromData(data, this.world)
-        this.rooms.set(c, room)
-        return room
-      } catch (e) {
-        console.error(`[комнаты] не удалось прочитать ${c}:`, (e as Error).message)
-        return undefined
+        let json: string | undefined
+        try {
+          json = await storage.read(c)
+        } catch (e) {
+          // хранилище не ответило — это не «комнаты нет»: клиент на «не найдена» забывает свой вход, а так повторит попытку
+          console.error(`[комнаты] хранилище не отдало ${c}:`, (e as Error).message)
+          throw new Error('Сервер не смог прочитать сохранённую комнату — попробуйте ещё раз')
+        }
+        if (json === undefined) return undefined
+        try {
+          const room = this.rooms.get(c) ?? Room.fromData(JSON.parse(json) as RoomData, this.world)
+          this.rooms.set(c, room)
+          return room
+        } catch (e) {
+          console.error(`[комнаты] не удалось прочитать ${c}:`, (e as Error).message)
+          return undefined
+        }
       } finally {
         this.loading.delete(c)
       }
@@ -321,37 +339,29 @@ export class RoomStore {
     return load
   }
 
-  /** Отметить изменение и сохранить на диск с задержкой */
+  /** Отметить изменение и сохранить в хранилище с задержкой */
   touch(room: Room): void {
     room.updatedAt = Date.now()
-    if (!this.dir) return
+    if (!this.storage) return
     clearTimeout(this.timers.get(room.code))
     this.timers.set(room.code, setTimeout(() => {
       this.timers.delete(room.code)
-      // ошибка записи (диск полон, нет прав) не должна ронять сервер
+      // ошибка записи (диск полон, нет прав, база недоступна) не должна ронять сервер
       this.save(room).catch((e) => console.error(`[комнаты] не удалось сохранить ${room.code}:`, (e as Error).message))
     }, 500))
   }
 
-  /** Сохранения одной комнаты идут по очереди (таймер и остановка сервера не пишут один файл одновременно) */
+  /** Сохранения одной комнаты идут по очереди (таймер и остановка сервера не пишут одну комнату одновременно) */
   private saving = new Map<string, Promise<void>>()
   save(room: Room): Promise<void> {
-    if (!this.dir) return Promise.resolve()
+    const storage = this.storage
+    if (!storage) return Promise.resolve()
     const prev = this.saving.get(room.code) ?? Promise.resolve()
-    const next = prev.catch(() => {}).then(() => this.write(room))
+    const next = prev.catch(() => {}).then(() => storage.write(room.code, JSON.stringify(room.toData())))
     this.saving.set(room.code, next)
     void next.finally(() => { if (this.saving.get(room.code) === next) this.saving.delete(room.code) }).catch(() => {})
     return next
   }
-  /** Запись через временный файл: обрыв посреди записи не портит сохранённую комнату */
-  private async write(room: Room): Promise<void> {
-    await mkdir(this.dir!, { recursive: true })
-    const file = this.file(room.code)
-    const tmp = `${file}.${process.pid}.${Date.now().toString(36)}.tmp`
-    await writeFile(tmp, JSON.stringify(room.toData()))
-    await rename(tmp, file)
-  }
-
   async flush(): Promise<void> {
     for (const [code, t] of this.timers) {
       clearTimeout(t)
@@ -363,9 +373,15 @@ export class RoomStore {
     await Promise.allSettled([...this.saving.values()])
   }
 
-  /** Выгрузить из памяти комнаты, где давно никого нет (они сохранены на диске и загрузятся при входе) */
+  /** Остановка сервера: дописать комнаты и закрыть хранилище (соединения с базой) */
+  async close(): Promise<void> {
+    await this.flush()
+    await this.storage?.close?.()
+  }
+
+  /** Выгрузить из памяти комнаты, где давно никого нет (они сохранены в хранилище и загрузятся при входе) */
   async evictIdle(maxIdleMs: number, now = Date.now()): Promise<number> {
-    if (!this.dir) return 0
+    if (!this.storage) return 0
     let n = 0
     for (const [code, r] of this.rooms) {
       const online = [...r.players.values()].some((p) => p.sockets.size > 0)
@@ -378,9 +394,5 @@ export class RoomStore {
       n++
     }
     return n
-  }
-
-  private file(code: string): string {
-    return path.join(this.dir!, `${code}.json`)
   }
 }

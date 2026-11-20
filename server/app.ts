@@ -13,6 +13,7 @@ import { stateForClients, type Ack, type ClientToServer, type GmMode, type Joine
 import { authorize, isCommand } from './permissions'
 import { Schemas, limit, makeLimiters, parse, type Limits } from './guard'
 import { HOST_AWAY_MS, Room, RoomStore, type Player } from './rooms'
+import type { RoomStorage } from './storage'
 import { castVote, clearVotes, resolveVote as resolveVoteWith, voteComplete, votingOn } from './votes'
 
 import { GmDirector } from './gm/ai'
@@ -26,6 +27,8 @@ export interface ServerOptions {
   staticDir?: string | null
   /** каталог для сохранения комнат; null — только в памяти */
   dataDir?: string | null
+  /** другое хранилище комнат вместо каталога (Postgres на хостинге без диска) */
+  storage?: RoomStorage
   world: WorldMap | null
   /** ведущий; по умолчанию — без моделей ИИ (ходы ведёт сценарный ведущий) */
   gm?: GmFactory
@@ -97,7 +100,7 @@ export function clientAddr(hs: { address?: string; headers: IncomingHttpHeaders 
 }
 
 export async function createGameServer(opts: ServerOptions): Promise<GameServer> {
-  const store = new RoomStore(opts.dataDir ?? null, opts.world)
+  const store = new RoomStore(opts.storage ?? opts.dataDir ?? null, opts.world)
   const serveStatic = opts.staticDir && existsSync(opts.staticDir) ? sirv(opts.staticDir, { etag: true, gzip: true }) : null
   const http = createServer((req, res) => {
     if (req.url === '/health') { res.writeHead(200, { 'content-type': 'text/plain' }); res.end('ok'); return }
@@ -568,7 +571,7 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
     })
   })
 
-  // комнаты без игроков выгружаются из памяти через полчаса простоя (они на диске)
+  // комнаты без игроков выгружаются из памяти через полчаса простоя (они в хранилище)
   const evictTimer = setInterval(() => { void store.evictIdle(30 * 60_000).catch((e) => console.error('[комнаты]', e)) }, 5 * 60_000)
   evictTimer.unref()
 
@@ -579,10 +582,10 @@ export async function createGameServer(opts: ServerOptions): Promise<GameServer>
     async close() {
       clearInterval(evictTimer)
       for (const t of lateTimers.values()) clearTimeout(t)
-      // очередь ведущего сохранена в комнатах: сначала записать на диск, ходы моделей ждать недолго
+      // очередь ведущего сохранена в комнатах: сначала записать в хранилище, ходы моделей ждать недолго
       await store.flush()
       await Promise.race([gm.idle(), new Promise((r) => setTimeout(r, 3000))])
-      await store.flush()
+      await store.close()
       await new Promise<void>((resolve) => { io.close(() => resolve()) })
     },
   }
