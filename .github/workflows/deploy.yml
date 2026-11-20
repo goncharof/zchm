@@ -27,6 +27,19 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         if: ${{ !github.event.repository.private }}
         with: { path: dist }
+  # сервер сетевой игры на Render: сервис создан из публичной ссылки на репозиторий, сам за коммитами не следит —
+  # выкладку запускает его Deploy Hook (адрес — в секрете RENDER_DEPLOY_HOOK_URL; без секрета шаг ничего не делает)
+  render:
+    needs: build
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the Render deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "RENDER_DEPLOY_HOOK_URL is not set: the Render service is updated by hand"; exit 0; fi
+          curl -fsS -X POST "$HOOK" > /dev/null && echo "Render deploy triggered"
   deploy:
     needs: build
     if: ${{ !github.event.repository.private }}
