@@ -34,6 +34,7 @@ pnpm build:server && pnpm start   # продакшен: node server-dist/index.j
 #   без ключей ходы ведёт сценарный ведущий; ключи можно положить в .env.local (KEY=value, не в git и не в Docker)
 pnpm exec tsx tools/qa/fake-gm-server.ts   # сервер с демо-ведущим без Claude API (для проверки интерфейса)
 node tools/qa/online.mjs                    # при pnpm dev + демо-сервере: два игрока в комнате, скриншоты
+node tools/qa/saves.mjs [url] [outDir]      # при pnpm dev + pnpm server: сохранения, «Отложить игру», недавние комнаты
 tools/fetch_sources.sh   # скачать оцифрованную коробку (120 МБ) в source/pdf и создать tools/.venv
 pnpm data:bestiary  # source/pdf → src/data/bestiary.json + public/img/bestiary/*.jpg
 pnpm data:book      # → src/data/locations.json + public/img/locations/*.jpg
