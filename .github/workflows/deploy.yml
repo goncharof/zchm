@@ -1,4 +1,6 @@
-name: Deploy to GitHub Pages
+# Тесты и сборка на каждый push. Одиночная игра выкладывается на GitHub Pages, только когда репозиторий публичный
+# (на бесплатном тарифе Pages из приватного репозитория не работает); нужен Settings → Pages → Source: GitHub Actions.
+name: CI and GitHub Pages
 on:
   push:
     branches: [main, master]
@@ -15,17 +17,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # версия pnpm берётся из packageManager в package.json (указать её и здесь — действие остановится с ошибкой)
       - uses: pnpm/action-setup@v4
-        with: { version: 10 }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
+        with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm build
       - uses: actions/upload-pages-artifact@v3
+        if: ${{ !github.event.repository.private }}
         with: { path: dist }
   deploy:
     needs: build
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
