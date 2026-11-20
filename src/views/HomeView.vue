@@ -1,56 +1,33 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { idx } from '@/data'
 import { classArt, pct } from '@/ui/format'
 import { useGameStore } from '@/stores/game'
 import LogPanel from '@/components/LogPanel.vue'
 import OnlinePanel from '@/components/OnlinePanel.vue'
+import SavesPanel from '@/components/SavesPanel.vue'
+import type { RecentRoom } from '@/net/client'
 
 const store = useGameStore()
-/** загружать сохранения в сетевой игре может только хозяин комнаты */
-const canLoad = computed(() => !store.online || !!store.room?.me.isHost)
 const base = import.meta.env.BASE_URL
 // абсолютный адрес: url() в CSS-переменной считается от файла стилей (assets/), а не от страницы
 const bannerUrl = new URL(`${base}img/brand/banner.jpg`, document.baseURI).href
 const scrollToOnline = () => document.getElementById('online')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 const router = useRouter()
-const fileInput = ref<HTMLInputElement | null>(null)
 const allDead = computed(() => store.heroes.length > 0 && store.heroes.every((h) => h.status.dead))
 const where = computed(() => store.combat ? 'в бою' : store.location ? store.location.name : store.worldNode?.name ?? '—')
 
-const slotsVersion = ref(0)
-const slots = computed(() => { void slotsVersion.value; return [1, 2, 3].map((n) => store.slotInfo(n)) })
-function save(n: number) {
-  if (slots.value[n - 1] && !confirm(`Перезаписать слот ${n}?`)) return
-  store.saveSlot(n); slotsVersion.value++
-}
-function load(n: number) {
-  if (store.started && !confirm('Текущая партия будет заменена сохранением. Продолжить?')) return
-  store.loadSlot(n); slotsVersion.value++; continueGame()
-}
-function clear(n: number) {
-  if (!confirm(`Удалить слот ${n}?`)) return
-  store.clearSlot(n); slotsVersion.value++
-}
 function continueGame() {
   if (store.combat) router.push('/combat')
   else if (store.location) router.push(`/location/${store.location.id}`)
   else if (store.heroes.length) router.push('/map')
   else router.push('/party')
 }
-function exportSave() {
-  const blob = new Blob([store.exportSave()], { type: 'application/json' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `zchm-save-day${store.game?.day ?? 0}.json`
-  a.click()
-  URL.revokeObjectURL(a.href)
-}
-async function importSave(ev: Event) {
-  const f = (ev.target as HTMLInputElement).files?.[0]
-  if (!f) return
-  try { if (await store.importSave(await f.text())) { store.say('Сохранение загружено'); continueGame() } } catch (e) { store.say((e as Error).message) }
+// последняя комната, где игрок был: вернуться за стол одной кнопкой (одиночная партия при этом не трогается)
+const lastRoom = computed(() => (store.online ? null : store.recent[0] ?? null))
+async function resume(r: RecentRoom) {
+  if (await store.resumeRoom(r)) router.push('/table')
 }
 async function quick() {
   if (store.started && !confirm(store.online ? 'Партия комнаты будет заменена. Начать заново?' : 'Текущая партия будет удалена. Начать заново?')) return
@@ -78,9 +55,10 @@ async function newGame() {
       <div v-if="store.game?.victory" class="card tight" style="border-color:var(--ok)"><b>Победа!</b> {{ store.game.victory.heroName }} сразил Чёрного мага на {{ store.game.victory.day }}-й день. Ворота Инкардагот остались закрыты.</div>
       <div v-if="allDead" class="card tight" style="border-color:var(--danger)"><b>Партия погибла.</b> Жрец мог бы оживить павших, но жрецов не осталось. Начните новую партию или загрузите сохранение.</div>
       <div class="cta">
-        <button v-if="store.started" class="primary cta-main" @click="continueGame"><span>Продолжить</span><small>день {{ store.game?.day }} · {{ where }}</small></button>
+        <button v-if="store.started" class="primary cta-main" @click="continueGame"><span>Продолжить</span><small>{{ store.online ? `комната ${store.room?.code} · ` : '' }}день {{ store.game?.day }} · {{ where }}</small></button>
+        <button v-if="lastRoom" class="cta-main" :class="{ primary: !store.started }" :disabled="store.connecting" @click="resume(lastRoom)"><span>Вернуться за стол</span><small>комната {{ lastRoom.code }}{{ lastRoom.day ? ` · день ${lastRoom.day}` : '' }}{{ lastRoom.heroes ? ` · ${lastRoom.heroes}` : '' }}</small></button>
         <template v-if="!store.online || store.room?.me.isHost">
-          <button :class="{ primary: !store.started }" @click="newGame">Новая партия</button>
+          <button :class="{ primary: !store.started && !lastRoom }" @click="newGame">Новая партия</button>
           <button @click="quick" title="Воин, маг, жрец и вор со снаряжением на 40 монет">Быстрый старт</button>
         </template>
         <button v-if="!store.online" @click="scrollToOnline">Игра по сети</button>
@@ -106,24 +84,7 @@ async function newGame() {
       </div>
       <div class="card">
         <h2 class="title-ornament">Сохранения</h2>
-        <p class="small muted">Партия сохраняется автоматически. Слоты — дополнительные копии в этом браузере.</p>
-        <div v-for="n in [1, 2, 3]" :key="n" class="slot">
-          <div class="slot-info">
-            <b>Слот {{ n }}</b>
-            <span v-if="slots[n - 1]" class="small">День {{ slots[n - 1]!.day }} · {{ slots[n - 1]!.heroes || 'без героев' }} · <span class="muted">{{ new Date(slots[n - 1]!.savedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' }) }}</span></span>
-            <span v-else class="small muted">пусто</span>
-          </div>
-          <div class="slot-actions">
-            <button class="small" :disabled="!store.started" @click="save(n)">Сохранить</button>
-            <button v-if="canLoad" class="small" :disabled="!slots[n - 1]" @click="load(n)">Загрузить</button>
-            <button class="small ghost" :disabled="!slots[n - 1]" title="Удалить слот" :aria-label="`Удалить слот ${n}`" @click="clear(n)">✕</button>
-          </div>
-        </div>
-        <div class="row" style="margin-top:.6rem">
-          <button v-if="store.started" class="small" @click="exportSave">Экспорт сохранения</button>
-          <button v-if="canLoad" class="small" @click="fileInput?.click()">Импорт сохранения</button>
-          <input ref="fileInput" type="file" accept="application/json" style="display:none" @change="importSave" />
-        </div>
+        <SavesPanel :room-actions="false" />
       </div>
     </div>
     <div>

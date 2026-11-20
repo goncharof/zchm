@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import type { RecentRoom } from '@/net/client'
 import type { GmMode } from '@/net/protocol'
 import { useGameStore } from '@/stores/game'
+import { savedTime } from '@/ui/format'
 
 const store = useGameStore()
 const router = useRouter()
+const route = useRoute()
 const NAME_KEY = 'zchm.net.name'
 const name = ref(readName())
-const code = ref('')
+// ссылка «…#/?room=КОД» от друзей подставляет код комнаты
+const code = ref(typeof route.query.room === 'string' ? route.query.room.toUpperCase() : '')
+onMounted(() => { if (code.value && !store.online) document.getElementById('online')?.scrollIntoView({ block: 'start' }) })
 // по умолчанию — сценарный ведущий: он ведёт всю книгу без моделей, ИИ — надстройка (бесплатных квот на вечер мало)
 const gm = ref<GmMode>('script')
 const withParty = ref(true)
@@ -35,6 +40,24 @@ async function join() {
   const j = await store.joinRoom(code.value, name.value.trim())
   if (j) router.push('/table')
 }
+async function resume(x: RecentRoom) {
+  if (await store.resumeRoom(x)) router.push('/table')
+}
+function forget(x: RecentRoom) {
+  if (!confirm(`Убрать комнату ${x.code} из списка? Вернуться можно будет по коду и имени${x.host ? ', но уже не хозяином' : ''}.`)) return
+  store.forgetRecent(x.code)
+}
+function suspend() {
+  store.suspendRoom()
+  router.push('/')
+}
+function leave() {
+  const room = r.value
+  if (!room) return
+  const next = room.me.isHost ? room.players.find((p) => p.id !== room.me.id && p.online) ?? room.players.find((p) => p.id !== room.me.id) : undefined
+  const msg = `Покинуть комнату ${room.code} насовсем? Ваши герои освободятся${next ? `, хозяином станет ${next.name}` : ''}, а комната пропадёт из недавних.\n\nЧтобы просто закончить на сегодня, нажмите «Отложить игру».`
+  if (confirm(msg)) store.leaveRoom()
+}
 function copyLink() {
   const url = `${location.origin}${location.pathname}#/?room=${r.value?.code}`
   void navigator.clipboard?.writeText(url).then(() => store.say('Ссылка скопирована'))
@@ -45,6 +68,20 @@ function copyLink() {
   <div class="card">
     <h2>Игра по сети</h2>
     <template v-if="!r">
+      <template v-if="store.recent.length">
+        <h3>Недавние комнаты</h3>
+        <div class="recent">
+          <div v-for="x in store.recent" :key="x.code" class="recent-row">
+            <span class="code">{{ x.code }}</span>
+            <div class="recent-info small">
+              <div>{{ x.name }}<span v-if="x.host" class="badge accent" style="margin-left:.3rem">хозяин</span><span v-if="x.heroes" class="muted"> · {{ x.heroes }}</span></div>
+              <div class="muted">{{ x.day ? `день ${x.day} · ` : '' }}были {{ savedTime(x.at) }}</div>
+            </div>
+            <button class="small primary" :disabled="store.connecting" @click="resume(x)">Вернуться</button>
+            <button class="small ghost" title="Убрать из списка" :aria-label="`Убрать комнату ${x.code} из списка`" @click="forget(x)">✕</button>
+          </div>
+        </div>
+      </template>
       <p class="small muted">Соберитесь командой: каждый играет своим героем со своего устройства. Ведущим может быть ИИ, кто-то из вас или никто — тогда Книгу Жизни читают сами игроки.</p>
       <div class="row" style="margin-bottom:.5rem"><label>Ваше имя</label><input v-model="name" maxlength="30" placeholder="Например, Иван" /></div>
       <div class="cols c11">
@@ -72,6 +109,7 @@ function copyLink() {
           <li>Каждый берёт своего героя на экране «Партия» — кнопка «Взять героя». «Быстрый старт» хозяина создаёт четверых.</li>
           <li>За столом пишите, что делают ваши герои: номер помещения открывает его, реплика «сыграем», «деремся», «берём монеты» нажимает подходящую кнопку. С ИИ-ведущим ход идёт «когда все готовы»: ведущий отвечает, когда каждый написал или нажал «Готов».</li>
           <li>Бой — на экране «Бой»: каждый ходит своим героем, монстры ходят после героев.</li>
+          <li>Закончить вечер — «Отложить игру» или закрыть вкладку: партия хранится на сервере, герои остаются за вами. В следующий раз — «Вернуться за стол» на главной, с другого устройства — код и то же имя.</li>
           <li>Обновили страницу или пропала связь — игра сама вернёт за стол. Хозяина нет больше двух минут — любой может «Стать хозяином».</li>
         </ol>
       </details>
@@ -79,7 +117,12 @@ function copyLink() {
     <template v-else>
       <div class="row between">
         <div><span class="muted small">Комната</span> <b style="font-size:1.6rem;letter-spacing:.15em;color:var(--accent)">{{ r.code }}</b></div>
-        <div class="row"><button class="small" @click="copyLink">Ссылка</button><button class="small" @click="router.push('/table')">За стол</button><button class="small danger" @click="store.leaveRoom()">Выйти</button></div>
+        <div class="row"><button class="small" @click="copyLink">Ссылка</button><button class="small" @click="router.push('/table')">За стол</button></div>
+      </div>
+      <div class="row small" style="margin:.2rem 0 .5rem">
+        <button class="small" title="Отключиться до следующего раза: герои остаются за вами, партия — на сервере" @click="suspend">Отложить игру</button>
+        <button class="small ghost danger" title="Выйти из комнаты насовсем: герои освободятся" @click="leave">Покинуть комнату</button>
+        <span class="muted">Закончить на сегодня — «Отложить» или просто закрыть вкладку.</span>
       </div>
       <p class="small">Ведущий: <b>{{ GM_LABEL[r.gm] }}</b><span v-if="r.gmBusy" class="muted"> — пишет…</span></p>
       <p v-if="r.gm === 'ai'" class="small muted">Модели по порядку: {{ r.gmChain.length ? `${r.gmChain.join(' → ')} → сценарный` : 'не настроены на сервере — ведёт сценарный ведущий' }}.</p>

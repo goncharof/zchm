@@ -11,7 +11,7 @@ import type { CombatState, EquipSlot, GameState, Hero, InventoryKind, LogEntry }
 import type { EncounterSpec } from '@/engine/combat'
 import type { CastResult } from '@/engine/spells'
 import { GameSession, blankGame, migrate, parseSave, runCommand, type CommandArgs, type CommandName, type CommandResult } from '@/game/session'
-import { NetClient, savedSession } from '@/net/client'
+import { NetClient, forgetRoom, recentRooms, rememberRoom, savedSession, type RecentRoom } from '@/net/client'
 import type { ChatMessage, GmMode, RoomView, TurnMode } from '@/net/protocol'
 import type { NetStatus } from '@/net/client'
 
@@ -28,6 +28,10 @@ function readSave(): GameState | null {
 
 export const useGameStore = defineStore('game', () => {
   const game = ref<GameState | null>(readSave())
+  /** когда партия последний раз сохранена: в одиночной игре — в браузер, в сетевой — пришла с сервера (он пишет её на диск) */
+  const savedAt = ref<number | null>(game.value?.updatedAt ?? null)
+  /** комнаты, где игрок уже был, — вернуться за стол без кода */
+  const recent = ref<RecentRoom[]>(recentRooms())
   const world = ref<WorldMap | null>(null)
   const notice = ref<string>('')
   /** сетевая игра: клиент и сведения о комнате (null — одиночная игра) */
@@ -83,8 +87,22 @@ export const useGameStore = defineStore('game', () => {
   watch(game, (g) => {
     if (net.value) return
     if (!g) { localStorage.removeItem(SAVE_KEY); return }
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ ...g, updatedAt: Date.now() })) } catch { /* переполнение хранилища — игнорируем */ }
+    const t = Date.now()
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ ...g, updatedAt: t })); savedAt.value = t } catch { /* переполнение хранилища — игнорируем */ }
   }, { deep: true })
+
+  // недавние комнаты: свои герои, день и права хозяина — для списка «Недавние комнаты» на главной
+  watch(() => {
+    const r = room.value, s = savedSession()
+    if (!r || !s || s.code !== r.code) return null
+    const mine = heroes.value.filter((h) => r.me.heroUids.includes(h.uid)).map((h) => h.name).join(', ')
+    return JSON.stringify([s, mine, r.me.isHost, game.value?.day ?? 0])
+  }, (key) => {
+    if (!key) return
+    const [s, mine, host, day] = JSON.parse(key) as [RecentRoom, string, boolean, number]
+    rememberRoom(s, { heroes: mine, host, day })
+    recent.value = recentRooms()
+  })
 
   function say(text: string): void {
     notice.value = text
@@ -127,7 +145,7 @@ export const useGameStore = defineStore('game', () => {
   // ---------- сеть ----------
   function attachNet(client: NetClient): void {
     net.value = client
-    client.onState((state) => { game.value = migrate(state) })
+    client.onState((state) => { game.value = migrate(state); savedAt.value = Date.now() })
     client.onRoom((r) => { room.value = r })
     client.onNotice((text) => say(text))
     client.onStatus((st) => { netStatus.value = st })
@@ -162,6 +180,8 @@ export const useGameStore = defineStore('game', () => {
     rejoinState.value = 'idle'
     chatSeenT.value = 0
     game.value = readSave()
+    savedAt.value = game.value?.updatedAt ?? null
+    recent.value = recentRooms()
   }
   function ensureNet(url?: string): NetClient {
     if (!net.value) attachNet(new NetClient(url))
@@ -181,7 +201,7 @@ export const useGameStore = defineStore('game', () => {
   }
   /** Создать комнату; withParty — взять с собой текущую одиночную партию */
   const createRoom = (name: string, gm: GmMode, withParty: boolean) => netAction((c) => c.create(name, gm, withParty && game.value ? JSON.parse(JSON.stringify(game.value)) : undefined))
-  const joinRoom = (code: string, name: string) => netAction((c) => c.join(code, name))
+  const joinRoom = (code: string, name: string) => netAction((c) => c.join(code, name)).finally(() => { recent.value = recentRooms() })
   /** Вернуться в комнату после перезагрузки страницы. Сервер недоступен — ждать связи, а не забывать вход */
   async function rejoin(): Promise<void> {
     const s = savedSession()
@@ -205,11 +225,28 @@ export const useGameStore = defineStore('game', () => {
     rejoinState.value = 'idle'
     detachNet()
   }
+  /** Покинуть комнату насовсем: герои освобождаются, комната пропадает из недавних */
   function leaveRoom(): void {
     const c = net.value
+    const code = room.value?.code
+    if (code) forgetRoom(code)
     if (c) void c.leave().catch(() => {})
     rejoinState.value = 'idle'
     detachNet()
+  }
+  /** Отложить игру: место за столом (герои, права хозяина) остаётся, вернуться — из недавних комнат */
+  function suspendRoom(): void {
+    const code = room.value?.code
+    net.value?.suspend()
+    rejoinState.value = 'idle'
+    detachNet()
+    if (code) say(`Игра отложена. Комната ${code} — в «Недавних комнатах» на главной`)
+  }
+  /** Вернуться в комнату из недавних (по сохранённому токену) */
+  const resumeRoom = (r: RecentRoom) => netAction((c) => c.join(r.code, r.name, r.token), r.url).finally(() => { recent.value = recentRooms() })
+  function forgetRecent(code: string): void {
+    forgetRoom(code)
+    recent.value = recentRooms()
   }
   const sendChat = (text: string, toGm: boolean, asGm = false) => netAction((c) => c.chat(text, toGm, asGm))
   const choose = (messageId: string, choiceId: string) => netAction((c) => c.choose(messageId, choiceId))
@@ -331,7 +368,7 @@ export const useGameStore = defineStore('game', () => {
 
   return {
     game, world, notice, net, room, online, aiGm, isGm, myHeroUids, canControl, isMine: isMineHero, chat, netStatus, rejoinState, abandonRejoin, unread, markChatSeen, isMineMsg: isMine, streaming, connecting,
-    createRoom, joinRoom, rejoin, leaveRoom, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, setNarrator, claimHost, setReady, turnGo, ownerOf,
+    savedAt, recent, createRoom, joinRoom, rejoin, leaveRoom, suspendRoom, resumeRoom, forgetRecent, sendChat, choose, claimHero, releaseHero, setGmMode, setTurnMode, setNarrator, claimHost, setReady, turnGo, ownerOf,
     heroes, combat, location, worldNode, started,
     say, hero, cmd, cmdOk, attachNet, detachNet,
     resetGame, exportSave, importSave, slotInfo, saveSlot, loadSlot, clearSlot,

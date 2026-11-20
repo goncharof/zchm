@@ -2,15 +2,16 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-  BookOpen, Castle, Dice5, Home, Info, Map as MapIcon, Menu, MessageCircle, MessagesSquare, ScrollText, Skull, Sparkles, Store, Swords, Users, X,
+  BookOpen, Castle, Dice5, Home, Info, Save, Map as MapIcon, Menu, MessageCircle, MessagesSquare, ScrollText, Skull, Sparkles, Store, Swords, Users, X,
 } from 'lucide-vue-next'
 import DiceTray from '@/components/DiceTray.vue'
 import GmChat from '@/components/GmChat.vue'
+import SavesPanel from '@/components/SavesPanel.vue'
 import { useGameStore } from '@/stores/game'
 import { idx } from '@/data'
 import { savedSession } from '@/net/client'
 import { speak, speechPrefs, spokenIds } from '@/ui/speech'
-import { classArt, pct } from '@/ui/format'
+import { classArt, pct, savedTime } from '@/ui/format'
 import { updateAvailable } from '@/ui/version'
 
 const store = useGameStore()
@@ -21,6 +22,7 @@ const dice = ref(false)
 const more = ref(false)
 const refMenu = ref(false)
 const chatOpen = ref(false)
+const savesOpen = ref(false)
 const base = import.meta.env.BASE_URL
 
 // возврат за стол после обновления страницы: пока не вошли — экран ожидания, а не чужое одиночное сохранение
@@ -35,11 +37,11 @@ const onTable = computed(() => route.path === '/table')
 // чат уже на экране: за столом и в локации, где вместо текста книги — ведущий (как hideText в LocationView);
 // плавающая кнопка там не нужна и закрывала бы «Готов» и поле реплики
 const chatOnScreen = computed(() => onTable.value || (route.path.startsWith('/location/') && (store.aiGm || (store.online && !store.isGm))))
-watch(() => route.fullPath, () => { more.value = false; refMenu.value = false; if (route.path === '/table') chatOpen.value = false })
+watch(() => route.fullPath, () => { more.value = false; refMenu.value = false; savesOpen.value = false; if (route.path === '/table') chatOpen.value = false })
 // меню «Справочник» и плавающий чат закрываются щелчком мимо и клавишей Esc
 const moreRef = ref<HTMLElement | null>(null)
 function onDocClick(e: MouseEvent) { if (refMenu.value && moreRef.value && !moreRef.value.contains(e.target as Node)) refMenu.value = false }
-function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { refMenu.value = false; more.value = false; chatOpen.value = false } }
+function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { refMenu.value = false; more.value = false; chatOpen.value = false; savesOpen.value = false } }
 onMounted(() => { document.addEventListener('click', onDocClick); document.addEventListener('keydown', onKey) })
 onBeforeUnmount(() => { document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onKey) })
 
@@ -69,6 +71,10 @@ const reference = [
 function reload() { location.reload() }
 const refActive = computed(() => reference.some((r) => route.path.startsWith(r.to)))
 const onlineCount = computed(() => store.room?.players.filter((p) => p.online).length ?? 0)
+// метка сохранения: видно, что партия сохранена и где; нажатие открывает «Сохранения»
+const saveLost = computed(() => store.online && store.netStatus === 'reconnecting')
+const saveLabel = computed(() => saveLost.value ? 'не сохраняется' : store.savedAt ? `сохранено ${savedTime(store.savedAt)}` : 'сохранения')
+const saveTitle = computed(() => saveLost.value ? 'Нет связи с сервером — ходы не сохраняются' : store.online ? 'Партия хранится на сервере. Сохранения и «Отложить игру»' : 'Партия сохраняется в этом браузере. Сохранения')
 </script>
 
 <template>
@@ -95,6 +101,9 @@ const onlineCount = computed(() => store.room?.players.filter((p) => p.online).l
         <router-link v-if="store.online" to="/table" class="room-chip" :class="{ off: store.netStatus === 'reconnecting' }" :title="`Комната ${store.room?.code}: ${onlineCount} в сети`">
           <span class="dot" />{{ store.room?.code }}<span class="muted">· {{ onlineCount }}</span>
         </router-link>
+        <button v-if="store.started" class="save-chip" :class="{ off: saveLost }" :title="saveTitle" aria-label="Сохранения" @click="savesOpen = true">
+          <Save :size="15" /><span class="save-chip-t">{{ saveLabel }}</span>
+        </button>
         <button class="icon ghost icon-btn" title="Кубики" aria-label="Кубики" @click="dice = true"><Dice5 :size="20" /></button>
         <button v-if="store.online && !onTable" class="icon ghost icon-btn" title="Чат" aria-label="Чат" @click="chatOpen = !chatOpen">
           <MessageCircle :size="20" /><span v-if="unread" class="count">{{ unread > 99 ? '99+' : unread }}</span>
@@ -141,6 +150,7 @@ const onlineCount = computed(() => store.room?.players.filter((p) => p.online).l
         <router-link v-if="locationLink && inCombat" :to="locationLink"><Castle :size="22" />{{ store.location?.name }}</router-link>
         <router-link v-for="r in reference" :key="r.to" :to="r.to"><component :is="r.icon" :size="22" />{{ r.label }}</router-link>
         <button @click="more = false; dice = true"><Dice5 :size="22" />Кубики</button>
+        <button @click="more = false; savesOpen = true"><Save :size="22" />Сохранения</button>
       </div>
     </div>
   </template>
@@ -163,6 +173,12 @@ const onlineCount = computed(() => store.room?.players.filter((p) => p.online).l
     <button class="small primary" @click="reload">Обновить</button>
   </div>
   <DiceTray v-if="dice" @close="dice = false" />
+  <div v-if="savesOpen" class="modal-back" @click.self="savesOpen = false">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Сохранения" style="max-width:560px">
+      <div class="row between"><h3>Сохранения</h3><button class="small" @click="savesOpen = false">Закрыть</button></div>
+      <SavesPanel @done="savesOpen = false" />
+    </div>
+  </div>
   <div v-if="!store.room && (store.rejoinState !== 'idle' || (pendingRejoin && store.connecting))" class="overlay" role="status">
     <img :src="`${base}img/brand/logo.png`" alt="" />
     <div class="spinner" />

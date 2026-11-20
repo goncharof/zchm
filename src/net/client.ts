@@ -25,6 +25,44 @@ function saveSession(s: SavedSession | null): void {
     if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s))
     else localStorage.removeItem(SESSION_KEY)
   } catch { /* нет хранилища */ }
+  if (s) rememberRoom(s)
+}
+
+// ---------- недавние комнаты: вход в несколько комнат, чтобы вернуться за стол без кода ----------
+const RECENT_KEY = 'zchm.net.recent'
+const RECENT_MAX = 6
+
+/** Комната, где игрок уже был: вход по токену (герои и права хозяина при нём) и что показать в списке */
+export interface RecentRoom extends SavedSession {
+  /** когда игрок был в комнате последний раз */
+  at: number
+  /** имена своих героев */
+  heroes?: string
+  host?: boolean
+  day?: number
+}
+
+export function recentRooms(): RecentRoom[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY)
+    const list = raw ? (JSON.parse(raw) as RecentRoom[]) : []
+    return Array.isArray(list) ? list.filter((r) => r && typeof r.code === 'string' && typeof r.token === 'string') : []
+  } catch {
+    return []
+  }
+}
+function writeRecent(list: RecentRoom[]): void {
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.sort((a, b) => b.at - a.at).slice(0, RECENT_MAX))) } catch { /* нет хранилища */ }
+}
+/** Запомнить вход в комнату (новый токен заменяет старый) и обновить сведения о ней */
+export function rememberRoom(s: SavedSession, info: Partial<Omit<RecentRoom, keyof SavedSession>> = {}): void {
+  const list = recentRooms()
+  const old = list.find((r) => r.code === s.code)
+  const next: RecentRoom = { ...old, ...s, ...info, at: Date.now() }
+  writeRecent([next, ...list.filter((r) => r.code !== s.code)])
+}
+export function forgetRoom(code: string): void {
+  writeRecent(recentRooms().filter((r) => r.code !== code))
 }
 
 export class NetClient {
@@ -89,6 +127,7 @@ export class NetClient {
       return
     }
     if (/не найдена/.test(a.error ?? '')) {
+      forgetRoom(s.code)
       this.joined = null
       saveSession(null)
       this.releaseGate()
@@ -178,7 +217,7 @@ export class NetClient {
     await this.reachServer()
     const a = await this.joinRaw(code, name, token)
     // комнаты больше нет — забыть сохранённый вход, чтобы обновление страницы не пыталось снова
-    if (!a.ok && /не найдена/.test(a.error ?? '')) saveSession(null)
+    if (!a.ok && /не найдена/.test(a.error ?? '')) { saveSession(null); forgetRoom(code.trim().toUpperCase()) }
     const j = this.unwrap(a) as Joined
     this.releaseGate()
     this.joined = { code: j.code, token: j.token, name }
@@ -200,9 +239,18 @@ export class NetClient {
   async setReady(ready: boolean): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:ready', ready)) }
   async turnGo(): Promise<void> { await this.send(() => this.socket.timeout(TIMEOUT_MS).emitWithAck('turn:go')) }
 
-  /** Выйти из комнаты: сервер освобождает героев (иначе за столом остаётся «призрак»), вход забывается */
+  /** Покинуть комнату насовсем: сервер освобождает героев (иначе за столом остаётся «призрак»), вход забывается */
   async leave(): Promise<void> {
+    const code = this.joined?.code
     if (this.joined && this.socket.connected) await this.ask(this.socket.timeout(3000).emitWithAck('room:leave'))
+    if (code) forgetRoom(code)
+    this.forget()
+    this.close()
+  }
+
+  /** Отложить игру: отключиться, оставив за собой место (герои, права хозяина). Обновление страницы за стол не вернёт,
+   *  вход остаётся в недавних комнатах */
+  suspend(): void {
     this.forget()
     this.close()
   }

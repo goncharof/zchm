@@ -49,3 +49,13 @@ const CLASS_ART: Record<string, string> = {
 export function classArt(classId: string): string {
   return import.meta.env.BASE_URL + (CLASS_ART[classId] ?? CLASS_ART.warrior)
 }
+
+/** Время сохранения: сегодня — «в 21:04», раньше — «18.11 в 21:04» */
+export function savedTime(t: number, now = Date.now()): string {
+  const d = new Date(t)
+  const hm = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  if (new Date(now).toDateString() === d.toDateString()) return `в ${hm}`
+  const sameYear = new Date(now).getFullYear() === d.getFullYear()
+  const date = d.toLocaleDateString('ru-RU', sameYear ? { day: '2-digit', month: '2-digit' } : { day: '2-digit', month: '2-digit', year: '2-digit' })
+  return `${date} в ${hm}`
+}
