@@ -6,6 +6,8 @@ import type { GmMode } from '@/net/protocol'
 import { useGameStore } from '@/stores/game'
 import { savedTime } from '@/ui/format'
 
+/** bare — без рамки и заголовка: панель комнаты в окне «Комната» (App.vue) */
+const props = withDefaults(defineProps<{ bare?: boolean }>(), { bare: false })
 const store = useGameStore()
 const router = useRouter()
 const route = useRoute()
@@ -65,8 +67,8 @@ function copyLink() {
 </script>
 
 <template>
-  <div class="card">
-    <h2>Игра по сети</h2>
+  <div :class="{ card: !props.bare }">
+    <h2 v-if="!props.bare">Игра по сети</h2>
     <template v-if="!r">
       <template v-if="store.recent.length">
         <h3>Недавние комнаты</h3>
@@ -100,9 +102,9 @@ function copyLink() {
           <button :disabled="store.connecting" @click="join">{{ store.connecting ? 'Подключаемся…' : 'Войти' }}</button>
         </div>
       </div>
-      <p class="small muted" style="margin-top:.4rem">Сценарный ведущий ведёт Книгу Жизни сам: кнопки вариантов, бой, проверки удачи, кости, заклинания жреца и мага, а чего в книге нет — решает стол (удача, кубик, да или нет). ИИ-ведущий сверх того пишет рассказ, но зависит от бесплатных облачных моделей, настроенных на сервере (или Claude по ключу); если ни одна не отвечает, ход ведёт сценарный.</p>
       <details class="how-online small">
         <summary>Как это устроено</summary>
+        <p style="margin:.4rem 0 0">Сценарный ведущий ведёт Книгу Жизни сам: кнопки вариантов, бой, проверки удачи, кости, заклинания жреца и мага, а чего в книге нет — решает стол (удача, кубик, да или нет). ИИ-ведущий сверх того пишет рассказ, но зависит от бесплатных облачных моделей, настроенных на сервере (или Claude по ключу); если ни одна не отвечает, ход ведёт сценарный.</p>
         <ol>
           <li><b>Хозяин</b> создаёт комнату и выбирает ведущего: сценарный (кнопки по книге), ИИ, живой — сам хозяин, или никого.</li>
           <li>Код комнаты из шести знаков или кнопку «Ссылка» отправьте друзьям: они вводят своё имя и код.</li>
@@ -116,8 +118,8 @@ function copyLink() {
     </template>
     <template v-else>
       <div class="row between">
-        <div><span class="muted small">Комната</span> <b style="font-size:1.6rem;letter-spacing:.15em;color:var(--accent)">{{ r.code }}</b></div>
-        <div class="row"><button class="small" @click="copyLink">Ссылка</button><button class="small" @click="router.push('/table')">За стол</button></div>
+        <div><span v-if="!props.bare" class="muted small">Комната</span> <b style="font-size:1.6rem;letter-spacing:.15em;color:var(--accent)">{{ r.code }}</b></div>
+        <div class="row"><button class="small" @click="copyLink">Ссылка</button><button v-if="route.path !== '/table'" class="small" @click="router.push('/table')">За стол</button></div>
       </div>
       <div class="row small" style="margin:.2rem 0 .5rem">
         <button class="small" title="Отключиться до следующего раза: герои остаются за вами, партия — на сервере" @click="suspend">Отложить игру</button>

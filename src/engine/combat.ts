@@ -91,6 +91,8 @@ export function makeAlly(ownerUid: string, name: string, defense: number, attack
   return { uid: uid('ally'), ownerUid, name, defense, attacks, lives, maxLives: lives, rounds, decoy, attackMultiplier: 1 }
 }
 
+/** начало записи о бое в журнале партии */
+const FIGHT_START = 'Бой начинается'
 export function startCombat(specs: EncounterSpec[], idx: DataIndex, returnTo?: string): { state: CombatState; log: LogEntry[] } {
   const monsters: MonsterInstance[] = []
   for (const s of specs) {
@@ -113,8 +115,15 @@ export function startCombat(specs: EncounterSpec[], idx: DataIndex, returnTo?: s
     returnTo,
     xpEarned: {},
   }
-  const log = [entry(`Бой начинается: ${monsters.map((m) => m.name).join(', ')}. Первый раунд — дистанция: метательное оружие и заклинания.`)]
+  const log = [entry(`${FIGHT_START}: ${monsters.map((m) => m.name).join(', ')}. Первый раунд — дистанция: метательное оружие и заклинания.`)]
   return { state, log }
+}
+
+/** Журнал текущего боя: записи с его начала (журнал партии общий и обрезается, поэтому по записи, а не по номеру).
+ *  Начало уже вытеснено из журнала — весь журнал. */
+export function fightLog(log: LogEntry[]): LogEntry[] {
+  for (let i = log.length - 1; i >= 0; i--) if (log[i].text.startsWith(FIGHT_START)) return log.slice(i)
+  return log
 }
 
 /** Дополнительные действия в раунде: воин 12 уровня — 2 атаки за ход */

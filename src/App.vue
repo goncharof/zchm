@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-  BookOpen, Castle, Dice5, Home, Info, Save, Map as MapIcon, Menu, MessageCircle, MessagesSquare, ScrollText, Skull, Sparkles, Store, Swords, Users, X,
+  BookOpen, Castle, Dice5, DoorOpen, Home, Info, Save, Map as MapIcon, Menu, MessageCircle, MessagesSquare, ScrollText, Skull, Sparkles, Store, Swords, Users, X,
 } from 'lucide-vue-next'
 import DiceTray from '@/components/DiceTray.vue'
 import GmChat from '@/components/GmChat.vue'
+import OnlinePanel from '@/components/OnlinePanel.vue'
 import SavesPanel from '@/components/SavesPanel.vue'
 import { useGameStore } from '@/stores/game'
 import { idx } from '@/data'
@@ -13,6 +14,7 @@ import { savedSession } from '@/net/client'
 import { speak, speechPrefs, spokenIds } from '@/ui/speech'
 import { classArt, pct, savedTime } from '@/ui/format'
 import { updateAvailable } from '@/ui/version'
+import { roomOpen, savesOpen } from '@/ui/dialogs'
 
 const store = useGameStore()
 const route = useRoute()
@@ -22,7 +24,6 @@ const dice = ref(false)
 const more = ref(false)
 const refMenu = ref(false)
 const chatOpen = ref(false)
-const savesOpen = ref(false)
 const base = import.meta.env.BASE_URL
 
 // возврат за стол после обновления страницы: пока не вошли — экран ожидания, а не чужое одиночное сохранение
@@ -37,17 +38,21 @@ const onTable = computed(() => route.path === '/table')
 // чат уже на экране: за столом и в локации, где вместо текста книги — ведущий (как hideText в LocationView);
 // плавающая кнопка там не нужна и закрывала бы «Готов» и поле реплики
 const chatOnScreen = computed(() => onTable.value || (route.path.startsWith('/location/') && (store.aiGm || (store.online && !store.isGm))))
-watch(() => route.fullPath, () => { more.value = false; refMenu.value = false; savesOpen.value = false; if (route.path === '/table') chatOpen.value = false })
+watch(() => route.fullPath, () => { more.value = false; refMenu.value = false; savesOpen.value = false; roomOpen.value = false; if (route.path === '/table') chatOpen.value = false })
+// полоса партии — там, где за героями следят, но их листов на экране нет: в бою, на главной и в «Партии» герои уже
+// показаны, в справочнике они не нужны
+const partyBar = computed(() => heroes.value.length > 0 && ['/map', '/location', '/table', '/shop'].some((x) => route.path.startsWith(x)))
+watchEffect(() => document.documentElement.classList.toggle('no-partybar', !partyBar.value))
 // меню «Справочник» и плавающий чат закрываются щелчком мимо и клавишей Esc
 const moreRef = ref<HTMLElement | null>(null)
 function onDocClick(e: MouseEvent) { if (refMenu.value && moreRef.value && !moreRef.value.contains(e.target as Node)) refMenu.value = false }
-function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { refMenu.value = false; more.value = false; chatOpen.value = false; savesOpen.value = false } }
+function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { refMenu.value = false; more.value = false; chatOpen.value = false; savesOpen.value = false; roomOpen.value = false } }
 onMounted(() => { document.addEventListener('click', onDocClick); document.addEventListener('keydown', onKey) })
 onBeforeUnmount(() => { document.removeEventListener('click', onDocClick); document.removeEventListener('keydown', onKey) })
 
 // чат: непрочитанные считает стор (по времени последнего просмотренного; любой открытый чат отмечает прочитанное)
 const unread = computed(() => store.unread)
-watch(() => store.online, (on) => { if (!on) chatOpen.value = false })
+watch(() => store.online, (on) => { if (!on) { chatOpen.value = false; roomOpen.value = false } })
 
 // озвучка новых реплик ведущего на любом экране; история чата (вход в комнату) не читается
 let seenList: unknown = null
@@ -87,7 +92,7 @@ const saveTitle = computed(() => saveLost.value ? 'Нет связи с серв
         <router-link v-if="store.online" to="/table" class="nav-link hot-online" title="Стол" aria-label="Стол"><MessagesSquare :size="17" /><span>Стол</span><span v-if="store.room?.gm === 'ai' && store.room?.gmBusy"> ✎</span></router-link>
         <router-link to="/party" class="nav-link" title="Партия" aria-label="Партия"><Users :size="17" /><span>Партия</span></router-link>
         <router-link to="/map" class="nav-link" title="Карта" aria-label="Карта"><MapIcon :size="17" /><span>Карта</span></router-link>
-        <router-link v-if="locationLink" :to="locationLink" class="nav-link" :title="store.location?.name" :aria-label="store.location?.name"><Castle :size="17" /><span class="lbl">{{ store.location?.name }}</span></router-link>
+        <router-link v-if="locationLink" :to="locationLink" class="nav-link nav-loc" :title="store.location?.name" :aria-label="store.location?.name"><Castle :size="17" /><span class="lbl">{{ store.location?.name }}</span></router-link>
         <router-link v-if="inCombat" to="/combat" class="nav-link hot" title="Бой" aria-label="Бой"><Swords :size="17" /><span>Бой</span></router-link>
         <router-link to="/shop" class="nav-link" title="Лавка" aria-label="Лавка"><Store :size="17" /><span class="lbl-opt">Лавка</span></router-link>
         <div ref="moreRef" class="nav-more">
@@ -98,10 +103,11 @@ const saveTitle = computed(() => saveLost.value ? 'Нет связи с серв
         </div>
       </nav>
       <div class="topbar-actions">
-        <router-link v-if="store.online" to="/table" class="room-chip" :class="{ off: store.netStatus === 'reconnecting' }" :title="`Комната ${store.room?.code}: ${onlineCount} в сети`">
+        <button v-if="store.online" class="room-chip" :class="{ off: store.netStatus === 'reconnecting' }" :title="`Комната ${store.room?.code}: ${onlineCount} в сети. Ссылка, игроки, режим ведущего, «Отложить игру»`" :aria-label="`Комната ${store.room?.code}`" @click="roomOpen = true">
           <span class="dot" />{{ store.room?.code }}<span class="muted">· {{ onlineCount }}</span>
-        </router-link>
-        <button v-if="store.started" class="save-chip" :class="{ off: saveLost }" :title="saveTitle" aria-label="Сохранения" @click="savesOpen = true">
+        </button>
+        <!-- в комнате партию хранит сервер: метка — значок, пока связь есть (о связи говорит плашка комнаты) -->
+        <button v-if="store.started" class="save-chip" :class="{ off: saveLost, brief: store.online && !saveLost }" :title="saveTitle" aria-label="Сохранения" @click="savesOpen = true">
           <Save :size="15" /><span class="save-chip-t">{{ saveLabel }}</span>
         </button>
         <button class="icon ghost icon-btn" title="Кубики" aria-label="Кубики" @click="dice = true"><Dice5 :size="20" /></button>
@@ -110,7 +116,7 @@ const saveTitle = computed(() => saveLost.value ? 'Нет связи с серв
         </button>
       </div>
     </div>
-    <div v-if="heroes.length" class="party-bar">
+    <div v-if="partyBar" class="party-bar">
       <div class="party-bar-inner">
         <div v-if="store.game" class="day-pill">день<b>{{ store.game.day }}</b></div>
         <router-link v-for="h in heroes" :key="h.uid" to="/party" class="hero-pill" :class="{ down: h.status.dead || h.status.unconscious }" :title="`${h.name}: ${idx.cls(h.classId).name} ${h.level} ур.${store.online ? ` · ${store.ownerOf(h.uid) ?? 'ничей'}` : ''}`">
@@ -151,6 +157,7 @@ const saveTitle = computed(() => saveLost.value ? 'Нет связи с серв
         <router-link v-for="r in reference" :key="r.to" :to="r.to"><component :is="r.icon" :size="22" />{{ r.label }}</router-link>
         <button @click="more = false; dice = true"><Dice5 :size="22" />Кубики</button>
         <button @click="more = false; savesOpen = true"><Save :size="22" />Сохранения</button>
+        <button v-if="store.online" @click="more = false; roomOpen = true"><DoorOpen :size="22" />Комната</button>
       </div>
     </div>
   </template>
@@ -177,6 +184,12 @@ const saveTitle = computed(() => saveLost.value ? 'Нет связи с серв
     <div class="modal" role="dialog" aria-modal="true" aria-label="Сохранения" style="max-width:560px">
       <div class="row between"><h3>Сохранения</h3><button class="small" @click="savesOpen = false">Закрыть</button></div>
       <SavesPanel @done="savesOpen = false" />
+    </div>
+  </div>
+  <div v-if="roomOpen && store.online" class="modal-back" @click.self="roomOpen = false">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Комната" style="max-width:560px">
+      <div class="row between"><h3>Комната</h3><button class="small" @click="roomOpen = false">Закрыть</button></div>
+      <OnlinePanel bare />
     </div>
   </div>
   <div v-if="!store.room && (store.rejoinState !== 'idle' || (pendingRejoin && store.connecting))" class="overlay" role="status">

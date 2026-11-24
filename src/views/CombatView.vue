@@ -5,7 +5,7 @@ import { ChevronRight, SlidersHorizontal, Swords } from 'lucide-vue-next'
 import { idx } from '@/data'
 import type { Hero } from '@/engine/model'
 import { attacksLabel, heroDefense, heroWeapons, isActive } from '@/engine/character'
-import { toHit } from '@/engine/combat'
+import { fightLog, toHit } from '@/engine/combat'
 import { entryName, salePrice } from '@/engine/inventory'
 import type { LootItem } from '@/engine/loot'
 import { fleeTarget } from '@/engine/rules'
@@ -15,6 +15,7 @@ import { classArt, pct } from '@/ui/format'
 import LogPanel from '@/components/LogPanel.vue'
 import MonsterPicker from '@/components/MonsterPicker.vue'
 import SpellCaster from '@/components/SpellCaster.vue'
+import HintTip from '@/components/HintTip.vue'
 
 const store = useGameStore()
 const router = useRouter()
@@ -116,8 +117,10 @@ function ammoText(w: ReturnType<typeof heroWeapons>[number]) {
 /** подсказка про клинки — одна на весь бой, а не под каждым героем */
 const bladesWait = computed(() => c.value?.phase === 'ranged' && store.heroes.some((h) => canAct(h) && heroWeapons(h, idx).some((w) => !weaponReady(w))))
 const result = computed(() => (c.value?.finished === 'victory' ? 'Победа' : c.value?.finished === 'fled' ? 'Отступление' : 'Поражение'))
-// телефон: запасные действия боя (автоход, «Закончить ход», «Добавить монстров», «Прервать») — под кнопкой «Ещё»
+// запасные действия боя (автоход, «Закончить ход», «Добавить монстров», «Прервать») — под кнопкой «Ещё»
 const extraOpen = ref(false)
+/** журнал под боем — только этот бой, а не вся игра с покупками и переходами */
+const log = computed(() => fightLog(store.game?.log ?? []))
 function finish() {
   const back = c.value?.returnTo
   store.endCombat()
@@ -165,12 +168,12 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
         <button v-if="!c.finished && c.turn === 'monsters'" class="primary" @click="store.monstersAct()">Ход монстров</button>
         <button v-if="c.finished" class="primary" @click="finish">Завершить бой</button>
         <button v-if="!c.finished" class="small cb-more" :aria-expanded="extraOpen" @click="extraOpen = !extraOpen"><SlidersHorizontal :size="15" aria-hidden="true" />Ещё</button>
-        <div v-if="!c.finished" class="cb-extra" :class="{ open: extraOpen }">
-          <label class="switch-row" title="Ход монстров выполняется автоматически"><input v-model="autoMonsters" type="checkbox" class="switch" /> монстры ходят сами</label>
-          <button v-if="c.turn === 'heroes'" class="small" title="Оставшиеся герои пропускают ход" @click="store.endHeroesTurn()">Закончить ход героев</button>
-          <button v-if="store.gmTools" class="small" @click="picker = true">Добавить монстров</button>
-          <button v-if="store.gmTools" class="small danger" @click="store.abortCombat()">Прервать</button>
-        </div>
+      </div>
+      <div v-if="!c.finished && extraOpen" class="cb-extra">
+        <label class="switch-row" title="Ход монстров выполняется автоматически"><input v-model="autoMonsters" type="checkbox" class="switch" /> монстры ходят сами</label>
+        <button v-if="c.turn === 'heroes'" class="small" title="Оставшиеся герои пропускают ход" @click="store.endHeroesTurn()">Закончить ход героев</button>
+        <button v-if="store.gmTools" class="small" @click="picker = true">Добавить монстров</button>
+        <button v-if="store.gmTools" class="small danger" @click="store.abortCombat()">Прервать</button>
       </div>
       <p v-if="bladesWait" class="cb-hint">Клинки — после «Сойтись вплотную»; на дистанции стреляют, метают и колдуют.</p>
     </div>
@@ -191,7 +194,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
 
     <div class="cols c11">
       <div>
-        <h3>Противники <span v-if="!c.finished" class="small muted">— нажмите, чтобы выбрать цель</span></h3>
+        <h3>Противники <span v-if="!c.finished && alive.length > 1" class="small muted">— нажмите, чтобы выбрать цель</span></h3>
         <div class="foes" :class="{ many: manyFoes }">
         <div v-for="t in foeTiles" :key="t.key" class="card tight foe" :class="{ 'hero-down': t.down, target: t.isTarget }" @click="pickTile(t)">
           <div class="monster-card" v-for="m in [t.m]" :key="m.uid">
@@ -222,7 +225,7 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
         </template>
       </div>
       <div>
-        <h3>Герои</h3>
+        <h3>Герои <HintTip label="Как считается удар">Попадание: к18 + ловкость (меткость для метательного) ≥ защита цели. Урон: таблица атак по к6 + сила.</HintTip></h3>
         <div v-for="h in store.heroes" :key="h.uid" class="card tight fighter" :class="{ ready: canAct(h), 'hero-down': !isActive(h) || c.escaped.includes(h.uid) }">
           <div class="fighter-head">
             <img :src="classArt(h.classId)" alt="" class="portrait small-portrait" />
@@ -238,16 +241,17 @@ function monsterState(m: NonNullable<typeof c.value>['monsters'][number]) {
           <div v-if="canAct(h)" class="row fighter-actions">
             <button v-for="w in heroWeapons(h, idx)" :key="w.slot + w.name" class="small primary" :disabled="!targetMonster || !weaponReady(w)" :title="weaponReady(w) ? needRoll(h, w.slot) : weaponWhy(w)" @click="store.attack(h.uid, w.slot, target)">{{ w.ranged ? '🏹' : '⚔' }} {{ w.name }} ({{ attacksLabel(w) }}){{ ammoText(w) }} <span class="muted">{{ weaponReady(w) ? needRoll(h, w.slot) : '' }}</span></button>
             <button v-if="!heroWeapons(h, idx).some(w => !w.ranged)" class="small" :disabled="!targetMonster || c.phase === 'ranged'" :title="needRoll(h, 'unarmed')" @click="store.attack(h.uid, 'unarmed', target)">Голыми руками <span class="muted">{{ needRoll(h, 'unarmed') }}</span></button>
-            <button class="small" @click="store.flee(h.uid)" :title="`Нужно выкинуть ${fleeNeed()}+`">Бежать ({{ fleeNeed() }}+)</button>
-            <button class="small" @click="store.skip(h.uid)">Пропустить</button>
+            <span class="fighter-rare">
+              <button class="small ghost" @click="store.flee(h.uid)" :title="`Нужно выкинуть ${fleeNeed()}+`">Бежать ({{ fleeNeed() }}+)</button>
+              <button class="small ghost" @click="store.skip(h.uid)">Пропустить</button>
+            </span>
           </div>
           <div v-if="canAct(h) && (h.spellbook.length || h.inventory.some((e) => e.kind === 'scroll'))" style="margin-top:.35rem"><SpellCaster :hero="h" :in-combat="true" :target-uid="target" /></div>
           <div v-if="!canAct(h) && isActive(h) && !c.escaped.includes(h.uid) && c.turn === 'heroes' && !c.finished" class="small muted">{{ store.canControl(h.uid) ? 'ждёт следующего раунда' : `ходит ${store.ownerOf(h.uid) ?? 'другой игрок'}` }}</div>
         </div>
-        <p class="small muted">Попадание: к18 + ловкость (меткость для метательного) ≥ защита цели. Урон: таблица атак по к6 + сила.</p>
       </div>
     </div>
     <h3>Журнал</h3>
-    <LogPanel :entries="store.game?.log ?? []" :limit="60" />
+    <LogPanel :entries="log" :limit="60" />
   </template>
 </template>

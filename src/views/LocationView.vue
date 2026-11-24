@@ -14,6 +14,7 @@ import BookStages from '@/components/BookStages.vue'
 import { reminders } from '@/game/referee'
 import { REL_GO, describeExits, isYard, lookAround, roomOf } from '@/engine/plans'
 import GmChat from '@/components/GmChat.vue'
+import HintTip from '@/components/HintTip.vue'
 
 const props = defineProps<{ id: string }>()
 const store = useGameStore()
@@ -198,7 +199,7 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
   <div v-if="!loc" class="card">Локация не найдена.</div>
   <template v-else>
     <div class="row between" style="margin-bottom:.6rem">
-      <h1>{{ loc.name }} <span class="badge">Книга Жизни, стр. {{ loc.pages[0] }}–{{ loc.pages[1] }}</span> <span v-if="visitedCount" class="badge accent">пройдено {{ visitedCount }} из {{ loc.paragraphs.length }}</span></h1>
+      <h1 :title="`Книга Жизни, стр. ${loc.pages[0]}–${loc.pages[1]}`">{{ loc.name }} <span v-if="tools" class="badge">Книга Жизни, стр. {{ loc.pages[0] }}–{{ loc.pages[1] }}</span> <span v-if="visitedCount" class="badge accent">пройдено {{ visitedCount }} из {{ loc.paragraphs.length }}</span></h1>
       <div class="row loc-tools">
         <router-link v-if="services.includes('shop') || services.includes('tavern')" class="btn" to="/shop" aria-label="Лавка и трактир"><Store :size="16" aria-hidden="true" /><span>Лавка<span class="hide-phone"> / трактир</span></span></router-link>
         <button v-if="tools" aria-label="Произвольный бой" title="Бой с любыми монстрами из Бестиария" @click="picker = true"><Swords :size="16" aria-hidden="true" /><span class="hide-phone">Произвольный бой</span><span class="phone-only">Бой</span></button>
@@ -225,15 +226,14 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
           <p class="small muted" style="margin:0">{{ store.game?.pendingRoad.length ? 'В пути случились встречи — откройте их по порядку.' : paragraph ? 'Встреча в пути. Когда она разыграна, возвращайтесь к карте.' : 'Встреч в пути нет.' }}</p>
         </div>
         <div v-else-if="walk" class="card tight">
-          <p style="margin:0 0 .5rem"><b>{{ hereTitle }}</b> {{ around }}</p>
+          <p style="margin:0 0 .5rem"><b>{{ hereTitle }}</b> {{ around }} <HintTip label="Как ходить по локации">Идти можно в соседнее помещение или вернуться в пройденное. План открывается по мере пути.</HintTip></p>
           <div class="row exits">
             <button v-for="e in exits" :key="e.to" class="small" :class="{ ghost: e.known }" @click="go(e.to)">{{ REL_GO[e.rel] }}: {{ e.what }}<span v-if="e.known && !isYard(e.to)"> · § {{ e.to }}</span></button>
           </div>
           <template v-if="back.length">
-            <p class="small muted" style="margin:.6rem 0 .3rem">Вернуться туда, где партия уже была:</p>
+            <p class="small muted" style="margin:.6rem 0 .3rem">Вернуться:</p>
             <div class="numgrid back"><button v-for="n in back" :key="n" class="visited" @click="go(n)">{{ backLabel(n) }}</button></div>
           </template>
-          <p class="small muted" style="margin:.5rem 0 0">Идти можно в соседнее помещение или вернуться в пройденное. План открывается по мере пути.</p>
         </div>
         <div v-else class="card tight">
           <div class="numgrid">
@@ -273,20 +273,18 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
       <div ref="textCol" class="loc-text">
         <div v-if="hideText" class="card">
           <template v-if="store.aiGm">
-            <h3>Ведущий</h3>
-            <p class="small muted">Нажмите номер помещения на плане или напишите, что делают герои.</p>
+            <h3>Ведущий <HintTip label="Как играть с ведущим">Выберите, куда идти, кнопкой выхода или напишите, что делают герои.</HintTip></h3>
             <GmChat height="58vh" />
           </template>
           <template v-else>
-            <h3>Текст читает ведущий</h3>
-            <p class="small muted">Номера на плане — куда вы идёте; ведущий описывает, что вы видите, и разыгрывает события.</p>
+            <h3>Текст читает ведущий <HintTip label="Как играть с ведущим">Выходы и номера на плане — куда вы идёте; ведущий описывает, что вы видите, и разыгрывает события.</HintTip></h3>
             <GmChat height="40vh" />
           </template>
         </div>
         <div v-else-if="!paragraph" class="card muted">{{ !walk ? 'Выберите номер параграфа.' : isYard(room) ? `${hereTitle} Здесь тихо — выберите, куда идти дальше.` : 'Партия у входа в локацию. Выберите, куда идти.' }}</div>
         <div v-else class="card">
           <div class="row between">
-            <h2>§ {{ paragraph.n }}</h2>
+            <h2>§ {{ paragraph.n }} <HintTip v-if="staged && !fullText && (!gm || revealed)" label="Как читать параграф">Варианты со стрелкой — выбор партии. Исходы боя, проверки удачи и броска откроются сами.</HintTip></h2>
             <div class="row">
               <label class="row small" style="gap:.3rem">Действует
                 <select v-model="heroUid" class="small"><option v-for="h in activeHeroes" :key="h.uid" :value="h.uid">{{ h.name }}</option></select>
@@ -297,7 +295,6 @@ function scroll() { if (heroUid.value) store.giveScroll(heroUid.value) }
           <div v-if="gm && !revealed" class="row"><span class="muted">Режим ведущего: текст скрыт от игроков.</span><button class="small" @click="revealed = true">Показать текст</button></div>
           <template v-else-if="!fullText">
             <BookStages :loc="loc.id" :loc-name="loc.name" :paragraph="paragraph" :hero-uid="heroUid" @fight="startFight" @ambush="startAmbush" @goto="(n) => { if (!walk) done(); open(n) }" />
-            <p v-if="staged" class="small muted" style="margin-top:.5rem">Варианты со стрелкой — выбор партии. Исходы боя, проверки удачи и броска откроются сами.</p>
           </template>
           <template v-else>
             <p class="paragraph-text">{{ paragraphText(paragraph) }}</p>

@@ -27,8 +27,14 @@ await host.page.getByPlaceholder('Например, Иван').fill('Иван')
 await host.page.locator('select').filter({ hasText: 'ИИ-ведущий' }).selectOption('ai')
 await host.page.getByRole('button', { name: 'Создать комнату' }).click()
 await host.page.waitForURL(/#\/table/)
-const code = (await host.page.locator('b', { hasText: /^[A-Z0-9]{5,8}$/ }).first().textContent()).trim()
+const code = (await host.page.locator('.room-chip').first().textContent()).trim().slice(0, 6)
 await host.shot('01-table-empty')
+// настройки комнаты — в окне «Комната», а не на столе
+await host.page.getByRole('button', { name: `Комната ${code}` }).first().click()
+await host.page.getByRole('dialog', { name: 'Комната' }).waitFor()
+if (!(await host.page.getByRole('dialog', { name: 'Комната' }).innerText()).includes('Сменить режим')) problems.push('[host] в окне «Комната» нет смены режима ведущего')
+await host.shot('01b-room-dialog')
+await host.page.keyboard.press('Escape')
 
 // второй игрок входит по коду
 await guest.page.getByPlaceholder('Например, Иван').fill('Пётр')
@@ -68,6 +74,7 @@ await guest.page.waitForTimeout(400)
 await guest.shot('03-location-ai')
 await host.page.goto(BASE + '#/table')
 await host.shot('04-table')
+if (await host.page.locator('main .recent, main table.list').count()) problems.push('[host] настройки комнаты снова на столе')
 
 // текст книги игрокам не показывается
 const leaked = await guest.page.evaluate(() => document.body.innerText.includes('§ 1'))

@@ -5,8 +5,6 @@ import { useGameStore } from '@/stores/game'
 import { savedTime } from '@/ui/format'
 
 /** Сохранения: как сохраняется партия (одиночная — браузер, сетевая — сервер), слоты, файл, отложить игру */
-// roomActions: кнопки «Отложить игру» и ссылка — на главной они уже есть в панели «Игра по сети»
-const props = withDefaults(defineProps<{ roomActions?: boolean }>(), { roomActions: true })
 const emit = defineEmits<{ done: [] }>()
 const store = useGameStore()
 const router = useRouter()
@@ -86,7 +84,7 @@ function suspend() {
         <li><b>Закончить вечер:</b> нажмите «Отложить игру» или просто закройте вкладку — ваши герои останутся за вами<span v-if="r.me.isHost">, а вы — хозяином комнаты</span>.</li>
         <li><b>Вернуться:</b> на этом устройстве — «Недавние комнаты» на главной; с другого — код <b>{{ r.code }}</b> и то же имя<span v-if="myName"> «{{ myName }}»</span>.<span v-if="r.me.isHost"> С другого устройства хозяин войдёт обычным игроком.</span></li>
       </ul>
-      <div v-if="props.roomActions" class="row">
+      <div class="row">
         <button class="primary small" @click="suspend">Отложить игру</button>
         <button class="small" @click="copyLink">Скопировать ссылку на комнату</button>
       </div>

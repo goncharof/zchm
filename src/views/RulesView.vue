@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { gameData } from '@/data'
 import { BOTTLES, EXTRA_ATTACKS } from '@/engine/rules'
 import { HAND_NAMES, attacksStr } from '@/ui/format'
+import HowToPlay from '@/components/HowToPlay.vue'
 
 const STAT: Record<string, string> = { strength: 'сила', dexterity: 'ловкость', accuracy: 'меткость', luck: 'удача', defense: 'защита' }
 const cls = ref(gameData.classes[0].id)
@@ -17,6 +18,7 @@ function bonus(b?: Record<string, number>) {
   <p class="muted small">Краткая справка по Инструкции «Заклятья Чёрного мага» (1997). Где правила неполны, используются трактовки, описанные в разделе «Об игре».</p>
   <div class="cols c11">
     <div>
+      <HowToPlay />
       <div class="card">
         <h2>Кубики и проверки</h2>
         <p>В игре два кубика: <b>к6</b> и <b>к18</b>. Запись «3к6» — бросить к6 три раза и сложить.</p>

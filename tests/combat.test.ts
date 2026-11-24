@@ -3,12 +3,23 @@ import { idx } from '@/data'
 import { arrowsLeft, createHero, gainXp, hasWard, heroWeapons } from '@/engine/character'
 import { buy, equip } from '@/engine/inventory'
 import { seededRng, setRng } from '@/engine/dice'
-import { checkEnd, closeToMelee, heroAttack, heroFlee, monstersTurn, regrowHeads, startCombat, finishCombat } from '@/engine/combat'
+import { checkEnd, closeToMelee, entry, fightLog, heroAttack, heroFlee, monstersTurn, regrowHeads, startCombat, finishCombat } from '@/engine/combat'
 import { castSpell, resolveCost } from '@/engine/spells'
 import { addToInventory } from '@/engine/inventory'
 
 describe('бой', () => {
   beforeEach(() => setRng(seededRng(2026)))
+
+  it('журнал боя — записи с начала последнего боя, а не вся игра', () => {
+    const before = [entry('Конан покупает: меч короткий.'), entry('Партия входит: Золотой город.')]
+    const first = startCombat([{ monsterId: 'ork', count: 1 }], idx).log
+    const second = startCombat([{ monsterId: 'ork', count: 2 }], idx).log
+    const hit = entry('Конан атакует Орк.', 'hit')
+    expect(fightLog([...before, ...first, entry('Победа!'), ...second, hit])).toEqual([...second, hit])
+    // начало боя вытеснено из журнала (он обрезается) — показываем что есть
+    expect(fightLog([hit])).toEqual([hit])
+    expect(fightLog([])).toEqual([])
+  })
 
   it('встреча с орками: бой доходит до конца, опыт = очки × отнятые жизни', () => {
     const w = createHero('Воин', 'warrior', idx); w.money = 500

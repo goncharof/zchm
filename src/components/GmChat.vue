@@ -103,7 +103,7 @@ async function send() {
 <template>
   <div class="gm-chat">
     <div ref="box" class="gm-chat-log" :style="{ height: props.height }">
-      <div v-if="!items.length && !live.length" class="muted small">Здесь будет рассказ ведущего и реплики игроков.</div>
+      <div v-if="!items.length && !live.length" class="muted small">Здесь будет рассказ ведущего и реплики игроков.<template v-if="store.aiGm"> Пишите, что делают ваши герои: ведущий читает Книгу Жизни, бросает за проверки удачи и начинает бои.</template></div>
       <div v-for="m in items" :key="m.id" class="gm-msg" :class="[m.from, { mine: store.isMineMsg(m) }]">
         <div class="gm-author">{{ m.author }}<span v-if="m.from === 'player' && ai && !m.toGm" class="muted"> · игрокам</span></div>
         <div class="gm-text">{{ m.text }}</div>
@@ -125,10 +125,10 @@ async function send() {
       </div>
       <div v-if="ai && store.room?.gmBusy && !live.length" class="muted small">Ведущий обдумывает ход…</div>
       <div v-if="readyMode && store.room && !store.room.gmBusy && (store.room.held || store.room.ready.length)" class="muted small">Ведущий ждёт готовности всех. Реплик в очереди: {{ store.room.held }}.</div>
-      <div v-if="store.room?.gm === 'script'" class="muted small">Сценарный ведущий понимает номера помещений и кнопки вариантов.</div>
+      <div v-if="store.room?.gm === 'script' && items.length < 6" class="muted small">Сценарный ведущий понимает номера помещений и кнопки вариантов.</div>
     </div>
     <div v-if="readyMode" class="ready-bar">
-      <span class="muted small">Ход по готовности</span>
+      <span class="muted small" title="Ведущий ответит, когда напишут или нажмут «Готов» все">Ход по готовности</span>
       <span v-for="w in waiting" :key="w.name" class="chip" :class="{ ok: w.ready }">{{ w.ready ? '✓' : '…' }} {{ w.name }}</span>
       <span class="grow" />
       <button class="small" :class="{ primary: !iAmReady }" @click="store.setReady(!iAmReady)">{{ iAmReady ? 'Я ещё не готов' : 'Готов' }}</button>
@@ -148,7 +148,6 @@ async function send() {
         <button type="submit" class="primary send" aria-label="Отправить" title="Отправить (Enter)"><SendHorizontal :size="18" /><span class="send-lbl">Отправить</span></button>
         <button v-if="canSpeak" type="button" class="icon ghost speech" :class="{ on: speechPrefs.on }" :aria-pressed="speechPrefs.on" aria-label="озвучивать ведущего" :title="speechPrefs.on ? 'Озвучка ведущего включена' : 'Озвучивать ведущего'" @click="flipSpeech"><Volume2 v-if="speechPrefs.on" :size="19" /><VolumeX v-else :size="19" /></button>
       </div>
-      <div v-if="ai && toGm && readyMode" class="small muted">Ведущий ответит, когда напишут или нажмут «Готов» все.</div>
       <div v-if="canSpeak && speechPrefs.on" class="row small speech-opts">
         <select v-if="voices.length > 1" v-model="speechPrefs.voice" class="small" title="Голос" @change="saveSpeechPrefs">
           <option :value="undefined">голос по умолчанию</option>

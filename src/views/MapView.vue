@@ -5,6 +5,7 @@ import { idx } from '@/data'
 import { knownNodes, shortestRoute } from '@/engine/world'
 import { useGameStore } from '@/stores/game'
 import { plural } from '@/ui/format'
+import HintTip from '@/components/HintTip.vue'
 
 const store = useGameStore()
 const router = useRouter()
@@ -112,11 +113,10 @@ function enter(locationId: string) {
       </div>
       </div>
       <p class="small muted map-hint">Карту можно листать вбок. Нажмите город, чтобы проложить путь.</p>
-      <p v-if="fog" class="small muted" style="margin:.4rem 0 0">Карта открывается по мере пути: видны места, где партия была, и куда от них ведут дороги.</p>
     </div>
     <div>
       <div class="card">
-        <h2>День {{ store.game?.day }}</h2>
+        <h2>День {{ store.game?.day }} <HintTip align="right" label="Как путешествовать">Перемещаться можно только по дорогам, 1 клетка в день (верхом — 2, на призрачном драконе — 3). За каждый день пути возможна случайная встреча.<template v-if="fog"> Карта открывается по мере пути: видны места, где партия была, и куда от них ведут дороги.</template></HintTip></h2>
         <p>Партия: <b>{{ current?.name ?? '—' }}</b></p>
         <p v-if="roadFirst" class="small" style="color:var(--note)">Сначала разыграйте встречи в пути.</p>
         <button v-else-if="current?.locationId" class="primary" @click="enter(current.locationId)">Войти: {{ idx.locationById.get(current.locationId)?.name }}</button>
@@ -125,7 +125,6 @@ function enter(locationId: string) {
         <h3>{{ selected.name }}<span v-if="chapter" class="small muted" style="font-family:var(--font);margin-left:.4rem">глава «{{ chapter }}»</span></h3>
         <p v-if="route">Путь: {{ route.nodes.length - 1 }} {{ plural(route.nodes.length - 1, 'участок', 'участка', 'участков') }} дороги, <b>{{ days }} {{ plural(days, 'день', 'дня', 'дней') }}</b><span v-if="how"> ({{ how }})</span>.</p>
         <p v-else class="muted">Дороги туда нет.</p>
-        <p class="small muted">Перемещаться можно только по дорогам, 1 клетка в день (верхом — 2, на призрачном драконе — 3). За каждый день пути возможна случайная встреча.</p>
         <button class="primary" :disabled="!route || roadFirst" @click="go">Отправиться</button>
       </div>
       <div class="card" v-if="store.game?.pendingRoad.length">

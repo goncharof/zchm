@@ -29,6 +29,9 @@ async function player(label, viewport) {
 const text = (p) => p.evaluate(() => document.body.innerText)
 /** открыть «Сохранения»: метка в верхней панели */
 const openSaves = async (p) => { await p.getByRole('button', { name: 'Сохранения', exact: true }).first().click(); await p.getByRole('dialog', { name: 'Сохранения' }).waitFor() }
+/** открыть «Комната» (игроки, режим ведущего, «Отложить игру»): плашка с кодом в верхней панели */
+const roomDialog = (p) => p.getByRole('dialog', { name: 'Комната' })
+const openRoom = async (p) => { if (!(await roomDialog(p).count())) await p.locator('.room-chip').click(); await roomDialog(p).waitFor() }
 
 // ---------- одиночная игра ----------
 for (const [label, viewport] of [['solo-desktop', { width: 1280, height: 860 }], ['solo-mobile', { width: 390, height: 844 }], ['solo-landscape', { width: 844, height: 390 }]]) {
@@ -46,6 +49,11 @@ for (const [label, viewport] of [['solo-desktop', { width: 1280, height: 860 }],
   await a.page.keyboard.press('Escape')
   await a.page.goto(BASE + '#/')
   await a.shot('03-home')
+  // главная при начатой партии — экран «Продолжить»: сетевая игра и сохранения открываются по кнопке
+  check(!(await a.page.locator('#online').count()), `[${label}] карточка сетевой игры на главной свёрнута`)
+  check(!/Запасные копии/.test(await text(a.page)), `[${label}] сохранений на главной нет — они в окне`)
+  await a.page.getByRole('button', { name: 'Игра по сети' }).click()
+  check(await a.page.getByPlaceholder('Например, Иван').isVisible(), `[${label}] «Игра по сети» открывает карточку`)
   // закрыли вкладку и открыли снова: партия на месте
   await a.page.reload()
   check(await a.page.getByRole('button', { name: /Продолжить/ }).isVisible(), `[${label}] после перезагрузки есть «Продолжить»`)
@@ -100,6 +108,7 @@ check(await guest.page.getByRole('button', { name: /Вернуться за ст
 check(/Недавние комнаты/.test(await text(guest.page)), '[guest] список недавних комнат')
 await host.page.goto(BASE + '#/')
 await host.page.waitForTimeout(400)
+await openRoom(host.page)
 const row = await host.page.locator('table.list tr', { hasText: 'Пётр' }).innerText()
 check(!/без героя/.test(row), `[host] герой отложившего игрока остался за ним: ${row.replace(/\s+/g, ' ')}`)
 await host.shot('02-home-room')
@@ -116,18 +125,21 @@ check(await guest.page.getByRole('button', { name: /Отпустить|Осво�
 await guest.shot('04-party-back')
 
 // хозяин откладывает и возвращается хозяином
-await host.page.locator('#online').getByRole('button', { name: 'Отложить игру' }).click()
+await openRoom(host.page)
+await roomDialog(host.page).getByRole('button', { name: 'Отложить игру' }).click()
 await host.page.waitForTimeout(500)
 await host.shot('03-home-suspended')
 await host.page.locator('.recent-row', { hasText: code }).getByRole('button', { name: 'Вернуться' }).click()
 await host.page.waitForURL(/#\/table/)
 await host.page.goto(BASE + '#/')
 await host.page.waitForTimeout(400)
+await openRoom(host.page)
 check(await host.page.locator('table.list tr', { hasText: 'Иван' }).locator('.badge', { hasText: 'хозяин' }).count() === 1, '[host] вернулся хозяином')
 
 // гость покидает комнату насовсем: комнаты нет в недавних, герой свободен
 await guest.page.goto(BASE + '#/')
-await guest.page.locator('#online').getByRole('button', { name: 'Покинуть комнату' }).click()
+await openRoom(guest.page)
+await roomDialog(guest.page).getByRole('button', { name: 'Покинуть комнату' }).click()
 await guest.page.waitForTimeout(600)
 check(!/Недавние комнаты/.test(await text(guest.page)), '[guest] покинутая комната пропала из недавних')
 await guest.shot('05-home-left')

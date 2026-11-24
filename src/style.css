@@ -41,12 +41,13 @@
   --font-book: 'Old Standard TT', Georgia, 'Times New Roman', serif;
   --mono: ui-monospace, Menlo, monospace;
   --topbar-h: 56px;
-  /* высота полосы партии под верхней панелью (липкие элементы ниже неё) */
+  /* высота полосы партии под верхней панелью (липкие элементы ниже неё); без полосы — :root.no-partybar */
   --partybar-h: 58px;
   --tabbar-h: 62px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   color-scheme: dark;
 }
+:root.no-partybar { --partybar-h: 0px; }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -286,9 +287,8 @@ table.list tr.inv-row td:first-child { width: 100%; }
 .combat-bar.defeat .cb-result { color: var(--blood-2); }
 .combat-bar.fled .cb-result { color: var(--brass); }
 .cb-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .4rem; }
-/* запасные действия: на компьютере — в строку, на телефоне — под кнопкой «Ещё» */
-.cb-more { display: none; }
-.cb-extra { display: contents; }
+/* запасные действия (автоход, «Закончить ход», инструменты ведущего) — строкой под панелью, по кнопке «Ещё» */
+.cb-extra { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .4rem; flex-basis: 100%; padding-top: .55rem; border-top: 1px dashed var(--line-2); }
 .cb-hint { flex-basis: 100%; margin: 0; padding-top: .55rem; border-top: 1px solid var(--line); font-size: .82rem; color: var(--muted); }
 /* герой: кто ещё не сходил — красная кромка и отсвет */
 .fighter { position: relative; transition: border-color .2s, box-shadow .2s; }
@@ -299,6 +299,9 @@ table.list tr.inv-row td:first-child { width: 100%; }
 .fighter-name b { font-size: .98rem; }
 .fighter-name span { font-size: .78rem; color: var(--muted); }
 .fighter-actions { gap: .4rem; }
+/* «Бежать» и «Пропустить» — редкие действия: без рамки и справа, чтобы не спорили с ударом */
+.fighter-rare { display: inline-flex; gap: .1rem; margin-left: auto; }
+.fighter-rare button { color: var(--muted); }
 /* противник-цель — красная рамка с отсветом */
 .foe { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
 .foe.hero-down { cursor: default; }
@@ -310,9 +313,8 @@ table.list tr.inv-row td:first-child { width: 100%; }
   .cb-round b { font-size: 1.3rem; }
   .cb-actions { flex: 1 1 auto; justify-content: flex-start; }
   .cb-actions > button:not(.cb-more) { flex: 1 1 auto; }
-  .cb-more { display: inline-flex; margin-left: auto; }
-  .cb-extra { display: none; }
-  .cb-extra.open { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; flex-basis: 100%; padding-top: .5rem; border-top: 1px dashed var(--line-2); }
+  .cb-more { margin-left: auto; }
+  .cb-extra { justify-content: flex-start; }
 }
 
 /* памятка «Как это устроено» в карточке сетевой игры */
@@ -469,6 +471,24 @@ table.shop td:last-child button + button { margin-left: .3rem; }
 .modal-back { position: fixed; inset: 0; background: rgba(0, 0, 0, .7); backdrop-filter: blur(3px); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .modal { background: var(--surface); border: 1px solid var(--line-2); border-radius: 16px; max-width: 760px; width: 100%; max-height: 90vh; overflow: auto; padding: 1.1rem; box-shadow: 0 20px 60px rgba(0, 0, 0, .6); }
 
+/* ---------- подсказка под знаком вопроса (HintTip) ---------- */
+.hint-tip { position: relative; display: inline-flex; vertical-align: middle; }
+.hint-btn { min-height: 0; width: 26px; height: 26px; padding: 0; border-radius: 50%; background: transparent; border-color: transparent; color: var(--faint); }
+.hint-tip.open .hint-btn { color: var(--stone-hi); border-color: var(--line-2); }
+@media (hover: hover) { .hint-btn:hover:not(:disabled) { color: var(--ink); background: var(--surface-2); border-color: var(--line); } }
+.hint-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 45; width: max-content; max-width: min(340px, 80vw);
+  padding: .6rem .75rem; background: var(--surface-3); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 16px 40px rgba(0, 0, 0, .6);
+  font: 400 .84rem/1.45 var(--font); letter-spacing: 0; color: var(--ink); text-align: left; white-space: normal;
+}
+.hint-tip.right .hint-pop { left: auto; right: 0; }
+@media (pointer: coarse) { .hint-btn { width: 36px; height: 36px; } }
+/* телефон и узкое окно (раскладка в одну колонку): плашкой над нижней панелью — у кнопки окно вылезло бы за край */
+@media (max-width: 900px) {
+  .hint-pop { position: fixed; top: auto; left: 12px; right: 12px; bottom: calc(var(--tabbar-h) + 12px + var(--safe-b)); width: auto; max-width: none; z-index: 57; }
+  .hint-tip.right .hint-pop { left: 12px; right: 12px; }
+}
+
 /* ---------- ветки параграфа ---------- */
 .branch { margin: .5rem 0; border-left: 3px solid var(--line-2); padding-left: .7rem; }
 .branch.open { border-left-color: var(--blood-2); }
@@ -500,7 +520,11 @@ table.shop td:last-child button + button { margin-left: .3rem; }
 .nav-link.router-link-active, .nav-link.active { color: var(--ink); background: var(--surface-2); border-color: var(--line); }
 .nav-link.hot { color: #fff; background: linear-gradient(180deg, var(--blood-2), var(--blood)); border-color: #e8475f; animation: pulse 2s infinite; }
 .nav-link.hot-online { color: var(--stone-hi); }
-.nav-link .lbl { overflow: hidden; text-overflow: ellipsis; max-width: 11rem; }
+.nav-link .lbl { overflow: hidden; text-overflow: ellipsis; max-width: 11rem; min-width: 0; }
+/* вкладки не сжимаются и не наезжают на плашки справа: место уступает название локации (до одного значка) */
+.nav-desktop > * { flex: none; }
+.nav-desktop > .nav-loc { flex: 0 1 auto; min-width: 2.4rem; }
+.nav-link > svg { flex: none; }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(224, 51, 79, .45); } 50% { box-shadow: 0 0 0 6px rgba(224, 51, 79, 0); } }
 .nav-more { position: relative; }
 .menu {
@@ -511,6 +535,7 @@ table.shop td:last-child button + button { margin-left: .3rem; }
 .menu .nav-link { width: 100%; justify-content: flex-start; }
 .topbar-actions { display: flex; align-items: center; gap: .35rem; margin-left: auto; flex: none; }
 .room-chip { display: inline-flex; align-items: center; gap: .35rem; font-size: .8rem; font-weight: 600; color: var(--stone-hi); background: rgba(77, 139, 105, .12); border: 1px solid rgba(77, 139, 105, .4); border-radius: 999px; padding: .2rem .6rem; white-space: nowrap; }
+@media (hover: hover) { button.room-chip:hover:not(:disabled) { background: rgba(77, 139, 105, .22); border-color: var(--stone-hi); } }
 .room-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .room-chip.off .dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
 .icon-btn { position: relative; }
@@ -582,6 +607,11 @@ table.shop td:last-child button + button { margin-left: .3rem; }
 .composer-row .send { min-height: 42px; border-radius: 12px; }
 .composer-row .speech { color: var(--faint); }
 .composer-row .speech.on { color: var(--stone-hi); }
+/* стол на широком экране: «кому» и поле реплики — одной строкой */
+@media (min-width: 901px) {
+  .table-chat .composer:has(> .seg) { grid-template-columns: auto 1fr; align-items: end; }
+  .table-chat .composer > .speech-opts { grid-column: 1 / -1; }
+}
 .seg { display: inline-flex; width: fit-content; padding: 3px; gap: 2px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; }
 .seg button { min-height: 30px; padding: .2rem .7rem; font-size: .8rem; background: transparent; border-color: transparent; border-radius: 8px; color: var(--muted); }
 .seg button.active { background: var(--surface-3); color: var(--ink); border-color: var(--line-2); }
@@ -662,6 +692,7 @@ details.add-hero > summary::-webkit-details-marker { display: none; }
 .save-chip.off { color: var(--danger); border-color: var(--danger); }
 @media (hover: hover) { .save-chip:hover { color: var(--ink); border-color: var(--accent); } }
 @media (max-width: 520px) { .save-chip .save-chip-t { display: none; } }
+.save-chip.brief .save-chip-t { display: none; }
 .recent { display: grid; gap: .35rem; margin-bottom: .6rem; }
 .recent-row { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 10px; }
 .recent-row .code { font-weight: 700; letter-spacing: .12em; color: var(--accent); }
