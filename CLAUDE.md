@@ -47,6 +47,7 @@ pnpm data:plans     # tools/plans/<локация>.json → src/data/plans.json 
 pnpm exec tsx tools/plan_text.ts <id>   # начало текста каждого параграфа локации — помощник разметки плана
 node tools/qa/screens.mjs [url] [outDir]  # при запущенном pnpm dev: проход по экранам в Chrome, скриншоты desktop/mobile в tools/qa/out, отчёт об ошибках и горизонтальной прокрутке
 node tools/qa/offline.mjs [url]           # при pnpm build && pnpm preview --port 5178: проверка игры без сети
+node tools/qa/readme-shots.mjs [url] [outDir]  # при pnpm dev --port 5177: скриншоты для README → docs/img/*.jpg
 pnpm qa:book        # обход Книги Жизни ботом: все пути кнопок + сценарный ведущий → tools/qa/out/book-walk.md (после правки разметки)
 ```
 
@@ -92,6 +93,8 @@ docs/            документация проекта
 - По локации партия идёт из помещения в соседнее (`src/engine/plans.ts`, `GameSession.moveTo`); тесты механики книги
   открывают помещения по номеру — правило планов в них выключено в `tests/setup.ts`, включает его `enablePlans()`.
 - После заметных изменений обновлять `docs/PROGRESS.md` (что сделано, что дальше) и при необходимости `docs/DECISIONS.md`.
+- README — витрина публичного репозитория: после заметных изменений интерфейса или возможностей переснять скриншоты
+  (`node tools/qa/readme-shots.mjs`) и сверить раздел «Что есть».
 - Коммиты — по скиллу `.claude/skills/commit`: Conventional Commits `type(scope): описание строчными` на английском,
   одно логическое изменение на коммит, **без `Co-Authored-By`**; вариант сообщения 1 («что сделано») без ожидания выбора.
 
